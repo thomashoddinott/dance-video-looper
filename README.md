@@ -2,9 +2,6 @@
 
 > The idea is [LoopTube](https://looptube.io)'s — this is a hobby rebuild of it for
 > personal use, pointed at clips in my own Drive rather than YouTube.
->
-> No video is committed to this repo. Clips are someone else's content and live in
-> Google Drive, not here.
 
 A personal practice tool: load a short dance clip, set an A/B loop over the four
 seconds you're actually trying to learn, and slow it down. On a laptop at home
