@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { getLoop } from './loop.factory'
 import {
   countOf,
+  laterOf,
   loopsFor,
-  practisedAt,
+  openedAt,
   withLoop,
+  withOpens,
   withoutLoop,
 } from './loopsChange'
 import { NO_LOOPS } from './loopsFile'
@@ -16,6 +18,8 @@ const ANOTHER_CLIP = 'pivot-turn'
 /* When the change being made happened. Every one of these functions takes it
    rather than reading a clock, so the merge below is testable as arithmetic. */
 const AT = '2026-09-06T18:04:11.000Z'
+const EARLIER = '2026-09-06T09:00:00.000Z'
+const LATER = '2026-09-06T21:30:00.000Z'
 
 const holding = (
   clips: Record<string, ReturnType<typeof getLoop>[]>,
@@ -128,14 +132,82 @@ describe('what a clip has', () => {
     ).toBe(2)
   })
 
-  it('says when it was last practised', () => {
-    expect(practisedAt(holding({}, { [A_CLIP]: AT }), A_CLIP)).toBe(AT)
+  it('says when it was last opened', () => {
+    expect(openedAt(holding({}, { [A_CLIP]: AT }), A_CLIP)).toBe(AT)
   })
 
-  /* Undefined rather than a fallback date. "Never practised" is not "practised
+  /* Undefined rather than a fallback date. "Never opened" is not "opened
      at the beginning of time" — the chip has to sort it below every clip that
      has been, and a real date would let it tie with one. */
-  it('says nothing for a clip that has never been practised', () => {
-    expect(practisedAt(NO_LOOPS, 'no-such-clip')).toBeUndefined()
+  it('says nothing for a clip that has never been opened', () => {
+    expect(openedAt(NO_LOOPS, 'no-such-clip')).toBeUndefined()
+  })
+})
+
+/* #16 — the opens this device recorded, carried into `loops.json` by the write a
+   loop save or removal was already making. There is no write of their own: the
+   whole point of keeping them on the device is that opening a clip costs Drive
+   nothing. */
+describe('carrying this device\u2019s opens into the file', () => {
+  it('adds a stamp for a clip the file had never heard of', () => {
+    expect(withOpens(NO_LOOPS, { [A_CLIP]: AT }).touched).toEqual({
+      [A_CLIP]: AT,
+    })
+  })
+
+  it('carries every clip it is given, and leaves the loops alone', () => {
+    const held = holding({ [A_CLIP]: [getLoop()] })
+
+    const carried = withOpens(held, { [A_CLIP]: AT, [ANOTHER_CLIP]: LATER })
+
+    expect(carried.clips).toEqual(held.clips)
+    expect(carried.touched).toEqual({ [A_CLIP]: AT, [ANOTHER_CLIP]: LATER })
+  })
+
+  it('moves a stamp on when this device opened the clip more recently', () => {
+    expect(
+      withOpens(holding({}, { [A_CLIP]: EARLIER }), { [A_CLIP]: LATER }).touched,
+    ).toEqual({ [A_CLIP]: LATER })
+  })
+
+  /* The merge rule, and why this is `max` rather than an assignment.
+     `applyToLoops` replays the change onto whatever Drive holds *now*, so a
+     laptop that has been shut for a week must not drag a clip's recency
+     backwards over what the phone wrote while it was away. */
+  it('leaves a later stamp standing when this device is behind', () => {
+    expect(
+      withOpens(holding({}, { [A_CLIP]: LATER }), { [A_CLIP]: EARLIER }).touched,
+    ).toEqual({ [A_CLIP]: LATER })
+  })
+
+  it('leaves a clip this device has not opened exactly as it was', () => {
+    expect(
+      withOpens(holding({}, { [ANOTHER_CLIP]: EARLIER }), { [A_CLIP]: AT })
+        .touched,
+    ).toEqual({ [ANOTHER_CLIP]: EARLIER, [A_CLIP]: AT })
+  })
+
+  it('is a no-op when this device has opened nothing', () => {
+    const held = holding({ [A_CLIP]: [getLoop()] }, { [A_CLIP]: AT })
+
+    expect(withOpens(held, {})).toEqual(held)
+  })
+})
+
+/* The same rule the grid reads with: this device's own record and Drive's may
+   each be ahead of the other, and the honest answer is the later one. */
+describe('the later of two stamps', () => {
+  it('takes whichever is later', () => {
+    expect(laterOf(EARLIER, LATER)).toBe(LATER)
+    expect(laterOf(LATER, EARLIER)).toBe(LATER)
+  })
+
+  it('takes the one that exists when only one does', () => {
+    expect(laterOf(undefined, AT)).toBe(AT)
+    expect(laterOf(AT, undefined)).toBe(AT)
+  })
+
+  it('is undefined when neither does', () => {
+    expect(laterOf(undefined, undefined)).toBeUndefined()
   })
 })

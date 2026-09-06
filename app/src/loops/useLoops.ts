@@ -5,7 +5,7 @@ import { withdrewConsent } from '../drive/driveErrors'
 import { useDriveSession } from '../drive/driveSession'
 import { applyToLoops, type LoopsChange, LoopsRefused, readLoops } from './driveLoops'
 import type { SavedLoop } from './loop'
-import { withLoop, withoutLoop } from './loopsChange'
+import { withLoop, withOpens, withoutLoop } from './loopsChange'
 import type { LoopsCache } from './loopsCache'
 import { browserLoopsCache } from './loopsCache'
 import type { LoopsFile } from './loopsFile'
@@ -53,6 +53,13 @@ const noticeFor = (error: unknown, what: string) => {
 export const useLoops = (
   api: DriveApi,
   cache: LoopsCache = browserLoopsCache,
+  /* What this device has opened, read at the moment of a write rather than
+     captured (#16). These stamps ride the write a loop save or removal was
+     already making — there is deliberately no write of their own, because
+     `loops.json` holds the loops and an ordering is not worth putting it in
+     the path of every open. A getter rather than a value so the write always
+     carries what is true now, not what was true when this hook rendered. */
+  opens: () => Readonly<Record<string, string>> = () => ({}),
 ): LoopsHandle => {
   const { status, requireToken, reportConsentWithdrawn } = useDriveSession()
   /* Seeded from the local copy rather than from nothing, which is BR-13's
@@ -141,11 +148,17 @@ export const useLoops = (
            upload's tile-first flow — and the difference is the wait being
            covered: thirteen seconds there, about two hundred milliseconds
            here. */
+        /* Folded in *inside* the change, so it is replayed onto whatever Drive
+           holds now exactly as the loop edit is — and so a retry carries them
+           too. `withOpens` keeps the later stamp per clip, so a device that has
+           been shut for a week cannot drag anything backwards. */
+        const carrying = opens()
+
         const next = await applyToLoops(
           api,
           reached.token,
           reached.folderId,
-          change,
+          (held) => withOpens(change(held), carrying),
         )
 
         setLoops(next)
@@ -161,7 +174,7 @@ export const useLoops = (
         setWriting(false)
       }
     },
-    [api, cache, folderToken, reportIfWithdrawn],
+    [api, cache, folderToken, opens, reportIfWithdrawn],
   )
 
   const save = useCallback(
