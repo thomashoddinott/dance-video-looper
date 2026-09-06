@@ -111,8 +111,13 @@ export function ClipsScreen({
 
     /* Whatever the dancer was ordering by, the clip they just added is the one
        they are looking for — and under any other ordering it lands somewhere
-       they would have to hunt for it. */
+       they would have to hunt for it.
+
+       The search goes for the same reason, and a sharper one: a search the new
+       clip does not match hides it outright, so the dancer would have added a
+       clip and been told there are none. */
     setChosen(RECENT)
+    setQuery('')
   }
 
   const ordering = orderings.find(({ id }) => id === chosen) ?? orderings[0]

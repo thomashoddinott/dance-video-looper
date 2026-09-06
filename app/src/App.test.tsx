@@ -354,6 +354,22 @@ describe('adding a clip', () => {
     expect(pressedChips()).toEqual(['Recent'])
   })
 
+  /* The same rule the ordering follows, for the same reason (US-01-18). A search
+     the new clip does not match would hide it behind "no clips match" — the
+     dancer would have added a clip and been told there are none. */
+  it('clears the search, so the new clip is not hidden behind it', async () => {
+    await renderLibraryWith(probeReading(26))
+
+    await userEvent.type(
+      screen.getByRole('searchbox', { name: 'Search clips' }),
+      'shuffle',
+    )
+    await chooseFile(aVideoFile({ named: 'Camel walk.mp4' }))
+
+    expect(await screen.findByText('Camel walk')).toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: 'Search clips' })).toHaveValue('')
+  })
+
   /* The player finds a clip by id or bounces back to the grid, so "Back to
      clips" being on screen is the whole assertion: it is only reachable if the
      clip added a moment ago was in the list the player read. */
