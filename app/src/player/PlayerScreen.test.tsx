@@ -94,6 +94,7 @@ const Player = ({
 
   return (
     <PlayerScreen
+      onOpened={noOpenIsRecorded}
       clips={clips}
       driveApi={driveApi}
       clipCache={holdsNothing}
@@ -102,6 +103,9 @@ const Player = ({
     />
   )
 }
+
+/* #16 stamps the clip on open; nothing in this file is about that. */
+const noOpenIsRecorded = () => {}
 
 const renderPlayerFetching = (
   { loaded, total }: { readonly loaded: number; readonly total: number },

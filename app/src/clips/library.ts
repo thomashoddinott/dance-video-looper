@@ -136,18 +136,18 @@ export const withLoopCounts = (
    the same file and arrive by the same route, but they answer different
    questions, and a function named for counting should not quietly do both —
    composing the two at the one call site says what is happening more plainly
-   than a `countFor`/`practisedFor` pair would.
+   than a `countFor`/`openedFor` pair would.
 
    Undefined is a real answer here rather than a gap: most of a library has
-   never been practised, and the chip has to draw those clips rather than leave
+   never been opened, and the chip has to draw those clips rather than leave
    them out. */
-export const withPractised = (
+export const withOpened = (
   library: Library,
-  practisedFor: (clipId: string) => string | undefined,
+  openedFor: (clipId: string) => string | undefined,
 ): Library => ({
   ...library,
   clips: library.clips.map((clip) => ({
     ...clip,
-    practised: practisedFor(clip.id),
+    opened: openedFor(clip.id),
   })),
 })
