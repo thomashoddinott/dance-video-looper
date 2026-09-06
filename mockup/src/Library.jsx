@@ -222,8 +222,13 @@ const UPLOAD_PLAYS_OUT_OVER = 2500
    local state would start over at Recent every time the dancer came back — and
    **Last opened** is a chip whose whole point is what you see *after* a trip
    through the player. Picking it, opening a clip and returning to Recent would
-   make the ordering unreachable in the one moment it is for. */
+   make the ordering unreachable in the one moment it is for.
+
+   The search stays local, and the contrast is the point: it is a question about
+   the grid in front of you rather than a setting, so coming back with the whole
+   library showing is the honest default. */
 function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
+  const [query, setQuery] = useState('')
   const [notice, setNotice] = useState(null)
   const [uploading, setUploading] = useState({})
   /* The library comes out of Drive in the product, so there is a moment before
@@ -253,7 +258,13 @@ function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
   }
 
   const active = SORTS.find((option) => option.id === sort)
-  const ordered = [...clips].sort(active.compare)
+  const wanted = query.trim().toLowerCase()
+  /* Filter, then order. Search narrows the set and the chosen chip orders what is
+     left, so the two controls compose rather than compete. */
+  const found = wanted
+    ? clips.filter((clip) => clip.name.toLowerCase().includes(wanted))
+    : clips
+  const ordered = [...found].sort(active.compare)
 
   /* Reads the real duration off the chosen file before adding it, so the new
      tile carries a true length rather than a made-up one. In the product this
@@ -328,6 +339,9 @@ function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
         src,
       })
       onSort('added')
+      /* The search goes for the same reason the sort flips, and a sharper one: a
+         search the new clip does not match hides it outright. */
+      setQuery('')
       playOutAnUpload(id)
     }
   }
@@ -361,6 +375,20 @@ function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
           <p className="mt-2 text-xs text-ink/40">Loading your clips…</p>
         )}
 
+        {/* Retrofitted from the product (US-01-18, #13) — the mockup gate pass for
+            a control the screen was drawn too early to need. This page dates from
+            a library of a handful of clips; at dozens the grid is a scroll.
+
+            No form and nothing to submit: the grid answers the keystroke. */}
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          aria-label="Search clips"
+          placeholder="Search clips"
+          className="mt-3 w-full rounded-lg bg-control px-3 py-2 text-sm text-ink placeholder:text-ink/40"
+        />
+
         <div className="mt-3 flex flex-wrap gap-1.5">
           {SORTS.map((option) => (
             <button
@@ -377,6 +405,19 @@ function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
             </button>
           ))}
         </div>
+
+        {/* An empty grid is only honest about an empty library. Under a search it
+            would be saying "you have no clips" when the truth is "none of yours
+            are called that".
+
+            And only once there is a library to have not matched: while it is
+            still loading there are no clips whatever was typed, so blaming the
+            search would be the same lie one state along. */}
+        {wanted && clips.length > 0 && ordered.length === 0 && (
+          <p className="mt-4 text-xs text-ink/60">
+            No clips match “{query.trim()}”.
+          </p>
+        )}
 
         <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {ordered.map((clip) => (

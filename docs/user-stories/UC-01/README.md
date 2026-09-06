@@ -1,17 +1,19 @@
 # UC-01 — user stories
 
-Seventeen stories for [UC-01: Loop a section of a clip](../../use-cases/UC-01_Loop_a_section_of_a_clip.md).
+Eighteen stories for [UC-01: Loop a section of a clip](../../use-cases/UC-01_Loop_a_section_of_a_clip.md).
 All **DRAFT**. Generation 1, so the numbers below are the only ones in play.
 
-**Twelve are cut from the mockup** — two pages, each a skeleton plus the components
+**Thirteen are cut from the mockup** — two pages, each a skeleton plus the components
 that drop into it. **Five are storage stories** with no mockup surface at all, which
 the method allows as *non-component stories*: cross-cutting concerns that span the
 others and are independently testable. Google Drive is the textbook case, since it
-is what every one of the twelve is quietly assuming.
+is what every one of the thirteen is quietly assuming.
 
-US-01-17 was added later than the other sixteen, on 2026-09-04, when the spike behind
-UC-01 Q-07 returned GO. It is a storage story by the same test: no surface, and it
-changes what every clip *is* on its way to Drive.
+Two were added later than the original sixteen. **US-01-17** on 2026-09-04, when the
+spike behind UC-01 Q-07 returned GO — a storage story by the same test: no surface,
+and it changes what every clip *is* on its way to Drive. **US-01-18** on 2026-09-06,
+once the library grew past the size US-01-03 had judged search against — a Clips
+screen component, and a **mockup gate pass**, since it is built before it is drawn.
 
 ## Clips screen — `mockup/src/Library.jsx`
 
@@ -21,6 +23,7 @@ changes what every clip *is* on its way to Drive.
 | [US-01-02](US-01-02_Clip_tile.md) | Clip tile | `Library.jsx:22–66` | #18 |
 | [US-01-03](US-01-03_Ordering_chips.md) | Ordering chips | `Library.jsx:152–167` | #19 |
 | [US-01-04](US-01-04_Add_a_clip.md) | Add a clip | `Library.jsx:108–129` | #20 |
+| [US-01-18](US-01-18_Search_the_clips.md) | Search the clips | `Library.jsx:350–361` — retrofitted | #13 |
 
 ## Player — `mockup/src/Player.jsx`
 
@@ -113,10 +116,10 @@ code is bad. Four of its findings shape the storage stories directly — `drive.
 scope, cache-first, renewal on user action, and last-write-wins clobbering — and the
 fifth is the mobile-OAuth gate above.
 
-**Two absences are decisions, not gaps.** Renaming or deleting a clip does
-not exist anywhere in the mockup (UC-01 Q-08), and neither does search or
-filtering on the Clips screen — a personal library of this size has not earned
-them.
+**One absence is a decision, not a gap.** Renaming or deleting a clip does not exist
+anywhere in the mockup (UC-01 Q-08). Search was the second such absence and is no
+longer one: the library outgrew the judgement US-01-03 made about it, and US-01-18
+takes a mockup gate pass rather than waiting for a drawing that was never made.
 
 ## Where the 🔍 rules get settled
 

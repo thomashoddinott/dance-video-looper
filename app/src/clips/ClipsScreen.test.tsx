@@ -11,9 +11,10 @@ import type { Clip } from './clip'
 import { getClip } from './clip.factory'
 import type { ClipProbe } from './clipProbe'
 import { ClipsScreen } from './ClipsScreen'
+import type { Library } from './library'
+import { LOADING, failed, loaded } from './library'
 import type { OrderingId } from './ordering'
 import { orderings } from './ordering'
-import { LOADING, loaded } from './library'
 
 /* The screen carries the Drive status footer (US-01-13), and the session
    deliberately throws rather than degrading when there is no provider above it.
@@ -39,19 +40,24 @@ const noClipIsDeleted = () => {}
 /* The ordering belongs to the caller now (#16), because the real one has to
    outlive this screen being unmounted for the player. Here the caller is this
    wrapper, so the chips still switch for real and the cases below are unchanged
-   by the move. */
+   by the move.
+
+   It takes the library whole rather than the clips in it, because `renderScreen`
+   below builds a `ready` one by construction — and the two states that carry no
+   clips for a reason of their own, not looked yet and looked and could not, are
+   only reachable past it. */
 function ScreenUnderTest({
-  clips,
+  library,
   onDelete,
 }: {
-  readonly clips: readonly Clip[]
+  readonly library: Library
   readonly onDelete: (clip: Clip) => void
 }) {
   const [ordering, setOrdering] = useState<OrderingId>(orderings[0].id)
 
   return (
     <ClipsScreen
-      library={loaded(LOADING, clips)}
+      library={library}
       ordering={ordering}
       onOrderingChange={setOrdering}
       onAdd={noClipIsAdded}
@@ -61,8 +67,8 @@ function ScreenUnderTest({
   )
 }
 
-const renderScreen = (
-  clips: readonly Clip[],
+const renderScreenWith = (
+  library: Library,
   onDelete: (clip: Clip) => void = noClipIsDeleted,
 ) =>
   render(
@@ -71,10 +77,15 @@ const renderScreen = (
       tokenStore={anEmptyTokenStore}
     >
       <MemoryRouter>
-        <ScreenUnderTest clips={clips} onDelete={onDelete} />
+        <ScreenUnderTest library={library} onDelete={onDelete} />
       </MemoryRouter>
     </DriveSessionProvider>,
   )
+
+const renderScreen = (
+  clips: readonly Clip[],
+  onDelete: (clip: Clip) => void = noClipIsDeleted,
+) => renderScreenWith(loaded(LOADING, clips), onDelete)
 
 /* A tile's identity is the clip it is about, and `listitem` takes no name from
    its contents, so the lookup is "the tile that mentions this clip". */
@@ -373,6 +384,193 @@ describe('the ordering chips', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Last opened' }))
 
     expect(gridOrder()).toEqual(['first', 'second', 'third'])
+  })
+})
+
+const searchBox = () => screen.getByRole('searchbox', { name: 'Search clips' })
+
+describe('the search box', () => {
+  it('offers a search box the dancer can find by name', () => {
+    renderScreen([])
+
+    expect(searchBox()).toBeInTheDocument()
+  })
+
+  it('starts empty, so the whole library is showing', () => {
+    renderScreen([getClip({ id: 'one' }), getClip({ id: 'two' })])
+
+    expect(searchBox()).toHaveValue('')
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+  })
+
+  it('shows only the clips whose name contains what was typed', async () => {
+    renderScreen([
+      getClip({ id: 'shuffle', name: 'Shuffle drill' }),
+      getClip({ id: 'wave', name: 'Wave practice' }),
+      getClip({ id: 'body', name: 'Body roll' }),
+    ])
+
+    await userEvent.type(searchBox(), 'wave')
+
+    expect(gridOrder()).toEqual(['wave'])
+  })
+
+  /* No form around it and no button to press: the grid answers the keystroke.
+     A submit would also reload the page, which on a static site means fetching
+     the whole library again to answer a question already in memory. */
+  it('narrows the grid as the text is typed, with nothing to submit', async () => {
+    renderScreen([
+      getClip({ id: 'wave', name: 'Wave practice' }),
+      getClip({ id: 'warm', name: 'Warm up' }),
+    ])
+
+    await userEvent.type(searchBox(), 'wa')
+
+    expect(gridOrder()).toEqual(['wave', 'warm'])
+
+    await userEvent.type(searchBox(), 've')
+
+    expect(gridOrder()).toEqual(['wave'])
+    expect(screen.queryByRole('button', { name: /search/i })).not.toBeInTheDocument()
+  })
+
+  it('matches whatever case the text was typed in', async () => {
+    renderScreen([getClip({ id: 'shuffle', name: 'Shuffle drill' })])
+
+    await userEvent.type(searchBox(), 'SHUFFLE')
+
+    expect(gridOrder()).toEqual(['shuffle'])
+  })
+
+  /* The space a phone keyboard adds after a finished word must not be the
+     difference between finding a clip and being told there is none. */
+  it('is not defeated by whitespace around the text', async () => {
+    renderScreen([getClip({ id: 'shuffle', name: 'Shuffle drill' })])
+
+    await userEvent.type(searchBox(), '  shuffle  ')
+
+    expect(gridOrder()).toEqual(['shuffle'])
+  })
+
+  it('brings every clip back when the box is cleared', async () => {
+    renderScreen([
+      getClip({ id: 'shuffle', name: 'Shuffle drill' }),
+      getClip({ id: 'wave', name: 'Wave practice' }),
+    ])
+
+    await userEvent.type(searchBox(), 'wave')
+    await userEvent.clear(searchBox())
+
+    expect(gridOrder()).toEqual(['shuffle', 'wave'])
+  })
+
+  /* The two controls compose in one direction: search narrows the set, the chosen
+     chip orders what is left. If searching re-ordered as well, the chip the dancer
+     pressed would quietly stop meaning anything. */
+  it('leaves the chosen ordering in charge of what is still showing', async () => {
+    renderScreen([
+      getClip({ id: 'wave-practice', name: 'Wave practice', added: '2026-08-28' }),
+      getClip({ id: 'arm-wave', name: 'Arm wave', added: '2026-08-14' }),
+      getClip({ id: 'body-roll', name: 'Body roll', added: '2026-08-12' }),
+    ])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Name' }))
+    await userEvent.type(searchBox(), 'wave')
+
+    expect(gridOrder()).toEqual(['arm-wave', 'wave-practice'])
+  })
+
+  /* An empty grid is only honest about a library that is empty. Under a search it
+     would be saying "you have no clips" when the truth is "none of yours are
+     called that" — the same conflation the loading and failed states already
+     refuse to make (US-01-14 criterion 8). */
+  it('says nothing matches, rather than showing a bare empty grid', async () => {
+    renderScreen([getClip({ name: 'Shuffle drill' })])
+
+    await userEvent.type(searchBox(), 'salsa')
+
+    expect(screen.getByRole('list', { name: 'Clips' })).toBeEmptyDOMElement()
+    expect(
+      screen.getByRole('status', { name: 'Search clips' }),
+    ).toHaveTextContent(/no clips match/i)
+  })
+
+  it('does not claim the library is empty, which would be a lie', async () => {
+    renderScreen([getClip({ name: 'Shuffle drill' })])
+
+    await userEvent.type(searchBox(), 'salsa')
+
+    expect(
+      screen.getByRole('status', { name: 'Search clips' }),
+    ).not.toHaveTextContent(/no clips yet|you have no clips|add a clip/i)
+  })
+
+  it('says nothing of the kind while the box is empty', () => {
+    renderScreen([getClip({ name: 'Shuffle drill' })])
+
+    expect(
+      screen.queryByRole('status', { name: 'Search clips' }),
+    ).not.toBeInTheDocument()
+  })
+
+  /* A library with nothing in it is not a search that found nothing, and the
+     footer note already explains that case. */
+  it('says nothing of the kind for an empty library nobody searched', () => {
+    renderScreen([])
+
+    expect(
+      screen.queryByRole('status', { name: 'Search clips' }),
+    ).not.toBeInTheDocument()
+  })
+
+  /* `loading` and `failed` both hand the screen a library with no clips, for a
+     reason that has nothing to do with what was typed. "No clips match" there is
+     the same lie the bare empty grid was not allowed to tell, one state along:
+     the library has not been read yet, or could not be read at all, and the
+     screen already has an honest sentence for each. */
+  it('says nothing matches only once the library has actually been read', async () => {
+    renderScreenWith(LOADING)
+
+    await userEvent.type(searchBox(), 'wave')
+
+    expect(
+      screen.queryByRole('status', { name: 'Search clips' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('does not blame the search when the library could not be read', async () => {
+    renderScreenWith(failed(LOADING))
+
+    await userEvent.type(searchBox(), 'wave')
+
+    expect(
+      screen.queryByRole('status', { name: 'Search clips' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('takes the line away again once the search matches something', async () => {
+    renderScreen([getClip({ id: 'shuffle', name: 'Shuffle drill' })])
+
+    await userEvent.type(searchBox(), 'salsa')
+    await userEvent.clear(searchBox())
+    await userEvent.type(searchBox(), 'shuffle')
+
+    expect(
+      screen.queryByRole('status', { name: 'Search clips' }),
+    ).not.toBeInTheDocument()
+    expect(gridOrder()).toEqual(['shuffle'])
+  })
+
+  it('keeps ordering what is left when the ordering changes mid-search', async () => {
+    renderScreen([
+      getClip({ id: 'wave-practice', name: 'Wave practice', added: '2026-08-28' }),
+      getClip({ id: 'arm-wave', name: 'Arm wave', added: '2026-08-14' }),
+    ])
+
+    await userEvent.type(searchBox(), 'wave')
+    await userEvent.click(screen.getByRole('button', { name: 'Name' }))
+
+    expect(gridOrder()).toEqual(['arm-wave', 'wave-practice'])
   })
 })
 

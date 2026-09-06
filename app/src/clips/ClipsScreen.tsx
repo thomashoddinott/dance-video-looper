@@ -10,6 +10,7 @@ import type { Library } from './library'
 import { uploadOf } from './library'
 import type { OrderingId } from './ordering'
 import { orderings } from './ordering'
+import { matching } from './search'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -49,6 +50,11 @@ export function ClipsScreen({
   readonly notice?: string | null
 }) {
   const { clips } = library
+  /* Local, unlike the ordering above it: a search is a question about the grid
+     you are looking at, not a setting, and coming back from the player with the
+     whole library showing is the honest default. Persisting it is explicitly not
+     in US-01-18. */
+  const [query, setQuery] = useState('')
   const [ownNotice, setNotice] = useState<string | null>(null)
 
   const notice = ownNotice ?? driveNotice
@@ -117,12 +123,30 @@ export function ClipsScreen({
 
     /* Whatever the dancer was ordering by, the clip they just added is the one
        they are looking for — and under any other ordering it lands somewhere
-       they would have to hunt for it. */
+       they would have to hunt for it.
+
+       The search goes for the same reason, and a sharper one: a search the new
+       clip does not match hides it outright, so the dancer would have added a
+       clip and been told there are none. */
     setChosen(RECENT)
+    setQuery('')
   }
 
   const ordering = orderings.find(({ id }) => id === chosen) ?? orderings[0]
-  const ordered = [...clips].sort(ordering.compare)
+  /* Filter, then order — never the other way about. Search narrows the set and the
+     chosen chip decides the order of what is left, so the two controls compose
+     instead of competing for the same result. */
+  const ordered = [...matching(clips, query)].sort(ordering.compare)
+  /* Trimmed, to agree with `matching` about what an empty box is: a query of
+     nothing but spaces is no search at all, so it must not be able to produce a
+     "nothing matches" line over a grid that is showing everything. */
+  const searching = query.trim() !== ''
+  /* And only once there was a library for the search to have excluded something
+     from. `loading` and `failed` both carry no clips for a reason of their own,
+     and a `ready` library with none is the footer note's business — in all three
+     the grid is empty whatever was typed, so blaming the search would be the
+     same lie the bare empty grid was not allowed to tell, one state along. */
+  const excludedEverything = searching && clips.length > 0 && ordered.length === 0
 
   return (
     <div className="min-h-screen bg-shell text-ink">
@@ -178,6 +202,22 @@ export function ClipsScreen({
           </p>
         )}
 
+        {/* No form around it and nothing to submit: the grid answers the keystroke.
+            A submit would reload the page, and on a static site that means fetching
+            the whole library again to answer a question already in memory.
+
+            Labelled rather than captioned — the placeholder is a hint, not a name,
+            and a visible label above the grid is a line of chrome the screen does
+            not need. */}
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          aria-label="Search clips"
+          placeholder="Search clips"
+          className="mt-3 w-full rounded-lg bg-control px-3 py-2 text-sm text-ink placeholder:text-ink/40"
+        />
+
         <div
           role="toolbar"
           aria-label="Order clips"
@@ -199,6 +239,24 @@ export function ClipsScreen({
             </button>
           ))}
         </div>
+
+        {/* An empty grid is only honest about a library that is empty. Under a
+            search it would be saying "you have no clips" when the truth is "none
+            of yours are called that" — the same conflation the loading and failed
+            states above already refuse to make.
+
+            Named, for the reason those two are: `DriveStatus` owns an unnamed
+            `status` on this screen and a second one would be indistinguishable
+            from it. */}
+        {excludedEverything && (
+          <p
+            role="status"
+            aria-label="Search clips"
+            className="mt-4 text-xs text-ink/60"
+          >
+            No clips match “{query.trim()}”.
+          </p>
+        )}
 
         <ul
           role="list"

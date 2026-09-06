@@ -308,17 +308,20 @@ describe('the Clips screen', () => {
     expect(note).toHaveTextContent(/only sees files it uploaded itself/i)
   })
 
-  it('lays the shell out heading, ordering, clips, then the note', () => {
+  /* Search reads before ordering, and both read before the grid they act on: you
+     narrow the library, then say how what is left should be arranged. */
+  it('lays the shell out heading, search, ordering, clips, then the note', () => {
     renderAppAt('/')
 
     const order = inDocumentOrder({
       heading: screen.getByRole('heading', { name: 'Clips' }),
+      search: screen.getByRole('searchbox', { name: 'Search clips' }),
       ordering: screen.getByRole('toolbar', { name: 'Order clips' }),
       clips: screen.getByRole('list', { name: 'Clips' }),
       note: screen.getByText(/clips live in google drive/i),
     })
 
-    expect(order).toEqual(['heading', 'ordering', 'clips', 'note'])
+    expect(order).toEqual(['heading', 'search', 'ordering', 'clips', 'note'])
   })
 })
 
@@ -356,6 +359,22 @@ describe('adding a clip', () => {
     await screen.findByText('Camel walk')
 
     expect(pressedChips()).toEqual(['Recent'])
+  })
+
+  /* The same rule the ordering follows, for the same reason (US-01-18). A search
+     the new clip does not match would hide it behind "no clips match" — the
+     dancer would have added a clip and been told there are none. */
+  it('clears the search, so the new clip is not hidden behind it', async () => {
+    await renderLibraryWith(probeReading(26))
+
+    await userEvent.type(
+      screen.getByRole('searchbox', { name: 'Search clips' }),
+      'shuffle',
+    )
+    await chooseFile(aVideoFile({ named: 'Camel walk.mp4' }))
+
+    expect(await screen.findByText('Camel walk')).toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: 'Search clips' })).toHaveValue('')
   })
 
   /* The player finds a clip by id or bounces back to the grid, so "Back to
