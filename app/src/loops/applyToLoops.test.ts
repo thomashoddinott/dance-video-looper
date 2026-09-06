@@ -12,6 +12,12 @@ import { NO_LOOPS, serialiseLoops } from './loopsFile'
 const A_CLIP = 'shuffle-drill'
 const THE_OTHER_CLIP = 'pivot-turn'
 
+/* When the change was made. Nothing here is about the stamp — that is
+   `loopsChange.test.ts` — but it rides every write, so it shows up in the
+   bodies these tests read back. */
+const AT = '2026-09-06T18:04:11.000Z'
+const PRACTISED = { [A_CLIP]: AT }
+
 const holding = (
   clips: Record<string, readonly SavedLoop[]>,
   versions: readonly string[] = ['3', '3'],
@@ -39,7 +45,7 @@ describe('writing a change back to Drive', () => {
     const api = holding({})
 
     await applyToLoops(api, A_TOKEN, A_FOLDER, (loops) =>
-      withLoop(loops, A_CLIP, getLoop()),
+      withLoop(loops, A_CLIP, getLoop(), AT),
     )
 
     expect(api.writeJson).toHaveBeenCalledWith(
@@ -56,9 +62,13 @@ describe('writing a change back to Drive', () => {
 
     await expect(
       applyToLoops(api, A_TOKEN, A_FOLDER, (loops) =>
-        withLoop(loops, A_CLIP, loop),
+        withLoop(loops, A_CLIP, loop, AT),
       ),
-    ).resolves.toEqual({ ...NO_LOOPS, clips: { [A_CLIP]: [loop] } })
+    ).resolves.toEqual({
+      ...NO_LOOPS,
+      clips: { [A_CLIP]: [loop] },
+      touched: PRACTISED,
+    })
   })
 
   /* UC-01 Q-05, and the whole reason this is a read-modify-write rather than a
@@ -71,13 +81,13 @@ describe('writing a change back to Drive', () => {
     const api = holding({ [THE_OTHER_CLIP]: [theirs] })
 
     await applyToLoops(api, A_TOKEN, A_FOLDER, (loops) =>
-      withLoop(loops, A_CLIP, mine),
+      withLoop(loops, A_CLIP, mine, AT),
     )
 
     expect(bodyWritten(api)).toEqual({
       schema: 1,
       clips: { [THE_OTHER_CLIP]: [theirs], [A_CLIP]: [mine] },
-      touched: {},
+      touched: PRACTISED,
     })
   })
 
@@ -87,13 +97,13 @@ describe('writing a change back to Drive', () => {
     const api = holding({ [A_CLIP]: [going, kept] })
 
     await applyToLoops(api, A_TOKEN, A_FOLDER, (loops) =>
-      withoutLoop(loops, A_CLIP, 'going'),
+      withoutLoop(loops, A_CLIP, 'going', AT),
     )
 
     expect(bodyWritten(api)).toEqual({
       schema: 1,
       clips: { [A_CLIP]: [kept] },
-      touched: {},
+      touched: PRACTISED,
     })
   })
 })
@@ -104,7 +114,7 @@ describe('the first save of all', () => {
     const api = aDriveApi()
 
     await applyToLoops(api, A_TOKEN, A_FOLDER, (loops) =>
-      withLoop(loops, A_CLIP, loop),
+      withLoop(loops, A_CLIP, loop, AT),
     )
 
     expect(api.createJson).toHaveBeenCalledWith(A_TOKEN, {
@@ -114,7 +124,7 @@ describe('the first save of all', () => {
     expect(bodyWritten(api)).toEqual({
       schema: 1,
       clips: { [A_CLIP]: [loop] },
-      touched: {},
+      touched: PRACTISED,
     })
   })
 })
@@ -130,7 +140,7 @@ describe('a file nobody can read', () => {
     })
 
     const refused = await applyToLoops(api, A_TOKEN, A_FOLDER, (loops) =>
-      withLoop(loops, A_CLIP, getLoop()),
+      withLoop(loops, A_CLIP, getLoop(), AT),
     ).catch((error: unknown) => error)
 
     expect(refused).toBeInstanceOf(LoopsRefused)
@@ -146,7 +156,7 @@ describe('a write that lands inside our own round trip', () => {
     const api = holding({}, ['3', '4', '4', '4'])
 
     await applyToLoops(api, A_TOKEN, A_FOLDER, (loops) =>
-      withLoop(loops, A_CLIP, getLoop()),
+      withLoop(loops, A_CLIP, getLoop(), AT),
     )
 
     expect(api.readJson).toHaveBeenCalledTimes(2)
@@ -159,7 +169,7 @@ describe('a write that lands inside our own round trip', () => {
     const api = holding({}, ['3', '4', '4', '5'])
 
     const refused = await applyToLoops(api, A_TOKEN, A_FOLDER, (loops) =>
-      withLoop(loops, A_CLIP, getLoop()),
+      withLoop(loops, A_CLIP, getLoop(), AT),
     ).catch((error: unknown) => error)
 
     expect(refused).toBeInstanceOf(LoopsRefused)

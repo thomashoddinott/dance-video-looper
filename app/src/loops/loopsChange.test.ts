@@ -1,16 +1,28 @@
 import { describe, expect, it } from 'vitest'
 
 import { getLoop } from './loop.factory'
-import { countOf, loopsFor, withLoop, withoutLoop } from './loopsChange'
+import {
+  countOf,
+  loopsFor,
+  practisedAt,
+  withLoop,
+  withoutLoop,
+} from './loopsChange'
 import { NO_LOOPS } from './loopsFile'
 
 const A_CLIP = 'shuffle-drill'
 const ANOTHER_CLIP = 'pivot-turn'
 
-const holding = (clips: Record<string, ReturnType<typeof getLoop>[]>) => ({
-  ...NO_LOOPS,
-  clips,
-})
+/* When the change being made happened. Every one of these functions takes it
+   rather than reading a clock, so the merge below is testable as arithmetic. */
+const AT = '2026-09-06T18:04:11.000Z'
+const EARLIER = '2026-09-06T09:00:00.000Z'
+const LATER = '2026-09-06T21:30:00.000Z'
+
+const holding = (
+  clips: Record<string, ReturnType<typeof getLoop>[]>,
+  touched: Record<string, string> = {},
+) => ({ ...NO_LOOPS, clips, touched })
 
 /* These two are the whole of what a device ever does to `loops.json`, and that
    is the point: because the only changes are "append this one" and "drop this
@@ -20,7 +32,9 @@ describe('adding a loop', () => {
   it('starts the list for a clip that had none', () => {
     const loop = getLoop()
 
-    expect(withLoop(NO_LOOPS, A_CLIP, loop)).toEqual(holding({ [A_CLIP]: [loop] }))
+    expect(withLoop(NO_LOOPS, A_CLIP, loop, AT)).toEqual(
+      holding({ [A_CLIP]: [loop] }, { [A_CLIP]: AT }),
+    )
   })
 
   it('adds to the end, which is the order the panel lists them in', () => {
@@ -28,7 +42,7 @@ describe('adding a loop', () => {
     const second = getLoop({ id: 'second' })
 
     expect(
-      withLoop(holding({ [A_CLIP]: [first] }), A_CLIP, second).clips[A_CLIP],
+      withLoop(holding({ [A_CLIP]: [first] }), A_CLIP, second, AT).clips[A_CLIP],
     ).toEqual([first, second])
   })
 
@@ -39,7 +53,7 @@ describe('adding a loop', () => {
     const theirs = getLoop({ id: 'theirs' })
 
     expect(
-      withLoop(holding({ [ANOTHER_CLIP]: [theirs] }), A_CLIP, mine).clips,
+      withLoop(holding({ [ANOTHER_CLIP]: [theirs] }), A_CLIP, mine, AT).clips,
     ).toEqual({ [ANOTHER_CLIP]: [theirs], [A_CLIP]: [mine] })
   })
 })
@@ -50,8 +64,8 @@ describe('removing a loop', () => {
     const going = getLoop({ id: 'going' })
 
     expect(
-      withoutLoop(holding({ [A_CLIP]: [kept, going] }), A_CLIP, 'going'),
-    ).toEqual(holding({ [A_CLIP]: [kept] }))
+      withoutLoop(holding({ [A_CLIP]: [kept, going] }), A_CLIP, 'going', AT),
+    ).toEqual(holding({ [A_CLIP]: [kept] }, { [A_CLIP]: AT }))
   })
 
   /* Matches what the reader does with a clip whose every entry was malformed:
@@ -59,8 +73,13 @@ describe('removing a loop', () => {
      about what an empty list means. */
   it('drops the clip entirely once its last loop is gone', () => {
     expect(
-      withoutLoop(holding({ [A_CLIP]: [getLoop({ id: 'only' })] }), A_CLIP, 'only'),
-    ).toEqual(NO_LOOPS)
+      withoutLoop(
+        holding({ [A_CLIP]: [getLoop({ id: 'only' })] }),
+        A_CLIP,
+        'only',
+        AT,
+      ),
+    ).toEqual(holding({}, { [A_CLIP]: AT }))
   })
 
   it('leaves every other clip exactly as it was', () => {
@@ -71,8 +90,9 @@ describe('removing a loop', () => {
         holding({ [A_CLIP]: [getLoop({ id: 'mine' })], [ANOTHER_CLIP]: [theirs] }),
         A_CLIP,
         'mine',
+        AT,
       ),
-    ).toEqual(holding({ [ANOTHER_CLIP]: [theirs] }))
+    ).toEqual(holding({ [ANOTHER_CLIP]: [theirs] }, { [A_CLIP]: AT }))
   })
 
   /* Both of these happen for real: the other device removed it first, and the
@@ -80,11 +100,64 @@ describe('removing a loop', () => {
   it('is a no-op for an id that is not there', () => {
     const held = holding({ [A_CLIP]: [getLoop()] })
 
-    expect(withoutLoop(held, A_CLIP, 'never-saved')).toEqual(held)
+    expect(withoutLoop(held, A_CLIP, 'never-saved', AT).clips).toEqual(held.clips)
   })
 
   it('is a no-op for a clip that is not there', () => {
-    expect(withoutLoop(NO_LOOPS, 'no-such-clip', 'loop-1')).toEqual(NO_LOOPS)
+    expect(withoutLoop(NO_LOOPS, 'no-such-clip', 'loop-1', AT).clips).toEqual({})
+  })
+})
+
+/* #12 — the last time a loop was saved on a clip or removed from it, which is
+   what the **Last practised** chip orders by. The stamp rides the two writes
+   that already happen rather than adding a third, which is the whole reason
+   practising is defined as loop edits and not as opening the player. */
+describe('stamping a clip as practised', () => {
+  it('stamps the clip a loop was saved on', () => {
+    expect(withLoop(NO_LOOPS, A_CLIP, getLoop(), AT).touched).toEqual({
+      [A_CLIP]: AT,
+    })
+  })
+
+  /* A removal is working on the clip too, so it stamps — including the removal
+     that empties it. That is why the stamp is a sibling of `clips` rather than
+     a field on a loop: it has to outlive the loops it was made by. */
+  it('stamps the clip a loop was removed from, even as its last loop goes', () => {
+    const emptied = withoutLoop(
+      holding({ [A_CLIP]: [getLoop({ id: 'only' })] }),
+      A_CLIP,
+      'only',
+      AT,
+    )
+
+    expect(emptied.clips).toEqual({})
+    expect(emptied.touched).toEqual({ [A_CLIP]: AT })
+  })
+
+  it('moves the stamp on when the same clip is practised again', () => {
+    expect(
+      withLoop(holding({}, { [A_CLIP]: EARLIER }), A_CLIP, getLoop(), LATER)
+        .touched,
+    ).toEqual({ [A_CLIP]: LATER })
+  })
+
+  /* The merge rule, and the reason this is `max` rather than an assignment.
+     `applyToLoops` replays the change onto whatever Drive holds *now*, so a
+     stamp captured before that round trip can arrive after a newer one the
+     phone already wrote. Taking the later of the two is what stops the laptop
+     dragging a clip's recency backwards. */
+  it('leaves a later stamp standing when an earlier change is replayed onto it', () => {
+    expect(
+      withLoop(holding({}, { [A_CLIP]: LATER }), A_CLIP, getLoop(), EARLIER)
+        .touched,
+    ).toEqual({ [A_CLIP]: LATER })
+  })
+
+  it('leaves every other clip’s stamp exactly as it was', () => {
+    expect(
+      withLoop(holding({}, { [ANOTHER_CLIP]: EARLIER }), A_CLIP, getLoop(), AT)
+        .touched,
+    ).toEqual({ [ANOTHER_CLIP]: EARLIER, [A_CLIP]: AT })
   })
 })
 
@@ -111,5 +184,16 @@ describe('what a clip has', () => {
         A_CLIP,
       ),
     ).toBe(2)
+  })
+
+  it('says when it was last practised', () => {
+    expect(practisedAt(holding({}, { [A_CLIP]: AT }), A_CLIP)).toBe(AT)
+  })
+
+  /* Undefined rather than a fallback date. "Never practised" is not "practised
+     at the beginning of time" — the chip has to sort it below every clip that
+     has been, and a real date would let it tie with one. */
+  it('says nothing for a clip that has never been practised', () => {
+    expect(practisedAt(NO_LOOPS, 'no-such-clip')).toBeUndefined()
   })
 })
