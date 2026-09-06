@@ -404,6 +404,62 @@ describe('the search box', () => {
     expect(gridOrder()).toEqual(['arm-wave', 'wave-practice'])
   })
 
+  /* An empty grid is only honest about a library that is empty. Under a search it
+     would be saying "you have no clips" when the truth is "none of yours are
+     called that" — the same conflation the loading and failed states already
+     refuse to make (US-01-14 criterion 8). */
+  it('says nothing matches, rather than showing a bare empty grid', async () => {
+    renderScreen([getClip({ name: 'Shuffle drill' })])
+
+    await userEvent.type(searchBox(), 'salsa')
+
+    expect(screen.getByRole('list', { name: 'Clips' })).toBeEmptyDOMElement()
+    expect(
+      screen.getByRole('status', { name: 'Search clips' }),
+    ).toHaveTextContent(/no clips match/i)
+  })
+
+  it('does not claim the library is empty, which would be a lie', async () => {
+    renderScreen([getClip({ name: 'Shuffle drill' })])
+
+    await userEvent.type(searchBox(), 'salsa')
+
+    expect(
+      screen.getByRole('status', { name: 'Search clips' }),
+    ).not.toHaveTextContent(/no clips yet|you have no clips|add a clip/i)
+  })
+
+  it('says nothing of the kind while the box is empty', () => {
+    renderScreen([getClip({ name: 'Shuffle drill' })])
+
+    expect(
+      screen.queryByRole('status', { name: 'Search clips' }),
+    ).not.toBeInTheDocument()
+  })
+
+  /* A library with nothing in it is not a search that found nothing, and the
+     footer note already explains that case. */
+  it('says nothing of the kind for an empty library nobody searched', () => {
+    renderScreen([])
+
+    expect(
+      screen.queryByRole('status', { name: 'Search clips' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('takes the line away again once the search matches something', async () => {
+    renderScreen([getClip({ id: 'shuffle', name: 'Shuffle drill' })])
+
+    await userEvent.type(searchBox(), 'salsa')
+    await userEvent.clear(searchBox())
+    await userEvent.type(searchBox(), 'shuffle')
+
+    expect(
+      screen.queryByRole('status', { name: 'Search clips' }),
+    ).not.toBeInTheDocument()
+    expect(gridOrder()).toEqual(['shuffle'])
+  })
+
   it('keeps ordering what is left when the ordering changes mid-search', async () => {
     renderScreen([
       getClip({ id: 'wave-practice', name: 'Wave practice', added: '2026-08-28' }),

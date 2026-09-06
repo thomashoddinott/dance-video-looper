@@ -120,6 +120,10 @@ export function ClipsScreen({
      chosen chip decides the order of what is left, so the two controls compose
      instead of competing for the same result. */
   const ordered = [...matching(clips, query)].sort(ordering.compare)
+  /* Trimmed, to agree with `matching` about what an empty box is: a query of
+     nothing but spaces is no search at all, so it must not be able to produce a
+     "nothing matches" line over a grid that is showing everything. */
+  const searching = query.trim() !== ''
 
   return (
     <div className="min-h-screen bg-shell text-ink">
@@ -212,6 +216,24 @@ export function ClipsScreen({
             </button>
           ))}
         </div>
+
+        {/* An empty grid is only honest about a library that is empty. Under a
+            search it would be saying "you have no clips" when the truth is "none
+            of yours are called that" — the same conflation the loading and failed
+            states above already refuse to make.
+
+            Named, for the reason those two are: `DriveStatus` owns an unnamed
+            `status` on this screen and a second one would be indistinguishable
+            from it. */}
+        {searching && ordered.length === 0 && (
+          <p
+            role="status"
+            aria-label="Search clips"
+            className="mt-4 text-xs text-ink/60"
+          >
+            No clips match “{query.trim()}”.
+          </p>
+        )}
 
         <ul
           role="list"
