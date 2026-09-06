@@ -181,19 +181,22 @@ describe('saving a loop', () => {
   it('refreshes the local copy with what was written', async () => {
     const loop = getLoop()
     const cache = aLoopsCache()
+    const api = holding({})
 
-    const { result } = renderLoops(holding({}), { cache })
+    const { result } = renderLoops(api, { cache })
 
     await result.current.save(A_CLIP, loop)
 
-    expect(cache.write).toHaveBeenCalledWith({
-      ...NO_LOOPS,
-      clips: { [A_CLIP]: [loop] },
-      /* Whatever the clock said. That the stamp is *the time of the save* is
-         pinned below, under a frozen one; this test is about the local copy
-         matching what went to Drive. */
-      touched: { [A_CLIP]: expect.any(String) as unknown as string },
-    })
+    const written = bodyWritten(api)
+
+    /* Against the body itself rather than against a shape restated here with
+       the stamp loosened to "some string". The claim is that the two agree —
+       comparing them directly says that, holds the stamp to the same standard
+       as everything beside it, and needs no assertion to get past the clock.
+       That the stamp is *the time of the save* is pinned below, under a frozen
+       one. */
+    expect(written.clips).toEqual({ [A_CLIP]: [loop] })
+    expect(cache.write).toHaveBeenCalledWith(written)
   })
 
   /* The criterion the whole story turns on: a loop silently lost is the worst
