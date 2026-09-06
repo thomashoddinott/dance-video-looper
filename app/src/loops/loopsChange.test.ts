@@ -153,6 +153,17 @@ describe('stamping a clip as practised', () => {
     ).toEqual({ [A_CLIP]: LATER })
   })
 
+  /* The rule `withClip` states and nothing else pins: a removal replayed onto a
+     file the other device has already removed from changes no loops, but the
+     dancer still pressed the button, so it still stamps. The two no-op tests
+     above assert only `.clips`, which is exactly what leaves this unguarded. */
+  it('stamps a removal that removes nothing', () => {
+    expect(
+      withoutLoop(holding({ [A_CLIP]: [getLoop()] }), A_CLIP, 'never-saved', AT)
+        .touched,
+    ).toEqual({ [A_CLIP]: AT })
+  })
+
   it('leaves every other clip’s stamp exactly as it was', () => {
     expect(
       withLoop(holding({}, { [ANOTHER_CLIP]: EARLIER }), A_CLIP, getLoop(), AT)
