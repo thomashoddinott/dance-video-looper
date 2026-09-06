@@ -26,9 +26,10 @@ the whole grid.
 
 - **Mockup:** none as drawn. This screen was mocked up before a library big enough to
   need search existed, so US-01-18 takes a **mockup gate pass** (CLAUDE.md → Process):
-  built first, then retrofitted into `mockup/src/Library.jsx` so the mockup stays a
-  true reference for UC-01 rather than a stale one. The same route US-01-13 and
-  US-01-14 took.
+  built first, then retrofitted so the mockup stays a true reference for UC-01 rather
+  than a stale one. The same route US-01-13 and US-01-14 took. Retrofitted at
+  `mockup/src/Library.jsx:350–361` (the box), `233–239` (filter then order), `384–388`
+  (nothing matches) and `316` (cleared on add).
 - **References:** UC-01 Basic Flow step 4 — the step the ordering chips also serve.
 - **Not in this story:** searching anything but the name — not the date, not the
   duration, not the loop count. No fuzzy matching, no highlighting of the matched

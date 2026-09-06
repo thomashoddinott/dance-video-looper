@@ -23,7 +23,7 @@ screen component, and a **mockup gate pass**, since it is built before it is dra
 | [US-01-02](US-01-02_Clip_tile.md) | Clip tile | `Library.jsx:22–66` | #18 |
 | [US-01-03](US-01-03_Ordering_chips.md) | Ordering chips | `Library.jsx:152–167` | #19 |
 | [US-01-04](US-01-04_Add_a_clip.md) | Add a clip | `Library.jsx:108–129` | #20 |
-| [US-01-18](US-01-18_Search_the_clips.md) | Search the clips | retrofitted — gate pass | #13 |
+| [US-01-18](US-01-18_Search_the_clips.md) | Search the clips | `Library.jsx:350–361` — retrofitted | #13 |
 
 ## Player — `mockup/src/Player.jsx`
 
