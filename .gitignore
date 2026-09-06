@@ -1,0 +1,22 @@
+node_modules/
+dist/
+
+# No video is committed. The clips live in Google Drive, which is the whole point
+# of the storage layer, and any clip on hand locally is someone else's content —
+# so it stays local rather than being published here. Drop your own file into
+# `app/public/` or `mockup/public/` to have something to play against.
+*.mp4
+
+# The Claude Code working directory — skills, agents, commands, hooks, worktrees
+# and local settings. Never tracked here. It is curated separately, and this repo
+# has no version that has ever carried it.
+.claude/
+
+# Scratch planning notes: they live inside a worktree and die with it.
+PLAN.md
+
+.env
+.env.local
+.env.*.local
+.DS_Store
+*.log

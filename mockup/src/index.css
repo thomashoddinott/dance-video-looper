@@ -1,0 +1,15 @@
+@import 'tailwindcss';
+
+/* Chalk — warm paper, deep teal. Every colour in the UI resolves from these
+   eight tokens, so a re-theme is an eight-line change, not a sweep. */
+
+@theme {
+  --color-shell: #eceae4;
+  --color-panel: #fbfaf7;
+  --color-control: #dedad0;
+  --color-control-hi: #cec9bc;
+  --color-accent: #0f7068;
+  --color-accent-2: #14504f;
+  --color-ink: #1c1a15;
+  --color-on-accent: #f4fbf9;
+}
