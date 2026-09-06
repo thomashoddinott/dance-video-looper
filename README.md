@@ -1,4 +1,4 @@
-[TODO - UPDATE]
+[TODO - UPDATE - strip out sections after WHY - rewrite, basically take summary of use case]
 
 # Dance Video Looper
 
