@@ -128,3 +128,26 @@ export const withLoopCounts = (
   ...library,
   clips: library.clips.map((clip) => ({ ...clip, loops: countFor(clip.id) })),
 })
+
+/* The same join, for the other thing `loops.json` knows that a Drive listing
+   does not: when each clip was last worked on (#12).
+
+   A sibling of `withLoopCounts` rather than a second argument to it. They read
+   the same file and arrive by the same route, but they answer different
+   questions, and a function named for counting should not quietly do both —
+   composing the two at the one call site says what is happening more plainly
+   than a `countFor`/`practisedFor` pair would.
+
+   Undefined is a real answer here rather than a gap: most of a library has
+   never been practised, and the chip has to draw those clips rather than leave
+   them out. */
+export const withPractised = (
+  library: Library,
+  practisedFor: (clipId: string) => string | undefined,
+): Library => ({
+  ...library,
+  clips: library.clips.map((clip) => ({
+    ...clip,
+    practised: practisedFor(clip.id),
+  })),
+})

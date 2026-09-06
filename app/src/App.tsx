@@ -7,14 +7,14 @@ import { browserClipCache, browserThumbnailCache } from './clips/clipCache'
 import type { ClipProbe } from './clips/clipProbe'
 import { browserClipProbe } from './clips/clipProbe'
 import { ClipsScreen } from './clips/ClipsScreen'
-import { withLoopCounts } from './clips/library'
+import { withLoopCounts, withPractised } from './clips/library'
 import type { ThumbnailCapture } from './clips/thumbnail'
 import { browserThumbnailCapture } from './clips/thumbnail'
 import { useLibrary } from './clips/useLibrary'
 import { useThumbnails } from './clips/useThumbnails'
 import type { DriveApi } from './drive/driveApi'
 import { browserDriveApi } from './drive/driveApi'
-import { countOf } from './loops/loopsChange'
+import { countOf, practisedAt } from './loops/loopsChange'
 import type { LoopsCache } from './loops/loopsCache'
 import { browserLoopsCache } from './loops/loopsCache'
 import { useLoops } from './loops/useLoops'
@@ -54,12 +54,13 @@ export function App({
      count in each tile and orders by it under **Most looped**. One `loops.json`
      holds every clip's, so there is one place to read it from (US-01-15). */
   const loops = useLoops(driveApi, loopsCache)
-  /* The clips as the grid draws them, counts included. The two arrive
-     separately — Drive's file listing knows nothing about loops, and
-     `loops.json` is fetched on its own — so this is where they are put
-     together, once, for both screens. */
-  const counted = withLoopCounts(library, (clipId) =>
-    countOf(loops.loops, clipId),
+  /* The clips as the grid draws them: counts, and when each was last practised
+     (#12). All of it arrives separately — Drive's file listing knows nothing
+     about loops, and `loops.json` is fetched on its own — so this is where they
+     are put together, once, for both screens. */
+  const counted = withPractised(
+    withLoopCounts(library, (clipId) => countOf(loops.loops, clipId)),
+    (clipId) => practisedAt(loops.loops, clipId),
   )
   /* Beside the loops, and above both routes for the same reason: the grid
      paints the stills and the player makes the ones that are missing, so a
