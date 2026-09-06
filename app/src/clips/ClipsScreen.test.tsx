@@ -307,6 +307,117 @@ describe('the ordering chips', () => {
   })
 })
 
+const searchBox = () => screen.getByRole('searchbox', { name: 'Search clips' })
+
+/* The names the grid is currently drawing, in the order it drew them. */
+const gridNames = () =>
+  screen.getAllByRole('listitem').map((tile) => tile.textContent)
+
+describe('the search box', () => {
+  it('offers a search box the dancer can find by name', () => {
+    renderScreen([])
+
+    expect(searchBox()).toBeInTheDocument()
+  })
+
+  it('starts empty, so the whole library is showing', () => {
+    renderScreen([getClip({ id: 'one' }), getClip({ id: 'two' })])
+
+    expect(searchBox()).toHaveValue('')
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+  })
+
+  it('shows only the clips whose name contains what was typed', async () => {
+    renderScreen([
+      getClip({ id: 'shuffle', name: 'Shuffle drill' }),
+      getClip({ id: 'wave', name: 'Wave practice' }),
+      getClip({ id: 'body', name: 'Body roll' }),
+    ])
+
+    await userEvent.type(searchBox(), 'wave')
+
+    expect(gridOrder()).toEqual(['wave'])
+  })
+
+  /* No form around it and no button to press: the grid answers the keystroke.
+     A submit would also reload the page, which on a static site means fetching
+     the whole library again to answer a question already in memory. */
+  it('narrows the grid as the text is typed, with nothing to submit', async () => {
+    renderScreen([
+      getClip({ id: 'wave', name: 'Wave practice' }),
+      getClip({ id: 'warm', name: 'Warm up' }),
+    ])
+
+    await userEvent.type(searchBox(), 'wa')
+
+    expect(gridOrder()).toEqual(['wave', 'warm'])
+
+    await userEvent.type(searchBox(), 've')
+
+    expect(gridOrder()).toEqual(['wave'])
+    expect(screen.queryByRole('button', { name: /search/i })).not.toBeInTheDocument()
+  })
+
+  it('matches whatever case the text was typed in', async () => {
+    renderScreen([getClip({ id: 'shuffle', name: 'Shuffle drill' })])
+
+    await userEvent.type(searchBox(), 'SHUFFLE')
+
+    expect(gridOrder()).toEqual(['shuffle'])
+  })
+
+  /* The space a phone keyboard adds after a finished word must not be the
+     difference between finding a clip and being told there is none. */
+  it('is not defeated by whitespace around the text', async () => {
+    renderScreen([getClip({ id: 'shuffle', name: 'Shuffle drill' })])
+
+    await userEvent.type(searchBox(), '  shuffle  ')
+
+    expect(gridOrder()).toEqual(['shuffle'])
+  })
+
+  it('brings every clip back when the box is cleared', async () => {
+    renderScreen([
+      getClip({ id: 'shuffle', name: 'Shuffle drill' }),
+      getClip({ id: 'wave', name: 'Wave practice' }),
+    ])
+
+    await userEvent.type(searchBox(), 'wave')
+    await userEvent.clear(searchBox())
+
+    expect(gridOrder()).toEqual(['shuffle', 'wave'])
+  })
+
+  /* The two controls compose in one direction: search narrows the set, the chosen
+     chip orders what is left. If searching re-ordered as well, the chip the dancer
+     pressed would quietly stop meaning anything. */
+  it('leaves the chosen ordering in charge of what is still showing', async () => {
+    renderScreen([
+      getClip({ id: 'wave-practice', name: 'Wave practice', added: '2026-08-28' }),
+      getClip({ id: 'arm-wave', name: 'Arm wave', added: '2026-08-14' }),
+      getClip({ id: 'body-roll', name: 'Body roll', added: '2026-08-12' }),
+    ])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Name' }))
+    await userEvent.type(searchBox(), 'wave')
+
+    expect(gridOrder()).toEqual(['arm-wave', 'wave-practice'])
+  })
+
+  it('keeps ordering what is left when the ordering changes mid-search', async () => {
+    renderScreen([
+      getClip({ id: 'wave-practice', name: 'Wave practice', added: '2026-08-28' }),
+      getClip({ id: 'arm-wave', name: 'Arm wave', added: '2026-08-14' }),
+    ])
+
+    await userEvent.type(searchBox(), 'wave')
+    await userEvent.click(screen.getByRole('button', { name: 'Name' }))
+
+    expect(gridNames()).toHaveLength(2)
+    expect(gridOrder()).toEqual(['arm-wave', 'wave-practice'])
+  })
+})
+
 /* A file input carries no ARIA role, so there is nothing to ask the tree for —
    the same reason `posterOf` above reaches for the medium instead. */
 const fileChooser = () =>

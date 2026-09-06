@@ -301,17 +301,20 @@ describe('the Clips screen', () => {
     expect(note).toHaveTextContent(/only sees files it uploaded itself/i)
   })
 
-  it('lays the shell out heading, ordering, clips, then the note', () => {
+  /* Search reads before ordering, and both read before the grid they act on: you
+     narrow the library, then say how what is left should be arranged. */
+  it('lays the shell out heading, search, ordering, clips, then the note', () => {
     renderAppAt('/')
 
     const order = inDocumentOrder({
       heading: screen.getByRole('heading', { name: 'Clips' }),
+      search: screen.getByRole('searchbox', { name: 'Search clips' }),
       ordering: screen.getByRole('toolbar', { name: 'Order clips' }),
       clips: screen.getByRole('list', { name: 'Clips' }),
       note: screen.getByText(/clips live in google drive/i),
     })
 
-    expect(order).toEqual(['heading', 'ordering', 'clips', 'note'])
+    expect(order).toEqual(['heading', 'search', 'ordering', 'clips', 'note'])
   })
 })
 

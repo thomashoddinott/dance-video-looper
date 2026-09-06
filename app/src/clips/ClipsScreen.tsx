@@ -10,6 +10,7 @@ import type { Library } from './library'
 import { uploadOf } from './library'
 import type { OrderingId } from './ordering'
 import { orderings } from './ordering'
+import { matching } from './search'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -41,6 +42,7 @@ export function ClipsScreen({
 }) {
   const { clips } = library
   const [chosen, setChosen] = useState<OrderingId>(orderings[0].id)
+  const [query, setQuery] = useState('')
   const [ownNotice, setNotice] = useState<string | null>(null)
 
   const notice = ownNotice ?? driveNotice
@@ -114,7 +116,10 @@ export function ClipsScreen({
   }
 
   const ordering = orderings.find(({ id }) => id === chosen) ?? orderings[0]
-  const ordered = [...clips].sort(ordering.compare)
+  /* Filter, then order — never the other way about. Search narrows the set and the
+     chosen chip decides the order of what is left, so the two controls compose
+     instead of competing for the same result. */
+  const ordered = [...matching(clips, query)].sort(ordering.compare)
 
   return (
     <div className="min-h-screen bg-shell text-ink">
@@ -169,6 +174,22 @@ export function ClipsScreen({
             Loading your clips…
           </p>
         )}
+
+        {/* No form around it and nothing to submit: the grid answers the keystroke.
+            A submit would reload the page, and on a static site that means fetching
+            the whole library again to answer a question already in memory.
+
+            Labelled rather than captioned — the placeholder is a hint, not a name,
+            and a visible label above the grid is a line of chrome the screen does
+            not need. */}
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          aria-label="Search clips"
+          placeholder="Search clips"
+          className="mt-3 w-full rounded-lg bg-control px-3 py-2 text-sm text-ink placeholder:text-ink/40"
+        />
 
         <div
           role="toolbar"
