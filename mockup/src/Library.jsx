@@ -1,9 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 
+/* Retrofitted from the product (#12) — the mockup gate pass for a chip that was
+   built before anything had drawn it.
+
+   Recent is the day a clip was uploaded and never changes again, so it cannot
+   answer "what am I working on". Last practised can. A clip never practised
+   compares as the empty string, which puts the whole never-practised tail below
+   every clip that has been — and still draws it, because a clip vanishing from
+   the grid under one chip would read as a clip deleted.
+
+   Last of the four so that `SORTS[0]` stays Recent: it is the default, and it
+   is where the grid jumps back to after an add. */
 const SORTS = [
   { id: 'added', label: 'Recent', compare: (a, b) => b.added.localeCompare(a.added) },
   { id: 'name', label: 'Name', compare: (a, b) => a.name.localeCompare(b.name) },
   { id: 'loops', label: 'Most looped', compare: (a, b) => b.loops - a.loops },
+  {
+    id: 'practised',
+    label: 'Last practised',
+    compare: (a, b) => (b.practised ?? '').localeCompare(a.practised ?? ''),
+  },
 ]
 
 function formatDuration(seconds) {

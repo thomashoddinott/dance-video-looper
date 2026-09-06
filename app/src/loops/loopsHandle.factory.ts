@@ -56,15 +56,24 @@ export const useFakeLoops = ({
     [held, refuses],
   )
 
+  /* A real clock, as `useLoops` uses — the fake is standing in for Drive, not
+     for time, and a frozen stamp would let a test pass that the real hook
+     fails. */
   const save = useCallback(
-    (clipId: string, loop: SavedLoop) =>
-      write((current) => withLoop(current, clipId, loop)),
+    (clipId: string, loop: SavedLoop) => {
+      const at = new Date().toISOString()
+
+      return write((current) => withLoop(current, clipId, loop, at))
+    },
     [write],
   )
 
   const remove = useCallback(
-    (clipId: string, id: string) =>
-      write((current) => withoutLoop(current, clipId, id)),
+    (clipId: string, id: string) => {
+      const at = new Date().toISOString()
+
+      return write((current) => withoutLoop(current, clipId, id, at))
+    },
     [write],
   )
 
