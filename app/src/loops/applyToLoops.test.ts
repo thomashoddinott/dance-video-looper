@@ -77,6 +77,7 @@ describe('writing a change back to Drive', () => {
     expect(bodyWritten(api)).toEqual({
       schema: 1,
       clips: { [THE_OTHER_CLIP]: [theirs], [A_CLIP]: [mine] },
+      touched: {},
     })
   })
 
@@ -92,6 +93,7 @@ describe('writing a change back to Drive', () => {
     expect(bodyWritten(api)).toEqual({
       schema: 1,
       clips: { [A_CLIP]: [kept] },
+      touched: {},
     })
   })
 })
@@ -112,6 +114,7 @@ describe('the first save of all', () => {
     expect(bodyWritten(api)).toEqual({
       schema: 1,
       clips: { [A_CLIP]: [loop] },
+      touched: {},
     })
   })
 })

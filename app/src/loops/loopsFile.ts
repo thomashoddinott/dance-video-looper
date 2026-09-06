@@ -10,15 +10,38 @@ import type { SavedLoop } from './loop'
 
    `schema` is one field of insurance. The loops are the asset, UC-01 Q-06 will
    export this exact shape, and a reader that meets a version it does not know
-   should say so rather than mangle what it found. */
+   should say so rather than mangle what it found.
+
+   **It stays at 1 as the shape grows, and `touched` (#12) is the precedent.**
+   The version is not a changelog — it is the switch that makes a reader refuse
+   the file, and refusing is only ever right when the loops themselves are at
+   stake. Bumping it for an added field would tell every device still on an
+   older deployed build that the file is unreadable, and that device would then
+   stop saving. Left at 1, the same device ignores the key it does not know and
+   drops it on its next write: recency lost, never a loop. Bump it only for a
+   change that would make an old reader mangle the loops. */
 export const SCHEMA = 1
 
 export type LoopsFile = {
   readonly schema: typeof SCHEMA
   readonly clips: Readonly<Record<string, readonly SavedLoop[]>>
+  /* When each clip was last worked on — the last time a loop was saved on it or
+     removed from it (#12), which is what the **Last practised** chip orders by.
+     ISO-8601, always UTC, because that is the one format whose string order is
+     its time order and the merge below compares them as strings.
+
+     A sibling of `clips` rather than a field on each loop: it is a fact about
+     the clip, and the clip it belongs to may have no loops left. Keyed the same
+     way, so both maps survive a re-upload for the same reason.
+
+     Always present, empty when nothing has been practised, exactly as `clips`
+     is — the "not carried around forever" rule (`withClip`) is about entries,
+     not about the map. That keeps `LoopsFile` a total shape and spares every
+     reader a `?? {}`. */
+  readonly touched: Readonly<Record<string, string>>
 }
 
-export const NO_LOOPS: LoopsFile = { schema: SCHEMA, clips: {} }
+export const NO_LOOPS: LoopsFile = { schema: SCHEMA, clips: {}, touched: {} }
 
 /* Three answers, not two, and the third is the one that matters: a file this
    app cannot understand is refused rather than read as empty, because reading
@@ -78,6 +101,30 @@ const clipsFrom = (
     ),
   )
 
+/* A string is not yet a time. An unparseable one would sort somewhere arbitrary
+   rather than fail, so it is refused at the door — the same argument `isNumber`
+   above makes about `NaN` reaching a seek. */
+const isTime = (value: unknown): value is string =>
+  typeof value === 'string' && Number.isFinite(Date.parse(value))
+
+/* The asymmetry that decides this whole module: `clips` being the wrong shape
+   refuses the file, because loops are unaccounted for. `touched` being the wrong
+   shape must not, because refusing would throw away readable loops to punish a
+   broken ordering — and an ordering costs nothing to rebuild, since the next
+   save stamps the clip again.
+
+   So everything here degrades: a map that is not a map reads as no stamps, and
+   a stamp that is not a time is dropped on its own, leaving its siblings. */
+const touchedFrom = (held: unknown): Readonly<Record<string, string>> => {
+  if (!isRecord(held)) return {}
+
+  return Object.fromEntries(
+    Object.entries(held).flatMap<[string, string]>(([clipId, at]) =>
+      isTime(at) ? [[clipId, at]] : [],
+    ),
+  )
+}
+
 const parsed = (body: string): unknown => {
   try {
     return JSON.parse(body) as unknown
@@ -103,7 +150,14 @@ export const readLoopsFile = (body: string): LoopsRead => {
 
   return {
     readable: true,
-    loops: { schema: SCHEMA, clips: clipsFrom(held.clips) },
+    loops: {
+      schema: SCHEMA,
+      clips: clipsFrom(held.clips),
+      /* Absent on every file written before #12, which `touchedFrom` reads as
+         no stamps rather than as a reason to refuse. That is what lets this
+         land without a schema bump — see the note on `SCHEMA`. */
+      touched: touchedFrom(held.touched),
+    },
   }
 }
 

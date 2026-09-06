@@ -3,8 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { getLoop } from './loop.factory'
 import { NO_LOOPS, readLoopsFile, serialiseLoops } from './loopsFile'
 
-const written = (clips: Record<string, unknown>) =>
-  JSON.stringify({ schema: 1, clips })
+/* `JSON.stringify` drops an undefined value rather than writing `null`, so
+   omitting the second argument writes a file with no `touched` key at all —
+   which is every file written before #12. */
+const written = (clips: Record<string, unknown>, touched?: unknown) =>
+  JSON.stringify({ schema: 1, clips, touched })
+
+const PRACTISED = '2026-09-06T18:04:11.000Z'
 
 /* The whole point of this module is that a bad file cannot cost the dancer
    their loops, so every case below is about telling three things apart:
@@ -15,12 +20,16 @@ describe('reading a loops.json body', () => {
 
     expect(readLoopsFile(written({ 'shuffle-drill': [loop] }))).toEqual({
       readable: true,
-      loops: { schema: 1, clips: { 'shuffle-drill': [loop] } },
+      loops: { schema: 1, clips: { 'shuffle-drill': [loop] }, touched: {} },
     })
   })
 
   it('survives a round trip through the writer', () => {
-    const loops = { schema: 1 as const, clips: { 'shuffle-drill': [getLoop()] } }
+    const loops = {
+      schema: 1 as const,
+      clips: { 'shuffle-drill': [getLoop()] },
+      touched: {},
+    }
 
     expect(readLoopsFile(serialiseLoops(loops))).toEqual({
       readable: true,
@@ -90,7 +99,7 @@ describe('a malformed loop among good ones', () => {
       ),
     ).toEqual({
       readable: true,
-      loops: { schema: 1, clips: { 'shuffle-drill': [good] } },
+      loops: { schema: 1, clips: { 'shuffle-drill': [good] }, touched: {} },
     })
   })
 
@@ -120,7 +129,7 @@ describe('a malformed loop among good ones', () => {
       readLoopsFile(written({ broken: 'not a list', kept: [good] })),
     ).toEqual({
       readable: true,
-      loops: { schema: 1, clips: { kept: [good] } },
+      loops: { schema: 1, clips: { kept: [good] }, touched: {} },
     })
   })
 
@@ -131,5 +140,103 @@ describe('a malformed loop among good ones', () => {
       readable: true,
       loops: NO_LOOPS,
     })
+  })
+})
+
+/* When each clip was last worked on (#12), which is what the **Last practised**
+   chip orders by.
+
+   Recency is not the asset — the loops are — and every rule below follows from
+   that one asymmetry. A stamp that cannot be read is dropped; a *loop* that
+   cannot be read makes the whole file untouchable. Losing a stamp costs an
+   ordering until the next save. Losing a loop costs the dancer their work. */
+describe('when a clip was last practised', () => {
+  it('reads back the stamps beside the loops', () => {
+    const loop = getLoop()
+
+    expect(
+      readLoopsFile(
+        written({ 'shuffle-drill': [loop] }, { 'shuffle-drill': PRACTISED }),
+      ),
+    ).toEqual({
+      readable: true,
+      loops: {
+        schema: 1,
+        clips: { 'shuffle-drill': [loop] },
+        touched: { 'shuffle-drill': PRACTISED },
+      },
+    })
+  })
+
+  /* Every `loops.json` in Drive predates this, and the dancer's loops are in
+     them. Reading one as anything other than "practised nothing yet" would be
+     the feature arriving by destroying what it was built to order. */
+  it('reads a file written before stamps existed as nothing practised yet', () => {
+    const loop = getLoop()
+
+    expect(readLoopsFile(written({ 'shuffle-drill': [loop] }))).toEqual({
+      readable: true,
+      loops: { schema: 1, clips: { 'shuffle-drill': [loop] }, touched: {} },
+    })
+  })
+
+  it('survives a round trip through the writer', () => {
+    const loops = {
+      schema: 1 as const,
+      clips: { 'shuffle-drill': [getLoop()] },
+      touched: { 'shuffle-drill': PRACTISED },
+    }
+
+    expect(readLoopsFile(serialiseLoops(loops))).toEqual({
+      readable: true,
+      loops,
+    })
+  })
+
+  /* Removing a clip's last loop drops it out of `clips` and is itself an act of
+     practising it, so the stamp has to outlive the loops it was made by. */
+  it('keeps a stamp for a clip that has no loops left', () => {
+    expect(readLoopsFile(written({}, { 'shuffle-drill': PRACTISED }))).toEqual({
+      readable: true,
+      loops: { schema: 1, clips: {}, touched: { 'shuffle-drill': PRACTISED } },
+    })
+  })
+
+  it('drops a stamp that is not a string and keeps its siblings', () => {
+    expect(
+      readLoopsFile(
+        written({}, { broken: 1757181851000, kept: PRACTISED }),
+      ),
+    ).toEqual({
+      readable: true,
+      loops: { schema: 1, clips: {}, touched: { kept: PRACTISED } },
+    })
+  })
+
+  /* A string is not yet a time. This one sorts somewhere arbitrary rather than
+     failing loudly, so it is refused at the door instead. */
+  it('drops a stamp that is not a time', () => {
+    expect(
+      readLoopsFile(written({}, { broken: 'last Tuesday-ish' })),
+    ).toEqual({ readable: true, loops: NO_LOOPS })
+  })
+
+  /* The asymmetry, stated as a test: `clips` being the wrong shape refuses the
+     whole file, because the loops in it are unaccounted for. `touched` being
+     the wrong shape must not, because refusing would throw away readable loops
+     to punish a broken ordering. */
+  it('keeps the file when the stamps themselves are the wrong shape', () => {
+    const loop = getLoop()
+    const readable = {
+      readable: true,
+      loops: { schema: 1, clips: { 'shuffle-drill': [loop] }, touched: {} },
+    }
+
+    expect(readLoopsFile(written({ 'shuffle-drill': [loop] }, []))).toEqual(
+      readable,
+    )
+    expect(
+      readLoopsFile(written({ 'shuffle-drill': [loop] }, 'yesterday')),
+    ).toEqual(readable)
   })
 })
