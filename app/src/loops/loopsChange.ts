@@ -15,34 +15,35 @@ import type { LoopsFile } from './loopsFile'
 
 /* The later of the two, and a plain string comparison because the stamps are
    ISO-8601 UTC — the one format whose lexical order is its chronological order.
+   Both sides may be missing: a clip this device has never opened, in a file that
+   has never heard of it either.
 
-   `max` rather than an assignment, and that is the merge rule rather than
-   caution. `applyToLoops` replays this change onto whatever Drive holds *now*,
-   so a stamp captured before that round trip can land on top of a newer one the
-   phone already wrote. Assigning would let a laptop that has been offline drag
-   a clip's recency backwards. Two clocks that disagree cost minutes here, which
-   is nothing against a chip measured in days. */
-const laterOf = (held: string | undefined, at: string) =>
-  held !== undefined && held > at ? held : at
+   `max` rather than an assignment wherever it is used, and that is the merge
+   rule rather than caution. Two clocks that disagree cost minutes here, which is
+   nothing against a chip measured in days. */
+export const laterOf = (
+  held: string | undefined,
+  other: string | undefined,
+): string | undefined => {
+  if (held === undefined) return other
+  if (other === undefined) return held
+
+  return held > other ? held : other
+}
 
 /* A clip with no loops is not in the file at all, which is the same rule
    `readLoopsFile` applies to a clip whose every entry was malformed. Keeping an
    empty list would give the two readings of "this clip has nothing" a way to
    disagree.
 
-   The stamp is not filtered the same way, on purpose: a clip whose last loop
-   has just been removed is a clip that was just practised, so its `touched`
-   entry outlives the loops that earned it (#12).
-
-   Every change through here stamps, with no exception for one that removes
-   nothing. A removal replayed onto a file the other device already removed from
-   changes no loops, but the dancer still pressed the button — the emptiness is
-   the merge's doing, not theirs. */
+   It leaves `touched` alone. Saving a loop is not what the fourth chip measures
+   any more (#16) — opening the clip is, and that is recorded on the device long
+   before this runs. A loop write carries those stamps (`withOpens`), but it does
+   not make one of its own. */
 const withClip = (
   loops: LoopsFile,
   clipId: string,
   saved: readonly SavedLoop[],
-  at: string,
 ): LoopsFile => ({
   ...loops,
   clips: Object.fromEntries(
@@ -50,7 +51,6 @@ const withClip = (
       ([, held]) => held.length > 0,
     ),
   ),
-  touched: { ...loops.touched, [clipId]: laterOf(loops.touched[clipId], at) },
 })
 
 export const loopsFor = (
@@ -65,41 +65,57 @@ export const loopsFor = (
 export const countOf = (loops: LoopsFile, clipId: string) =>
   loopsFor(loops, clipId).length
 
-/* What the **Last practised** chip orders by (#12). Undefined rather than a
-   fallback date, because "never practised" is not "practised at the beginning
-   of time": the chip sorts the never-practised below every clip that has been,
-   and any real date would let one of them tie with a clip that has. */
-export const practisedAt = (
+/* What Drive knows about when this clip was last opened (#16) — which may be
+   another device's answer, and may be behind this one's. The grid takes the
+   later of the two (`laterOf`).
+
+   Undefined rather than a fallback date, because "never opened" is not "opened
+   at the beginning of time": the chip sorts the never-opened below every clip
+   that has been, and any real date would let one of them tie with a clip that
+   genuinely was opened then. */
+export const openedAt = (
   loops: LoopsFile,
   clipId: string,
 ): string | undefined => loops.touched[clipId]
 
-/* At the end, because that is the order the panel lists them in and the order
-   the dancer saved them in.
+/* The opens this device recorded, folded into the file on their way to Drive
+   (#16). They ride the write a loop save or removal was already making — there
+   is no write of their own, which is the whole reason opening a clip is free.
 
-   `at` is passed in rather than read from a clock here, which keeps this module
-   pure and — more usefully — makes the merge above something a test can state
-   as arithmetic rather than schedule. */
+   Per clip the later stamp wins, so replaying a laptop's week-old opens onto
+   what the phone has since written cannot drag anything backwards. */
+export const withOpens = (
+  loops: LoopsFile,
+  opens: Readonly<Record<string, string>>,
+): LoopsFile => ({
+  ...loops,
+  touched: Object.entries(opens).reduce<Record<string, string>>(
+    (held, [clipId, at]) => ({
+      ...held,
+      [clipId]: laterOf(held[clipId], at) ?? at,
+    }),
+    { ...loops.touched },
+  ),
+})
+
+/* At the end, because that is the order the panel lists them in and the order
+   the dancer saved them in. */
 export const withLoop = (
   loops: LoopsFile,
   clipId: string,
   loop: SavedLoop,
-  at: string,
-): LoopsFile => withClip(loops, clipId, [...loopsFor(loops, clipId), loop], at)
+): LoopsFile => withClip(loops, clipId, [...loopsFor(loops, clipId), loop])
 
 /* A no-op for an id that is not there, and that is a real case rather than
    defensiveness: the other device may have removed it first, and the merge
-   replays this removal onto a file that has already lost it. A no-op for the
-   loops — it still stamps, for the reason `withClip` gives. */
+   replays this removal onto a file that has already lost it. */
 export const withoutLoop = (
   loops: LoopsFile,
   clipId: string,
   id: string,
-  at: string,
 ): LoopsFile =>
   withClip(
     loops,
     clipId,
     loopsFor(loops, clipId).filter((loop) => loop.id !== id),
-    at,
   )

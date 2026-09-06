@@ -152,6 +152,7 @@ function Opening() {
 }
 
 export function PlayerScreen({
+  onOpened,
   clips,
   loops,
   driveApi = browserDriveApi,
@@ -160,6 +161,10 @@ export function PlayerScreen({
   stillLoading = false,
 }: {
   readonly clips: readonly Clip[]
+  /* Fired once the path has resolved to a clip the library holds (#16), which
+     is what **Last opened** orders by. Not on every render and not before the
+     bounce: a path naming no clip is not an open. */
+  readonly onOpened: (clipId: string) => void
   /* The loops, from above both screens. The player no longer keeps a list of
      its own: US-01-15 puts them in Drive, and the Clips screen counts the same
      ones, so a second copy read separately would be a second copy free to
@@ -201,6 +206,7 @@ export function PlayerScreen({
       driveApi={driveApi}
       clipCache={clipCache}
       onBytes={onBytes}
+      onOpened={onOpened}
     />
   )
 }
@@ -211,13 +217,24 @@ function OpenedClip({
   driveApi,
   clipCache,
   onBytes,
+  onOpened,
 }: {
   readonly clip: Clip
   readonly loops: LoopsHandle
   readonly driveApi: DriveApi
   readonly clipCache: ClipCache
   readonly onBytes?: ((clipId: string, bytes: Blob) => void) | undefined
+  readonly onOpened: (clipId: string) => void
 }) {
+  /* #16. Here rather than in the parent because this component is keyed on the
+     clip and mounted only once the path has resolved to one the library holds —
+     so it fires exactly once per open, and a path naming no clip never counts
+     as one. It does not wait for the bytes: the dancer opened the clip whether
+     or not Drive could produce it. */
+  useEffect(() => {
+    onOpened(clip.id)
+  }, [clip.id, onOpened])
+
   /* Named here rather than inline at the call below, because `useClipSource`
      depends on it: a new function each render would re-run its effect and
      re-fetch the clip every time anything on this screen changed. */

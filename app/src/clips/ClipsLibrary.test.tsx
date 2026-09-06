@@ -10,6 +10,7 @@ import type { ClipProbe } from './clipProbe'
 import { ClipsScreen } from './ClipsScreen'
 import type { Library } from './library'
 import { adding, failed, LOADING, loaded } from './library'
+import { orderings } from './ordering'
 
 const anUnconfiguredDrive: TokenSource = async () => ({
   ok: false,
@@ -23,6 +24,7 @@ const anEmptyTokenStore: TokenStore = {
 }
 
 const noClipIsAdded = () => {}
+const noOrderingIsChosen = () => {}
 const noFileIsProbed: ClipProbe = async () => ({ ok: false })
 const noClipIsDeleted = () => {}
 
@@ -35,6 +37,8 @@ const renderLibrary = (library: Library) =>
       <MemoryRouter>
         <ClipsScreen
           library={library}
+          ordering={orderings[0].id}
+          onOrderingChange={noOrderingIsChosen}
           onAdd={noClipIsAdded}
           onDelete={noClipIsDeleted}
           probe={noFileIsProbed}

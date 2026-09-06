@@ -5,7 +5,7 @@ import { withdrewConsent } from '../drive/driveErrors'
 import { useDriveSession } from '../drive/driveSession'
 import { applyToLoops, type LoopsChange, LoopsRefused, readLoops } from './driveLoops'
 import type { SavedLoop } from './loop'
-import { withLoop, withoutLoop } from './loopsChange'
+import { withLoop, withOpens, withoutLoop } from './loopsChange'
 import type { LoopsCache } from './loopsCache'
 import { browserLoopsCache } from './loopsCache'
 import type { LoopsFile } from './loopsFile'
@@ -27,17 +27,6 @@ export type LoopsHandle = {
   readonly save: (clipId: string, loop: SavedLoop) => Promise<boolean>
   readonly remove: (clipId: string, id: string) => Promise<boolean>
 }
-
-/* The moment the dancer pressed the button, which is what `touched` records
-   (#12). Taken here, once, rather than inside the change handed to
-   `applyToLoops`: that change may be replayed on a retry, and the stamp is
-   about what the dancer did rather than which attempt happened to land. Keeping
-   the clock out of it also keeps `LoopsChange` a pure function of the file,
-   which is what makes the merge replayable in the first place.
-
-   UTC, because `touched` is compared as a string and only this format sorts
-   chronologically when it is. */
-const practisedNow = () => new Date().toISOString()
 
 /* Deliberately different sentences, because the dancer can act on the
    difference. "Could not be read" also carries the news that their existing
@@ -64,6 +53,13 @@ const noticeFor = (error: unknown, what: string) => {
 export const useLoops = (
   api: DriveApi,
   cache: LoopsCache = browserLoopsCache,
+  /* What this device has opened, read at the moment of a write rather than
+     captured (#16). These stamps ride the write a loop save or removal was
+     already making — there is deliberately no write of their own, because
+     `loops.json` holds the loops and an ordering is not worth putting it in
+     the path of every open. A getter rather than a value so the write always
+     carries what is true now, not what was true when this hook rendered. */
+  opens: () => Readonly<Record<string, string>> = () => ({}),
 ): LoopsHandle => {
   const { status, requireToken, reportConsentWithdrawn } = useDriveSession()
   /* Seeded from the local copy rather than from nothing, which is BR-13's
@@ -152,11 +148,17 @@ export const useLoops = (
            upload's tile-first flow — and the difference is the wait being
            covered: thirteen seconds there, about two hundred milliseconds
            here. */
+        /* Folded in *inside* the change, so it is replayed onto whatever Drive
+           holds now exactly as the loop edit is — and so a retry carries them
+           too. `withOpens` keeps the later stamp per clip, so a device that has
+           been shut for a week cannot drag anything backwards. */
+        const carrying = opens()
+
         const next = await applyToLoops(
           api,
           reached.token,
           reached.folderId,
-          change,
+          (held) => withOpens(change(held), carrying),
         )
 
         setLoops(next)
@@ -172,15 +174,12 @@ export const useLoops = (
         setWriting(false)
       }
     },
-    [api, cache, folderToken, reportIfWithdrawn],
+    [api, cache, folderToken, opens, reportIfWithdrawn],
   )
 
   const save = useCallback(
-    (clipId: string, loop: SavedLoop) => {
-      const at = practisedNow()
-
-      return write((held) => withLoop(held, clipId, loop, at), `“${loop.name}”`)
-    },
+    (clipId: string, loop: SavedLoop) =>
+      write((held) => withLoop(held, clipId, loop), `“${loop.name}”`),
     [write],
   )
 
@@ -188,11 +187,8 @@ export const useLoops = (
      to is still on screen when the sentence appears — the dancer can see which
      one it is, and a name repeated back adds nothing. */
   const remove = useCallback(
-    (clipId: string, id: string) => {
-      const at = practisedNow()
-
-      return write((held) => withoutLoop(held, clipId, id, at), 'That removal')
-    },
+    (clipId: string, id: string) =>
+      write((held) => withoutLoop(held, clipId, id), 'That removal'),
     [write],
   )
 

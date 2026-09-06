@@ -25,8 +25,8 @@ export const SCHEMA = 1
 export type LoopsFile = {
   readonly schema: typeof SCHEMA
   readonly clips: Readonly<Record<string, readonly SavedLoop[]>>
-  /* When each clip was last worked on — the last time a loop was saved on it or
-     removed from it (#12), which is what the **Last practised** chip orders by.
+  /* When each clip was last opened — the last time a loop was saved on it or
+     removed from it (#12), which is what the **Last opened** chip orders by.
      ISO-8601, always UTC, because that is the one format whose string order is
      its time order and the merge below compares them as strings.
 
@@ -34,7 +34,7 @@ export type LoopsFile = {
      the clip, and the clip it belongs to may have no loops left. Keyed the same
      way, so both maps survive a re-upload for the same reason.
 
-     Always present, empty when nothing has been practised, exactly as `clips`
+     Always present, empty when nothing has been opened, exactly as `clips`
      is — the "not carried around forever" rule (`withClip`) is about entries,
      not about the map. That keeps `LoopsFile` a total shape and spares every
      reader a `?? {}`. */
@@ -108,7 +108,7 @@ const isTime = (value: unknown): value is string =>
   typeof value === 'string' && Number.isFinite(Date.parse(value))
 
 /* And a time is not yet a *comparable* one. `laterOf` and the **Last
-   practised** chip both compare these as plain strings, which only orders
+   opened** chip both compare these as plain strings, which only orders
    chronologically for ISO-8601 UTC — so `…T19:04:11+02:00` would sort after
    `…T18:00:00.000Z` while being the earlier instant. `isTime` above admits
    every form `Date.parse` understands, so the same door that accepts a stamp
