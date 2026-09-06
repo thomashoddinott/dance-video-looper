@@ -129,6 +129,12 @@ export function ClipsScreen({
      nothing but spaces is no search at all, so it must not be able to produce a
      "nothing matches" line over a grid that is showing everything. */
   const searching = query.trim() !== ''
+  /* And only once there was a library for the search to have excluded something
+     from. `loading` and `failed` both carry no clips for a reason of their own,
+     and a `ready` library with none is the footer note's business — in all three
+     the grid is empty whatever was typed, so blaming the search would be the
+     same lie the bare empty grid was not allowed to tell, one state along. */
+  const excludedEverything = searching && clips.length > 0 && ordered.length === 0
 
   return (
     <div className="min-h-screen bg-shell text-ink">
@@ -230,7 +236,7 @@ export function ClipsScreen({
             Named, for the reason those two are: `DriveStatus` owns an unnamed
             `status` on this screen and a second one would be indistinguishable
             from it. */}
-        {searching && ordered.length === 0 && (
+        {excludedEverything && (
           <p
             role="status"
             aria-label="Search clips"

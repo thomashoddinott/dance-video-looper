@@ -58,6 +58,20 @@ comparator — the fourth criterion holds by construction rather than by vigilan
 The reverse would also *look* right and be wrong the moment the set changes, which is
 why the direction is written down here rather than left to the implementation.
 
+### "Nothing matches" needs a library to have not matched
+
+The third criterion is about a search that excluded everything, and that is only
+what an empty grid means once there *was* something to exclude. `loading` and
+`failed` both hand the screen a library with no clips for a reason of their own,
+and a `ready` library with none is the footer note's business. In all three the
+grid is empty whatever was typed, so the line is held back — otherwise it tells a
+dancer whose clips are merely unreachable that none of them are called that, which
+is the same conflation US-01-14 criterion 8 refuses one state earlier.
+
+Found in review of #14, where the guard read `searching && ordered.length === 0`
+and the loading state was reachable by typing before Drive answered — the studio
+with bad signal this app is otherwise built around.
+
 ### Why the whitespace criterion is not fussiness
 
 A phone keyboard adds a trailing space readily — autocorrect after a completed word,

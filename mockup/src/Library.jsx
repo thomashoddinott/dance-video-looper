@@ -380,8 +380,12 @@ function Library({ clips, onOpen, onAdd, onDelete }) {
 
         {/* An empty grid is only honest about an empty library. Under a search it
             would be saying "you have no clips" when the truth is "none of yours
-            are called that". */}
-        {wanted && ordered.length === 0 && (
+            are called that".
+
+            And only once there is a library to have not matched: while it is
+            still loading there are no clips whatever was typed, so blaming the
+            search would be the same lie one state along. */}
+        {wanted && clips.length > 0 && ordered.length === 0 && (
           <p className="mt-4 text-xs text-ink/60">
             No clips match “{query.trim()}”.
           </p>

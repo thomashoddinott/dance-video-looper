@@ -10,7 +10,8 @@ import type { Clip } from './clip'
 import { getClip } from './clip.factory'
 import type { ClipProbe } from './clipProbe'
 import { ClipsScreen } from './ClipsScreen'
-import { LOADING, loaded } from './library'
+import type { Library } from './library'
+import { LOADING, failed, loaded } from './library'
 
 /* The screen carries the Drive status footer (US-01-13), and the session
    deliberately throws rather than degrading when there is no provider above it.
@@ -33,8 +34,12 @@ const noClipIsAdded = () => {}
 const noFileIsProbed: ClipProbe = async () => ({ ok: false })
 const noClipIsDeleted = () => {}
 
-const renderScreen = (
-  clips: readonly Clip[],
+/* The library whole, rather than the clips in it. `renderScreen` below hands the
+   screen a `ready` one by construction, so the two states that carry no clips for
+   a reason of their own — not looked yet, and looked and could not — are only
+   reachable through here. */
+const renderScreenWith = (
+  library: Library,
   onDelete: (clip: Clip) => void = noClipIsDeleted,
 ) =>
   render(
@@ -44,7 +49,7 @@ const renderScreen = (
     >
       <MemoryRouter>
         <ClipsScreen
-          library={loaded(LOADING, clips)}
+          library={library}
           onAdd={noClipIsAdded}
           onDelete={onDelete}
           probe={noFileIsProbed}
@@ -52,6 +57,11 @@ const renderScreen = (
       </MemoryRouter>
     </DriveSessionProvider>,
   )
+
+const renderScreen = (
+  clips: readonly Clip[],
+  onDelete: (clip: Clip) => void = noClipIsDeleted,
+) => renderScreenWith(loaded(LOADING, clips), onDelete)
 
 /* A tile's identity is the clip it is about, and `listitem` takes no name from
    its contents, so the lookup is "the tile that mentions this clip". */
@@ -309,10 +319,6 @@ describe('the ordering chips', () => {
 
 const searchBox = () => screen.getByRole('searchbox', { name: 'Search clips' })
 
-/* The names the grid is currently drawing, in the order it drew them. */
-const gridNames = () =>
-  screen.getAllByRole('listitem').map((tile) => tile.textContent)
-
 describe('the search box', () => {
   it('offers a search box the dancer can find by name', () => {
     renderScreen([])
@@ -447,6 +453,31 @@ describe('the search box', () => {
     ).not.toBeInTheDocument()
   })
 
+  /* `loading` and `failed` both hand the screen a library with no clips, for a
+     reason that has nothing to do with what was typed. "No clips match" there is
+     the same lie the bare empty grid was not allowed to tell, one state along:
+     the library has not been read yet, or could not be read at all, and the
+     screen already has an honest sentence for each. */
+  it('says nothing matches only once the library has actually been read', async () => {
+    renderScreenWith(LOADING)
+
+    await userEvent.type(searchBox(), 'wave')
+
+    expect(
+      screen.queryByRole('status', { name: 'Search clips' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('does not blame the search when the library could not be read', async () => {
+    renderScreenWith(failed(LOADING))
+
+    await userEvent.type(searchBox(), 'wave')
+
+    expect(
+      screen.queryByRole('status', { name: 'Search clips' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('takes the line away again once the search matches something', async () => {
     renderScreen([getClip({ id: 'shuffle', name: 'Shuffle drill' })])
 
@@ -469,7 +500,6 @@ describe('the search box', () => {
     await userEvent.type(searchBox(), 'wave')
     await userEvent.click(screen.getByRole('button', { name: 'Name' }))
 
-    expect(gridNames()).toHaveLength(2)
     expect(gridOrder()).toEqual(['arm-wave', 'wave-practice'])
   })
 })
