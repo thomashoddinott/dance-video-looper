@@ -25,7 +25,7 @@ whichever fact about it I happen to remember.
 
 - **Mockup:** `mockup/src/Library.jsx:216–231` (the chip row), `3–7` (the three orderings and their comparators)
 - **References:** UC-01 Basic Flow step 4
-- **Not in this story:** what a tile looks like (US-01-02), and the automatic switch to **Recent** after adding a clip, which belongs to that flow (US-01-04). Search and filtering are not in this set at all — the mockup has neither, and a personal library of this size has not yet earned them.
+- **Not in this story:** what a tile looks like (US-01-02), and the automatic switch to **Recent** after adding a clip, which belongs to that flow (US-01-04). Search and filtering were not in this set at all — the mockup had neither, and a personal library of this size had not yet earned them. **That condition has since changed:** the library is now dozens of clips deep, and search is US-01-18. Ordering is still not its business — search narrows the grid, the chips order what is left.
 - **Open questions:** whether **Most looped** should mean *most saved* or *most practised* is a real product question the mockup does not answer — promoted to **UC-01 Q-13**, since it outlives this story. It does not block: the saved-loop count is the only signal the app keeps, so that is what is built against.
 - **Dependencies:** US-01-01 (the region the chips sit in — `ClipsScreen.tsx`, the `role="toolbar"` element, already present and empty)
 
