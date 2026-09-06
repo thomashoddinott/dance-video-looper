@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { DriveSessionProvider } from '../drive/DriveSessionProvider'
@@ -12,6 +13,8 @@ import type { ClipProbe } from './clipProbe'
 import { ClipsScreen } from './ClipsScreen'
 import type { Library } from './library'
 import { LOADING, failed, loaded } from './library'
+import type { OrderingId } from './ordering'
+import { orderings } from './ordering'
 
 /* The screen carries the Drive status footer (US-01-13), and the session
    deliberately throws rather than degrading when there is no provider above it.
@@ -34,10 +37,36 @@ const noClipIsAdded = () => {}
 const noFileIsProbed: ClipProbe = async () => ({ ok: false })
 const noClipIsDeleted = () => {}
 
-/* The library whole, rather than the clips in it. `renderScreen` below hands the
-   screen a `ready` one by construction, so the two states that carry no clips for
-   a reason of their own — not looked yet, and looked and could not — are only
-   reachable through here. */
+/* The ordering belongs to the caller now (#16), because the real one has to
+   outlive this screen being unmounted for the player. Here the caller is this
+   wrapper, so the chips still switch for real and the cases below are unchanged
+   by the move.
+
+   It takes the library whole rather than the clips in it, because `renderScreen`
+   below builds a `ready` one by construction — and the two states that carry no
+   clips for a reason of their own, not looked yet and looked and could not, are
+   only reachable past it. */
+function ScreenUnderTest({
+  library,
+  onDelete,
+}: {
+  readonly library: Library
+  readonly onDelete: (clip: Clip) => void
+}) {
+  const [ordering, setOrdering] = useState<OrderingId>(orderings[0].id)
+
+  return (
+    <ClipsScreen
+      library={library}
+      ordering={ordering}
+      onOrderingChange={setOrdering}
+      onAdd={noClipIsAdded}
+      onDelete={onDelete}
+      probe={noFileIsProbed}
+    />
+  )
+}
+
 const renderScreenWith = (
   library: Library,
   onDelete: (clip: Clip) => void = noClipIsDeleted,
@@ -48,12 +77,7 @@ const renderScreenWith = (
       tokenStore={anEmptyTokenStore}
     >
       <MemoryRouter>
-        <ClipsScreen
-          library={library}
-          onAdd={noClipIsAdded}
-          onDelete={onDelete}
-          probe={noFileIsProbed}
-        />
+        <ScreenUnderTest library={library} onDelete={onDelete} />
       </MemoryRouter>
     </DriveSessionProvider>,
   )
@@ -236,7 +260,7 @@ describe('the ordering chips', () => {
       'Recent',
       'Name',
       'Most looped',
-      'Last practised',
+      'Last opened',
     ])
   })
 
@@ -320,44 +344,44 @@ describe('the ordering chips', () => {
   /* #12. **Recent** is the day a clip was uploaded and never changes again, so
      a clip added in July and drilled last night sorts below six that were added
      and never opened. This is the chip that answers "what am I working on". */
-  it('draws the most recently practised clip first when Last practised is chosen', async () => {
+  it('draws the most recently opened clip first when Last opened is chosen', async () => {
     renderScreen([
-      getClip({ id: 'yesterday', practised: '2026-09-05T20:00:00.000Z' }),
-      getClip({ id: 'just-now', practised: '2026-09-06T18:04:11.000Z' }),
-      getClip({ id: 'last-week', practised: '2026-08-30T09:15:00.000Z' }),
+      getClip({ id: 'yesterday', opened: '2026-09-05T20:00:00.000Z' }),
+      getClip({ id: 'just-now', opened: '2026-09-06T18:04:11.000Z' }),
+      getClip({ id: 'last-week', opened: '2026-08-30T09:15:00.000Z' }),
     ])
 
-    await userEvent.click(screen.getByRole('button', { name: 'Last practised' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Last opened' }))
 
     expect(gridOrder()).toEqual(['just-now', 'yesterday', 'last-week'])
   })
 
   /* Most of a real library, and both halves of this matter. They sort last,
-     because never practised is not practised at the beginning of time. And they
+     because never opened is not opened at the beginning of time. And they
      are still drawn — a clip that fell out of the grid under one chip would
      read as a clip that had been deleted. */
-  it('sorts the never-practised below every clip that has been, and draws them all', async () => {
+  it('sorts the never-opened below every clip that has been, and draws them all', async () => {
     renderScreen([
       getClip({ id: 'never' }),
-      getClip({ id: 'worked-on', practised: '2026-08-30T09:15:00.000Z' }),
+      getClip({ id: 'worked-on', opened: '2026-08-30T09:15:00.000Z' }),
       getClip({ id: 'never-either' }),
     ])
 
-    await userEvent.click(screen.getByRole('button', { name: 'Last practised' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Last opened' }))
 
     expect(gridOrder()).toEqual(['worked-on', 'never', 'never-either'])
   })
 
-  it('leaves clips practised at the same moment in the order they arrived', async () => {
+  it('leaves clips opened at the same moment in the order they arrived', async () => {
     const at = '2026-09-06T18:04:11.000Z'
 
     renderScreen([
-      getClip({ id: 'first', practised: at, name: 'Camel walk' }),
-      getClip({ id: 'second', practised: at, name: 'Body roll' }),
-      getClip({ id: 'third', practised: at, name: 'Arm wave' }),
+      getClip({ id: 'first', opened: at, name: 'Camel walk' }),
+      getClip({ id: 'second', opened: at, name: 'Body roll' }),
+      getClip({ id: 'third', opened: at, name: 'Arm wave' }),
     ])
 
-    await userEvent.click(screen.getByRole('button', { name: 'Last practised' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Last opened' }))
 
     expect(gridOrder()).toEqual(['first', 'second', 'third'])
   })

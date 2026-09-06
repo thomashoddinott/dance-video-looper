@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { Route, Routes } from 'react-router'
 
 import type { Clip } from './clips/clip'
@@ -7,14 +7,18 @@ import { browserClipCache, browserThumbnailCache } from './clips/clipCache'
 import type { ClipProbe } from './clips/clipProbe'
 import { browserClipProbe } from './clips/clipProbe'
 import { ClipsScreen } from './clips/ClipsScreen'
-import { withLoopCounts, withPractised } from './clips/library'
+import { withLoopCounts, withOpened } from './clips/library'
+import type { OpenedStore } from './clips/openedStore'
+import { browserOpenedStore } from './clips/openedStore'
+import type { OrderingId } from './clips/ordering'
+import { orderings } from './clips/ordering'
 import type { ThumbnailCapture } from './clips/thumbnail'
 import { browserThumbnailCapture } from './clips/thumbnail'
 import { useLibrary } from './clips/useLibrary'
 import { useThumbnails } from './clips/useThumbnails'
 import type { DriveApi } from './drive/driveApi'
 import { browserDriveApi } from './drive/driveApi'
-import { countOf, practisedAt } from './loops/loopsChange'
+import { countOf, laterOf, openedAt } from './loops/loopsChange'
 import type { LoopsCache } from './loops/loopsCache'
 import { browserLoopsCache } from './loops/loopsCache'
 import { useLoops } from './loops/useLoops'
@@ -33,6 +37,7 @@ export function App({
   driveApi = browserDriveApi,
   clipCache = browserClipCache,
   loopsCache = browserLoopsCache,
+  openedStore = browserOpenedStore,
   thumbnailCache = browserThumbnailCache,
   capture = browserThumbnailCapture,
 }: {
@@ -40,6 +45,7 @@ export function App({
   readonly driveApi?: DriveApi
   readonly clipCache?: ClipCache
   readonly loopsCache?: LoopsCache
+  readonly openedStore?: OpenedStore
   readonly thumbnailCache?: ThumbnailCache
   readonly capture?: ThumbnailCapture
 } = {}) {
@@ -53,14 +59,43 @@ export function App({
      read them: the player lists a clip's loops, and the Clips screen puts the
      count in each tile and orders by it under **Most looped**. One `loops.json`
      holds every clip's, so there is one place to read it from (US-01-15). */
-  const loops = useLoops(driveApi, loopsCache)
-  /* The clips as the grid draws them: counts, and when each was last practised
+  /* When this device opened each clip (#16). In state as well as in storage so
+     the grid re-orders the moment the dancer comes back from the player, rather
+     than on the next reload. */
+  const [opened, setOpened] = useState(() => openedStore.read())
+
+  const markOpened = useCallback(
+    (clipId: string) => {
+      const at = new Date().toISOString()
+
+      openedStore.stamp(clipId, at)
+      setOpened((held) => ({ ...held, [clipId]: at }))
+    },
+    [openedStore],
+  )
+
+  /* A getter, so the write carries what this device knows at the moment it
+     runs. Opening a clip never writes to Drive itself — these stamps ride the
+     write a loop save or removal was already making. */
+  const opensNow = useCallback(() => opened, [opened])
+
+  const loops = useLoops(driveApi, loopsCache, opensNow)
+
+  /* Which chip is active, held here rather than on the Clips screen because
+     that screen is unmounted while the player is up — and **Last opened** is
+     the chip you pick before opening a clip and want to still be on when you
+     come back. */
+  const [ordering, setOrdering] = useState<OrderingId>(orderings[0].id)
+  /* The clips as the grid draws them: counts, and when each was last opened
      (#12). All of it arrives separately — Drive's file listing knows nothing
      about loops, and `loops.json` is fetched on its own — so this is where they
      are put together, once, for both screens. */
-  const counted = withPractised(
+  const counted = withOpened(
     withLoopCounts(library, (clipId) => countOf(loops.loops, clipId)),
-    (clipId) => practisedAt(loops.loops, clipId),
+    /* This device's own record and Drive's may each be ahead of the other — a
+       phone that opened it this morning, a laptop that opened it last week and
+       has not written since — so the honest answer is the later of the two. */
+    (clipId) => laterOf(opened[clipId], openedAt(loops.loops, clipId)),
   )
   /* Beside the loops, and above both routes for the same reason: the grid
      paints the stills and the player makes the ones that are missing, so a
@@ -116,6 +151,8 @@ export function App({
         element={
           <ClipsScreen
             library={counted}
+            ordering={ordering}
+            onOrderingChange={setOrdering}
             thumbnails={stills}
             onAdd={onAdd}
             onDelete={onDelete}
@@ -133,6 +170,7 @@ export function App({
             driveApi={driveApi}
             clipCache={clipCache}
             onBytes={onClipBytes}
+            onOpened={markOpened}
             stillLoading={library.state === 'loading'}
           />
         }

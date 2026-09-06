@@ -20,19 +20,19 @@ export const orderings = [
      day a clip was uploaded and never changes again, so a clip added in July and
      drilled last night sorts below six that were added and never opened.
 
-     `''` for a clip never practised, which puts the whole never-practised tail
+     `''` for a clip never opened, which puts the whole never-opened tail
      below every clip that has been — most of a real library. A fallback date
      would be worse than wrong: it would let one of them tie with a clip that
-     genuinely was practised then.
+     genuinely was opened then.
 
      Last of the four rather than beside **Recent**, so `orderings[0]` stays
      Recent — that is both the default and where the grid jumps back to after an
      add (`ClipsScreen`). */
   {
-    id: 'practised',
-    label: 'Last practised',
+    id: 'opened',
+    label: 'Last opened',
     compare: (a: Clip, b: Clip) =>
-      (b.practised ?? '').localeCompare(a.practised ?? ''),
+      (b.opened ?? '').localeCompare(a.opened ?? ''),
   },
 ] as const
 

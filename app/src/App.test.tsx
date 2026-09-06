@@ -30,6 +30,8 @@ import type { TokenSource } from './drive/gisTokenSource'
 import type { TokenStore } from './drive/tokenStore'
 import type { SavedLoop } from './loops/loop'
 import { getLoop } from './loops/loop.factory'
+import { localOpenedStore } from './clips/openedStore'
+import { inMemoryStorage } from './drive/keyValueStorage.factory'
 import { aLoopsCache } from './loops/loopsCache.factory'
 import { NO_LOOPS, serialiseLoops } from './loops/loopsFile'
 import { inDocumentOrder } from './test/documentOrder'
@@ -148,7 +150,11 @@ const renderAppAt = (
   path: string,
   tokenSource: TokenSource = sourceGranting(),
   extras: ReactNode = null,
-  { tokenStore = aTokenStore(), driveApi = driveHolding() } = {},
+  {
+    tokenStore = aTokenStore(),
+    driveApi = driveHolding(),
+    openedStore = localOpenedStore(inMemoryStorage()),
+  } = {},
 ) =>
   render(
     <DriveSessionProvider tokenSource={tokenSource} tokenStore={tokenStore}>
@@ -157,6 +163,7 @@ const renderAppAt = (
           driveApi={driveApi}
           clipCache={holdsNothing}
           loopsCache={aLoopsCache()}
+          openedStore={openedStore}
         />
         {extras}
       </MemoryRouter>
@@ -973,5 +980,127 @@ describe('the still a clip is remembered by', () => {
       expect(tileCount()).toBe(1)
     })
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+/* #16 — the fourth chip. What it orders by is the last time the dancer opened
+   the clip, which is the action a practice session is mostly made of; the
+   **Last practised** chip it replaces moved only when a loop was saved or
+   removed, which is rare enough that the ordering seldom changed. */
+describe('ordering the grid by when each clip was last opened', () => {
+  const THREE_CLIPS = [
+    getClip({ id: 'newest', name: 'Newest', added: '2026-09-04' }),
+    getClip({ id: 'middle', name: 'Middle', added: '2026-08-20' }),
+    getClip({ id: 'oldest', name: 'Oldest', added: '2026-08-02' }),
+  ]
+
+  const renderGrid = (openedStore = localOpenedStore(inMemoryStorage())) =>
+    renderAppAt('/', sourceGranting(), null, {
+      tokenStore: aConnectedStore(),
+      driveApi: driveHolding(THREE_CLIPS),
+      openedStore,
+    })
+
+  const gridOrder = () =>
+    within(screen.getByRole('list', { name: 'Clips' }))
+      .getAllByRole('link')
+      .map((link) => link.getAttribute('href')?.replace('/clip/', ''))
+
+  const chip = () => screen.getByRole('button', { name: 'Last opened' })
+
+  const openAndReturn = async (name: string) => {
+    await userEvent.click(await screen.findByText(name))
+    await userEvent.click(
+      await screen.findByRole('link', { name: 'Back to clips' }),
+    )
+  }
+
+  it('offers the chip in place of Last practised', async () => {
+    renderGrid()
+    await screen.findByText('Newest')
+
+    expect(chip()).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Last practised' }),
+    ).not.toBeInTheDocument()
+  })
+
+  /* The whole feature in one case: open a clip, come back, and it is top. */
+  it('puts the clip just opened at the front', async () => {
+    renderGrid()
+    await screen.findByText('Newest')
+    await userEvent.click(chip())
+
+    await openAndReturn('Oldest')
+
+    expect(gridOrder()[0]).toBe('oldest')
+  })
+
+  it('puts the one opened before it second', async () => {
+    renderGrid()
+    await screen.findByText('Newest')
+    await userEvent.click(chip())
+
+    await openAndReturn('Oldest')
+    await openAndReturn('Middle')
+
+    expect(gridOrder().slice(0, 2)).toEqual(['middle', 'oldest'])
+  })
+
+  /* Found by driving the mockup. The grid is unmounted while the player is up,
+     so an ordering held on the screen itself started over at Recent on every
+     return — which is the one moment this chip exists to be looked at. */
+  it('is still the chosen ordering after a trip through the player', async () => {
+    renderGrid()
+    await screen.findByText('Newest')
+    await userEvent.click(chip())
+
+    await openAndReturn('Oldest')
+
+    expect(chip()).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('sorts a clip never opened below every clip that has been, and draws it', async () => {
+    renderGrid()
+    await screen.findByText('Newest')
+    await userEvent.click(chip())
+
+    await openAndReturn('Oldest')
+
+    expect(gridOrder()).toHaveLength(3)
+    expect(gridOrder()[0]).toBe('oldest')
+  })
+
+  /* The reason the stamp is kept on the device: an open costs Drive nothing.
+     `loops.json` holds the loops, and writing it dozens of times a session for
+     an ordering would put the asset in the path of an action worth nothing. */
+  it('writes nothing to Drive when a clip is merely opened', async () => {
+    const driveApi = driveHolding(THREE_CLIPS)
+
+    renderAppAt('/', sourceGranting(), null, {
+      tokenStore: aConnectedStore(),
+      driveApi,
+    })
+    await screen.findByText('Newest')
+
+    await openAndReturn('Oldest')
+
+    expect(driveApi.writeJson).not.toHaveBeenCalled()
+    expect(driveApi.createJson).not.toHaveBeenCalled()
+  })
+
+  /* Kept across a reload, which a phone gives you for free when it reclaims the
+     tab — so the store is read back rather than the ordering starting over. */
+  it('remembers what was opened on an earlier visit', async () => {
+    const storage = inMemoryStorage()
+
+    renderGrid(localOpenedStore(storage))
+    await screen.findByText('Newest')
+    await userEvent.click(chip())
+    await openAndReturn('Oldest')
+
+    /* Read back through a *second* store over the same storage, which is what a
+       reload is: nothing of the first one's state survives it. */
+    expect(localOpenedStore(storage).read()).toHaveProperty('oldest')
   })
 })

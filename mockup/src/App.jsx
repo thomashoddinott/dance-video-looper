@@ -7,11 +7,12 @@ import Player from './Player.jsx'
    separate clips rather than one clip chopped into pieces. The loops belonging
    to a clip live on the player screen; here they are only a count.
 
-   `practised` is when a loop was last saved on the clip or removed from it
-   (#12) — seeded rather than produced, because this player keeps its saved
-   loops to itself and never tells the list about them. The values run counter
-   to both `added` and `loops` on purpose: the clip added most recently was last
-   worked on a week ago, and two clips have never been worked on at all. That is
+   `opened` is when the clip was last opened in the player (#16). Unlike the
+   `practised` stamp it replaces, this one is **produced as well as seeded** —
+   opening a clip below really does stamp it, so the chip can be driven here
+   rather than only looked at. The seed is the starting position, and it runs
+   counter to both `added` and `loops` on purpose: the clip added most recently
+   was last opened a week ago, and two have never been opened at all. That is
    the whole argument for the chip, and it is only visible in data that
    disagrees with the other three. */
 const SEED_CLIPS = [
@@ -21,7 +22,7 @@ const SEED_CLIPS = [
     added: '2026-08-29',
     seconds: 26,
     loops: 5,
-    practised: '2026-08-30T11:20:00.000Z',
+    opened: '2026-08-30T11:20:00.000Z',
     src: '/sample.mp4',
   },
   {
@@ -30,7 +31,7 @@ const SEED_CLIPS = [
     added: '2026-08-27',
     seconds: 18,
     loops: 2,
-    practised: '2026-09-06T18:04:11.000Z',
+    opened: '2026-09-06T18:04:11.000Z',
   },
   { id: 3, name: 'Clip 3', added: '2026-08-24', seconds: 41, loops: 0 },
   {
@@ -39,7 +40,7 @@ const SEED_CLIPS = [
     added: '2026-08-19',
     seconds: 12,
     loops: 3,
-    practised: '2026-09-05T20:00:00.000Z',
+    opened: '2026-09-05T20:00:00.000Z',
   },
   {
     id: 5,
@@ -47,7 +48,7 @@ const SEED_CLIPS = [
     added: '2026-08-11',
     seconds: 33,
     loops: 1,
-    practised: '2026-08-12T09:15:00.000Z',
+    opened: '2026-08-12T09:15:00.000Z',
   },
   { id: 6, name: 'Clip 6', added: '2026-08-04', seconds: 24, loops: 0 },
 ]
@@ -58,6 +59,10 @@ const SEED_CLIPS = [
 function App() {
   const [clips, setClips] = useState(SEED_CLIPS)
   const [clip, setClip] = useState(null)
+  /* Above the two screens, because the grid is unmounted while the player is up
+     and **Last opened** is a chip you pick *before* opening a clip and want to
+     still be on when you come back (#16). */
+  const [sort, setSort] = useState('added')
 
   const addClip = (added) => setClips([added, ...clips])
 
@@ -75,9 +80,25 @@ function App() {
   return (
     <Library
       clips={clips}
+      sort={sort}
+      onSort={setSort}
       onAdd={addClip}
       onDelete={deleteClip}
-      onOpen={(chosen) => setClip({ ...chosen, src: chosen.src ?? '/sample.mp4' })}
+      /* Stamped on the way in, which is the whole of the feature (#16): open a
+         clip, go back, and it is top of the grid under **Last opened**. In the
+         product the stamp goes to this device's own storage and rides the next
+         `loops.json` write to Drive; here there is neither, and the list held
+         above is the equivalent. */
+      onOpen={(chosen) => {
+        const at = new Date().toISOString()
+
+        setClips((held) =>
+          held.map((clip) =>
+            clip.id === chosen.id ? { ...clip, opened: at } : clip,
+          ),
+        )
+        setClip({ ...chosen, src: chosen.src ?? '/sample.mp4' })
+      }}
     />
   )
 }

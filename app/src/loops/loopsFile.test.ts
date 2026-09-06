@@ -143,14 +143,14 @@ describe('a malformed loop among good ones', () => {
   })
 })
 
-/* When each clip was last worked on (#12), which is what the **Last practised**
+/* When each clip was last opened (#12), which is what the **Last opened**
    chip orders by.
 
    Recency is not the asset — the loops are — and every rule below follows from
    that one asymmetry. A stamp that cannot be read is dropped; a *loop* that
    cannot be read makes the whole file untouchable. Losing a stamp costs an
    ordering until the next save. Losing a loop costs the dancer their work. */
-describe('when a clip was last practised', () => {
+describe('when a clip was last opened', () => {
   it('reads back the stamps beside the loops', () => {
     const loop = getLoop()
 
@@ -169,9 +169,9 @@ describe('when a clip was last practised', () => {
   })
 
   /* Every `loops.json` in Drive predates this, and the dancer's loops are in
-     them. Reading one as anything other than "practised nothing yet" would be
+     them. Reading one as anything other than "opened nothing yet" would be
      the feature arriving by destroying what it was built to order. */
-  it('reads a file written before stamps existed as nothing practised yet', () => {
+  it('reads a file written before stamps existed as nothing opened yet', () => {
     const loop = getLoop()
 
     expect(readLoopsFile(written({ 'shuffle-drill': [loop] }))).toEqual({

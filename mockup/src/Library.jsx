@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 
-/* Retrofitted from the product (#12) — the mockup gate pass for a chip that was
-   built before anything had drawn it.
+/* Recent is the day a clip was uploaded and never changes again, so it cannot
+   answer "what am I working on". Last opened can, and it moves on the one action
+   a practice session is mostly made of: open a clip, watch it, go back.
 
-   Recent is the day a clip was uploaded and never changes again, so it cannot
-   answer "what am I working on". Last practised can. A clip never practised
-   compares as the empty string, which puts the whole never-practised tail below
-   every clip that has been — and still draws it, because a clip vanishing from
-   the grid under one chip would read as a clip deleted.
+   It **replaces** Last practised (#12, #16) rather than joining it. That chip
+   stamped a clip only when a loop was saved on it or removed from it — a rare
+   enough event that the ordering seldom moved.
+
+   A clip never opened compares as the empty string, which puts the whole
+   never-opened tail below every clip that has been — and still draws it, because
+   a clip vanishing from the grid under one chip would read as a clip deleted.
 
    Last of the four so that `SORTS[0]` stays Recent: it is the default, and it
    is where the grid jumps back to after an add. */
@@ -16,9 +19,9 @@ const SORTS = [
   { id: 'name', label: 'Name', compare: (a, b) => a.name.localeCompare(b.name) },
   { id: 'loops', label: 'Most looped', compare: (a, b) => b.loops - a.loops },
   {
-    id: 'practised',
-    label: 'Last practised',
-    compare: (a, b) => (b.practised ?? '').localeCompare(a.practised ?? ''),
+    id: 'opened',
+    label: 'Last opened',
+    compare: (a, b) => (b.opened ?? '').localeCompare(a.opened ?? ''),
   },
 ]
 
@@ -214,8 +217,17 @@ function DriveStatus() {
    is the only thing a mockup is for. */
 const UPLOAD_PLAYS_OUT_OVER = 2500
 
-function Library({ clips, onOpen, onAdd, onDelete }) {
-  const [sort, setSort] = useState(SORTS[0].id)
+/* `sort` is held by the caller rather than here, and that is load-bearing for
+   #16 rather than tidiness: this screen is unmounted while the player is up, so
+   local state would start over at Recent every time the dancer came back — and
+   **Last opened** is a chip whose whole point is what you see *after* a trip
+   through the player. Picking it, opening a clip and returning to Recent would
+   make the ordering unreachable in the one moment it is for.
+
+   The search stays local, and the contrast is the point: it is a question about
+   the grid in front of you rather than a setting, so coming back with the whole
+   library showing is the honest default. */
+function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
   const [query, setQuery] = useState('')
   const [notice, setNotice] = useState(null)
   const [uploading, setUploading] = useState({})
@@ -326,7 +338,7 @@ function Library({ clips, onOpen, onAdd, onDelete }) {
         loops: 0,
         src,
       })
-      setSort('added')
+      onSort('added')
       /* The search goes for the same reason the sort flips, and a sharper one: a
          search the new clip does not match hides it outright. */
       setQuery('')
@@ -382,7 +394,7 @@ function Library({ clips, onOpen, onAdd, onDelete }) {
             <button
               key={option.id}
               type="button"
-              onClick={() => setSort(option.id)}
+              onClick={() => onSort(option.id)}
               className={`rounded-full px-3 py-1 text-xs font-semibold ${
                 option.id === sort
                   ? 'bg-control-hi text-ink'

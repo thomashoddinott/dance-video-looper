@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { getLoop } from './loop.factory'
 import {
   countOf,
+  laterOf,
   loopsFor,
-  practisedAt,
+  openedAt,
   withLoop,
+  withOpens,
   withoutLoop,
 } from './loopsChange'
 import { NO_LOOPS } from './loopsFile'
@@ -32,8 +34,8 @@ describe('adding a loop', () => {
   it('starts the list for a clip that had none', () => {
     const loop = getLoop()
 
-    expect(withLoop(NO_LOOPS, A_CLIP, loop, AT)).toEqual(
-      holding({ [A_CLIP]: [loop] }, { [A_CLIP]: AT }),
+    expect(withLoop(NO_LOOPS, A_CLIP, loop)).toEqual(
+      holding({ [A_CLIP]: [loop] }),
     )
   })
 
@@ -42,7 +44,7 @@ describe('adding a loop', () => {
     const second = getLoop({ id: 'second' })
 
     expect(
-      withLoop(holding({ [A_CLIP]: [first] }), A_CLIP, second, AT).clips[A_CLIP],
+      withLoop(holding({ [A_CLIP]: [first] }), A_CLIP, second).clips[A_CLIP],
     ).toEqual([first, second])
   })
 
@@ -53,7 +55,7 @@ describe('adding a loop', () => {
     const theirs = getLoop({ id: 'theirs' })
 
     expect(
-      withLoop(holding({ [ANOTHER_CLIP]: [theirs] }), A_CLIP, mine, AT).clips,
+      withLoop(holding({ [ANOTHER_CLIP]: [theirs] }), A_CLIP, mine).clips,
     ).toEqual({ [ANOTHER_CLIP]: [theirs], [A_CLIP]: [mine] })
   })
 })
@@ -64,8 +66,8 @@ describe('removing a loop', () => {
     const going = getLoop({ id: 'going' })
 
     expect(
-      withoutLoop(holding({ [A_CLIP]: [kept, going] }), A_CLIP, 'going', AT),
-    ).toEqual(holding({ [A_CLIP]: [kept] }, { [A_CLIP]: AT }))
+      withoutLoop(holding({ [A_CLIP]: [kept, going] }), A_CLIP, 'going'),
+    ).toEqual(holding({ [A_CLIP]: [kept] }))
   })
 
   /* Matches what the reader does with a clip whose every entry was malformed:
@@ -76,10 +78,8 @@ describe('removing a loop', () => {
       withoutLoop(
         holding({ [A_CLIP]: [getLoop({ id: 'only' })] }),
         A_CLIP,
-        'only',
-        AT,
-      ),
-    ).toEqual(holding({}, { [A_CLIP]: AT }))
+        'only'),
+    ).toEqual(NO_LOOPS)
   })
 
   it('leaves every other clip exactly as it was', () => {
@@ -90,9 +90,8 @@ describe('removing a loop', () => {
         holding({ [A_CLIP]: [getLoop({ id: 'mine' })], [ANOTHER_CLIP]: [theirs] }),
         A_CLIP,
         'mine',
-        AT,
       ),
-    ).toEqual(holding({ [ANOTHER_CLIP]: [theirs] }, { [A_CLIP]: AT }))
+    ).toEqual(holding({ [ANOTHER_CLIP]: [theirs] }))
   })
 
   /* Both of these happen for real: the other device removed it first, and the
@@ -100,75 +99,11 @@ describe('removing a loop', () => {
   it('is a no-op for an id that is not there', () => {
     const held = holding({ [A_CLIP]: [getLoop()] })
 
-    expect(withoutLoop(held, A_CLIP, 'never-saved', AT).clips).toEqual(held.clips)
+    expect(withoutLoop(held, A_CLIP, 'never-saved')).toEqual(held)
   })
 
   it('is a no-op for a clip that is not there', () => {
-    expect(withoutLoop(NO_LOOPS, 'no-such-clip', 'loop-1', AT).clips).toEqual({})
-  })
-})
-
-/* #12 — the last time a loop was saved on a clip or removed from it, which is
-   what the **Last practised** chip orders by. The stamp rides the two writes
-   that already happen rather than adding a third, which is the whole reason
-   practising is defined as loop edits and not as opening the player. */
-describe('stamping a clip as practised', () => {
-  it('stamps the clip a loop was saved on', () => {
-    expect(withLoop(NO_LOOPS, A_CLIP, getLoop(), AT).touched).toEqual({
-      [A_CLIP]: AT,
-    })
-  })
-
-  /* A removal is working on the clip too, so it stamps — including the removal
-     that empties it. That is why the stamp is a sibling of `clips` rather than
-     a field on a loop: it has to outlive the loops it was made by. */
-  it('stamps the clip a loop was removed from, even as its last loop goes', () => {
-    const emptied = withoutLoop(
-      holding({ [A_CLIP]: [getLoop({ id: 'only' })] }),
-      A_CLIP,
-      'only',
-      AT,
-    )
-
-    expect(emptied.clips).toEqual({})
-    expect(emptied.touched).toEqual({ [A_CLIP]: AT })
-  })
-
-  it('moves the stamp on when the same clip is practised again', () => {
-    expect(
-      withLoop(holding({}, { [A_CLIP]: EARLIER }), A_CLIP, getLoop(), LATER)
-        .touched,
-    ).toEqual({ [A_CLIP]: LATER })
-  })
-
-  /* The merge rule, and the reason this is `max` rather than an assignment.
-     `applyToLoops` replays the change onto whatever Drive holds *now*, so a
-     stamp captured before that round trip can arrive after a newer one the
-     phone already wrote. Taking the later of the two is what stops the laptop
-     dragging a clip's recency backwards. */
-  it('leaves a later stamp standing when an earlier change is replayed onto it', () => {
-    expect(
-      withLoop(holding({}, { [A_CLIP]: LATER }), A_CLIP, getLoop(), EARLIER)
-        .touched,
-    ).toEqual({ [A_CLIP]: LATER })
-  })
-
-  /* The rule `withClip` states and nothing else pins: a removal replayed onto a
-     file the other device has already removed from changes no loops, but the
-     dancer still pressed the button, so it still stamps. The two no-op tests
-     above assert only `.clips`, which is exactly what leaves this unguarded. */
-  it('stamps a removal that removes nothing', () => {
-    expect(
-      withoutLoop(holding({ [A_CLIP]: [getLoop()] }), A_CLIP, 'never-saved', AT)
-        .touched,
-    ).toEqual({ [A_CLIP]: AT })
-  })
-
-  it('leaves every other clip’s stamp exactly as it was', () => {
-    expect(
-      withLoop(holding({}, { [ANOTHER_CLIP]: EARLIER }), A_CLIP, getLoop(), AT)
-        .touched,
-    ).toEqual({ [ANOTHER_CLIP]: EARLIER, [A_CLIP]: AT })
+    expect(withoutLoop(NO_LOOPS, 'no-such-clip', 'loop-1')).toEqual(NO_LOOPS)
   })
 })
 
@@ -197,14 +132,82 @@ describe('what a clip has', () => {
     ).toBe(2)
   })
 
-  it('says when it was last practised', () => {
-    expect(practisedAt(holding({}, { [A_CLIP]: AT }), A_CLIP)).toBe(AT)
+  it('says when it was last opened', () => {
+    expect(openedAt(holding({}, { [A_CLIP]: AT }), A_CLIP)).toBe(AT)
   })
 
-  /* Undefined rather than a fallback date. "Never practised" is not "practised
+  /* Undefined rather than a fallback date. "Never opened" is not "opened
      at the beginning of time" — the chip has to sort it below every clip that
      has been, and a real date would let it tie with one. */
-  it('says nothing for a clip that has never been practised', () => {
-    expect(practisedAt(NO_LOOPS, 'no-such-clip')).toBeUndefined()
+  it('says nothing for a clip that has never been opened', () => {
+    expect(openedAt(NO_LOOPS, 'no-such-clip')).toBeUndefined()
+  })
+})
+
+/* #16 — the opens this device recorded, carried into `loops.json` by the write a
+   loop save or removal was already making. There is no write of their own: the
+   whole point of keeping them on the device is that opening a clip costs Drive
+   nothing. */
+describe('carrying this device\u2019s opens into the file', () => {
+  it('adds a stamp for a clip the file had never heard of', () => {
+    expect(withOpens(NO_LOOPS, { [A_CLIP]: AT }).touched).toEqual({
+      [A_CLIP]: AT,
+    })
+  })
+
+  it('carries every clip it is given, and leaves the loops alone', () => {
+    const held = holding({ [A_CLIP]: [getLoop()] })
+
+    const carried = withOpens(held, { [A_CLIP]: AT, [ANOTHER_CLIP]: LATER })
+
+    expect(carried.clips).toEqual(held.clips)
+    expect(carried.touched).toEqual({ [A_CLIP]: AT, [ANOTHER_CLIP]: LATER })
+  })
+
+  it('moves a stamp on when this device opened the clip more recently', () => {
+    expect(
+      withOpens(holding({}, { [A_CLIP]: EARLIER }), { [A_CLIP]: LATER }).touched,
+    ).toEqual({ [A_CLIP]: LATER })
+  })
+
+  /* The merge rule, and why this is `max` rather than an assignment.
+     `applyToLoops` replays the change onto whatever Drive holds *now*, so a
+     laptop that has been shut for a week must not drag a clip's recency
+     backwards over what the phone wrote while it was away. */
+  it('leaves a later stamp standing when this device is behind', () => {
+    expect(
+      withOpens(holding({}, { [A_CLIP]: LATER }), { [A_CLIP]: EARLIER }).touched,
+    ).toEqual({ [A_CLIP]: LATER })
+  })
+
+  it('leaves a clip this device has not opened exactly as it was', () => {
+    expect(
+      withOpens(holding({}, { [ANOTHER_CLIP]: EARLIER }), { [A_CLIP]: AT })
+        .touched,
+    ).toEqual({ [ANOTHER_CLIP]: EARLIER, [A_CLIP]: AT })
+  })
+
+  it('is a no-op when this device has opened nothing', () => {
+    const held = holding({ [A_CLIP]: [getLoop()] }, { [A_CLIP]: AT })
+
+    expect(withOpens(held, {})).toEqual(held)
+  })
+})
+
+/* The same rule the grid reads with: this device's own record and Drive's may
+   each be ahead of the other, and the honest answer is the later one. */
+describe('the later of two stamps', () => {
+  it('takes whichever is later', () => {
+    expect(laterOf(EARLIER, LATER)).toBe(LATER)
+    expect(laterOf(LATER, EARLIER)).toBe(LATER)
+  })
+
+  it('takes the one that exists when only one does', () => {
+    expect(laterOf(undefined, AT)).toBe(AT)
+    expect(laterOf(AT, undefined)).toBe(AT)
+  })
+
+  it('is undefined when neither does', () => {
+    expect(laterOf(undefined, undefined)).toBeUndefined()
   })
 })

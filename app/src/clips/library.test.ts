@@ -8,7 +8,7 @@ import {
   LOADING,
   loaded,
   withLoopCounts,
-  withPractised,
+  withOpened,
 } from './library'
 
 describe('what the library knows before it knows anything', () => {
@@ -140,21 +140,21 @@ describe('the count of loops saved against each clip', () => {
    it was last worked on. Kept separate from `withLoopCounts` rather than folded
    into it — two facts, arriving by the same route but answering to different
    questions, and a function named for counting should not quietly do both. */
-describe('when each clip was last practised', () => {
-  const PRACTISED = '2026-09-06T18:04:11.000Z'
+describe('when each clip was last opened', () => {
+  const OPENED = '2026-09-06T18:04:11.000Z'
 
   const twoClips = loaded(LOADING, [
     getClip({ id: 'shuffle-drill' }),
     getClip({ id: 'pivot-turn' }),
   ])
 
-  it('gives each clip the moment it was last practised', () => {
-    const dated = withPractised(twoClips, (clipId) =>
-      clipId === 'shuffle-drill' ? PRACTISED : undefined,
+  it('gives each clip the moment it was last opened', () => {
+    const dated = withOpened(twoClips, (clipId) =>
+      clipId === 'shuffle-drill' ? OPENED : undefined,
     )
 
-    expect(dated.clips.map(({ id, practised }) => [id, practised])).toEqual([
-      ['shuffle-drill', PRACTISED],
+    expect(dated.clips.map(({ id, opened }) => [id, opened])).toEqual([
+      ['shuffle-drill', OPENED],
       ['pivot-turn', undefined],
     ])
   })
@@ -163,22 +163,22 @@ describe('when each clip was last practised', () => {
     const clip = getClip({ id: 'shuffle-drill', loops: 2 })
 
     expect(
-      withPractised(loaded(LOADING, [clip]), () => PRACTISED).clips[0],
-    ).toEqual({ ...clip, practised: PRACTISED })
+      withOpened(loaded(LOADING, [clip]), () => OPENED).clips[0],
+    ).toEqual({ ...clip, opened: OPENED })
   })
 
   /* Which is most of a real library, and the chip has to draw them: never
-     practised is a clip to sort last, not a clip to leave out. */
-  it('leaves a clip that has never been practised without a date', () => {
+     opened is a clip to sort last, not a clip to leave out. */
+  it('leaves a clip that has never been opened without a date', () => {
     expect(
-      withPractised(twoClips, () => undefined).clips.map(
-        ({ practised }) => practised,
+      withOpened(twoClips, () => undefined).clips.map(
+        ({ opened }) => opened,
       ),
     ).toEqual([undefined, undefined])
   })
 
   it('keeps the rest of the library as it found it', () => {
-    const dated = withPractised(twoClips, () => PRACTISED)
+    const dated = withOpened(twoClips, () => OPENED)
 
     expect(dated.state).toBe('ready')
     expect(dated.uploading).toEqual(twoClips.uploading)

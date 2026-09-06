@@ -1,6 +1,6 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { DriveApi } from '../drive/driveApi'
 import { DriveError } from '../drive/driveApi'
@@ -323,62 +323,5 @@ describe('removing a loop', () => {
       expect(result.current.notice).not.toBeNull()
     })
     expect(result.current.loops.clips).toEqual({ [A_CLIP]: [loop] })
-  })
-})
-
-/* #12 — this is the hook's only share of the feature: it is where the clock is
-   read. What the stamp *means* once it exists is `loopsChange.test.ts`.
-
-   The write that carries it is the write that was already happening, which is
-   the whole design: the failure criterion above ("a write that did not land
-   adds nothing") extends to recency for free, because there is no second call
-   that could leave Drive claiming a clip was practised while the loop that was
-   practised on it never arrived. */
-describe('stamping the clip as practised', () => {
-  const PRACTISED = '2026-09-06T18:04:11.000Z'
-
-  beforeEach(() => {
-    /* `shouldAdvanceTime`, so the promises inside a save still settle — the
-       clock is being pinned to a known reading, not stopped. */
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    vi.setSystemTime(new Date(PRACTISED))
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('sends the stamp to Drive in the same body as the loop', async () => {
-    const loop = getLoop()
-    const api = holding({})
-
-    const { result } = renderLoops(api)
-
-    await result.current.save(A_CLIP, loop)
-
-    expect(bodyWritten(api)).toEqual({
-      ...NO_LOOPS,
-      clips: { [A_CLIP]: [loop] },
-      touched: { [A_CLIP]: PRACTISED },
-    })
-  })
-
-  it('stamps a removal as readily as a save', async () => {
-    const api = holding({ [A_CLIP]: [getLoop({ id: 'going' })] })
-
-    const { result } = renderLoops(api)
-
-    await waitFor(() => {
-      expect(result.current.loops.clips[A_CLIP]).toHaveLength(1)
-    })
-
-    /* Re-pinned here rather than only in `beforeEach`: the clock advances with
-       real time so the wait above can finish, and what is being asserted is the
-       reading at the moment of the removal. */
-    vi.setSystemTime(new Date(PRACTISED))
-
-    await result.current.remove(A_CLIP, 'going')
-
-    expect(bodyWritten(api).touched).toEqual({ [A_CLIP]: PRACTISED })
   })
 })

@@ -7,14 +7,14 @@ export type Clip = {
   readonly seconds?: number | undefined
   readonly loops: number
   /* When a loop was last saved on this clip or removed from it (#12), which is
-     what the **Last practised** chip orders by. Comes from `loops.json` beside
+     what the **Last opened** chip orders by. Comes from `loops.json` beside
      the count above, and is undefined for the same two different reasons: the
      dancer has never worked on this clip, or the file has not arrived yet.
 
-     Undefined rather than a fallback date, deliberately. "Never practised" is
-     not "practised at the beginning of time" — the chip sorts it below every
+     Undefined rather than a fallback date, deliberately. "Never opened" is
+     not "opened at the beginning of time" — the chip sorts it below every
      clip that has been, and any real date would let it tie with one. */
-  readonly practised?: string | undefined
+  readonly opened?: string | undefined
   readonly src?: string | undefined
   /* Drive's own id for the file holding this clip's bytes, which is what a
      download is addressed by. Absent until the upload finishes — and absent

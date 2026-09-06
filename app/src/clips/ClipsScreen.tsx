@@ -19,6 +19,8 @@ const RECENT: OrderingId = 'added'
 
 export function ClipsScreen({
   library,
+  ordering: chosen,
+  onOrderingChange: setChosen,
   thumbnails = {},
   onAdd,
   onDelete,
@@ -26,6 +28,13 @@ export function ClipsScreen({
   notice: driveNotice = null,
 }: {
   readonly library: Library
+  /* Held by the caller rather than here, and that is load-bearing for #16
+     rather than tidiness: this screen is unmounted while the player is up, so
+     local state would start over at Recent every time the dancer came back —
+     and **Last opened** is the chip whose whole point is what you see *after* a
+     trip through the player. */
+  readonly ordering: OrderingId
+  readonly onOrderingChange: (id: OrderingId) => void
   /* A url per clip that has a still (#77). Absent entries are clips with
      none, which paint the placeholder they always did. */
   readonly thumbnails?: Readonly<Record<string, string>>
@@ -41,7 +50,10 @@ export function ClipsScreen({
   readonly notice?: string | null
 }) {
   const { clips } = library
-  const [chosen, setChosen] = useState<OrderingId>(orderings[0].id)
+  /* Local, unlike the ordering above it: a search is a question about the grid
+     you are looking at, not a setting, and coming back from the player with the
+     whole library showing is the honest default. Persisting it is explicitly not
+     in US-01-18. */
   const [query, setQuery] = useState('')
   const [ownNotice, setNotice] = useState<string | null>(null)
 
