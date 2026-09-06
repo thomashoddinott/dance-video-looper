@@ -107,6 +107,16 @@ const clipsFrom = (
 const isTime = (value: unknown): value is string =>
   typeof value === 'string' && Number.isFinite(Date.parse(value))
 
+/* And a time is not yet a *comparable* one. `laterOf` and the **Last
+   practised** chip both compare these as plain strings, which only orders
+   chronologically for ISO-8601 UTC — so `…T19:04:11+02:00` would sort after
+   `…T18:00:00.000Z` while being the earlier instant. `isTime` above admits
+   every form `Date.parse` understands, so the same door that accepts a stamp
+   is where it is put in the one shape the comparisons hold for. This app only
+   ever writes `toISOString()`; the file is indented to be legible in the
+   dancer's own Drive, and UC-01 Q-06 will read this shape back in. */
+const asUtc = (at: string) => new Date(at).toISOString()
+
 /* The asymmetry that decides this whole module: `clips` being the wrong shape
    refuses the file, because loops are unaccounted for. `touched` being the wrong
    shape must not, because refusing would throw away readable loops to punish a
@@ -120,7 +130,7 @@ const touchedFrom = (held: unknown): Readonly<Record<string, string>> => {
 
   return Object.fromEntries(
     Object.entries(held).flatMap<[string, string]>(([clipId, at]) =>
-      isTime(at) ? [[clipId, at]] : [],
+      isTime(at) ? [[clipId, asUtc(at)]] : [],
     ),
   )
 }

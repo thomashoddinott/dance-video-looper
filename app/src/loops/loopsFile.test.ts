@@ -213,6 +213,28 @@ describe('when a clip was last practised', () => {
     })
   })
 
+  /* The other half of that same argument. `Date.parse` understands far more
+     than this app writes, and a stamp carrying an offset is a time that reads
+     perfectly and still sorts wrong: `laterOf` and the chip both compare these
+     as plain strings, so `…T19:04:11+02:00` sorts *after* `…T18:00:00.000Z`
+     while being the earlier instant. The type says "always UTC" — the door is
+     where that is made true, rather than trusted.
+
+     Not hypothetical: `loops.json` is indented precisely so the dancer can open
+     it in their own Drive, and UC-01 Q-06 will read this shape back in. */
+  it('normalises a stamp that arrived in some other time zone', () => {
+    expect(
+      readLoopsFile(written({}, { 'shuffle-drill': '2026-09-06T19:04:11+02:00' })),
+    ).toEqual({
+      readable: true,
+      loops: {
+        schema: 1,
+        clips: {},
+        touched: { 'shuffle-drill': '2026-09-06T17:04:11.000Z' },
+      },
+    })
+  })
+
   /* A string is not yet a time. This one sorts somewhere arbitrary rather than
      failing loudly, so it is refused at the door instead. */
   it('drops a stamp that is not a time', () => {
