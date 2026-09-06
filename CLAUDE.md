@@ -82,8 +82,9 @@ Then the PR lands, the ticket closes, and the worktree is tidied away.
 ## The verification gate — there is no CI, on purpose
 
 **This project is not getting CI.** No GitHub Actions, no runner, no workflow file.
-It's a personal static site with no backend and no deploy target; a hosted pipeline is
-machinery out of proportion to it. Don't helpfully add one.
+It's a personal static site with no backend; a hosted pipeline is machinery out of
+proportion to it. Don't helpfully add one — including for the deploy, which is a
+local command (see **Deploying**) and not a pipeline.
 
 What CI was for is kept. **Every check that applies runs locally, in the session, and
 every one is green before a merge:**
@@ -108,6 +109,31 @@ Reading the output:
 
 Read this instead of `gh pr checks` — nothing runs when a PR is opened, so an empty
 check list is not a pass. A PR that has not been through the gate is unverified.
+
+## Deploying
+
+Also local, and also not CI. From `app/`:
+
+```
+npm run build
+npx gh-pages -d dist --dotfiles
+```
+
+That pushes the built site to the `gh-pages` branch, which Pages serves from. `main`
+never carries built output — `dist/` is gitignored.
+
+- **`--dotfiles` is not optional.** `gh-pages` skips dotfiles by default, and
+  `public/.nojekyll` is what stops Pages running the build through Jekyll.
+- **Don't add a `deploy` script to any `package.json`.** The gate runs every script a
+  workspace declares that terminates, so a `deploy` script means `node
+  scripts/verify.mjs` publishes the site as a side effect of verifying it.
+- The base path is `/dance-video-looper/`, set in `app/vite.config.ts` for dev as well
+  as build so the dev server exercises it too. `404.html` is a copy of `index.html`,
+  emitted at build, so a reload on a route deeper than the root reaches the router
+  instead of GitHub's 404.
+- Sign-in on the deployed site needs its origin registered on the OAuth client, which
+  is a Google Cloud Console step. Until it is done, sign-in fails in a way that looks
+  like the dancer declining consent.
 
 ## Gotchas
 
@@ -140,6 +166,12 @@ check list is not a pass. A PR that has not been through the gate is unverified.
   someone else's content, so it is not published here. Drop your own file into
   `app/public/` or `mockup/public/` to have something to play against. Don't
   commit one, and don't re-add a tracked sample.
+
+  **A clip in `public/` is development-only and must never be deployed.** Gitignore
+  does not cover that: Vite copies `public/` wholesale into `dist/`, so a file
+  correctly kept out of every commit still lands on a public URL the moment the build
+  is published. Clear `public/` before deploying. Publishing someone else's video is
+  the one mistake here that cannot be taken back.
 - `PLAN.md` — scratch, lives and dies inside a worktree.
 - `.claude/` — the Claude Code working directory. Curated separately and tracked
   nowhere in this repo.
