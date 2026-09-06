@@ -229,13 +229,14 @@ const gridOrder = () =>
     .map((link) => link.getAttribute('href')?.replace('/clip/', ''))
 
 describe('the ordering chips', () => {
-  it('offers the three orderings, in the order the dancer reads them', () => {
+  it('offers the four orderings, in the order the dancer reads them', () => {
     renderScreen([])
 
     expect(chips().map((chip) => chip.textContent)).toEqual([
       'Recent',
       'Name',
       'Most looped',
+      'Last practised',
     ])
   })
 
@@ -312,6 +313,51 @@ describe('the ordering chips', () => {
     ])
 
     await userEvent.click(screen.getByRole('button', { name: 'Most looped' }))
+
+    expect(gridOrder()).toEqual(['first', 'second', 'third'])
+  })
+
+  /* #12. **Recent** is the day a clip was uploaded and never changes again, so
+     a clip added in July and drilled last night sorts below six that were added
+     and never opened. This is the chip that answers "what am I working on". */
+  it('draws the most recently practised clip first when Last practised is chosen', async () => {
+    renderScreen([
+      getClip({ id: 'yesterday', practised: '2026-09-05T20:00:00.000Z' }),
+      getClip({ id: 'just-now', practised: '2026-09-06T18:04:11.000Z' }),
+      getClip({ id: 'last-week', practised: '2026-08-30T09:15:00.000Z' }),
+    ])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Last practised' }))
+
+    expect(gridOrder()).toEqual(['just-now', 'yesterday', 'last-week'])
+  })
+
+  /* Most of a real library, and both halves of this matter. They sort last,
+     because never practised is not practised at the beginning of time. And they
+     are still drawn — a clip that fell out of the grid under one chip would
+     read as a clip that had been deleted. */
+  it('sorts the never-practised below every clip that has been, and draws them all', async () => {
+    renderScreen([
+      getClip({ id: 'never' }),
+      getClip({ id: 'worked-on', practised: '2026-08-30T09:15:00.000Z' }),
+      getClip({ id: 'never-either' }),
+    ])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Last practised' }))
+
+    expect(gridOrder()).toEqual(['worked-on', 'never', 'never-either'])
+  })
+
+  it('leaves clips practised at the same moment in the order they arrived', async () => {
+    const at = '2026-09-06T18:04:11.000Z'
+
+    renderScreen([
+      getClip({ id: 'first', practised: at, name: 'Camel walk' }),
+      getClip({ id: 'second', practised: at, name: 'Body roll' }),
+      getClip({ id: 'third', practised: at, name: 'Arm wave' }),
+    ])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Last practised' }))
 
     expect(gridOrder()).toEqual(['first', 'second', 'third'])
   })

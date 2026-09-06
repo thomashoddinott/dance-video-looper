@@ -28,6 +28,17 @@ export type LoopsHandle = {
   readonly remove: (clipId: string, id: string) => Promise<boolean>
 }
 
+/* The moment the dancer pressed the button, which is what `touched` records
+   (#12). Taken here, once, rather than inside the change handed to
+   `applyToLoops`: that change may be replayed on a retry, and the stamp is
+   about what the dancer did rather than which attempt happened to land. Keeping
+   the clock out of it also keeps `LoopsChange` a pure function of the file,
+   which is what makes the merge replayable in the first place.
+
+   UTC, because `touched` is compared as a string and only this format sorts
+   chronologically when it is. */
+const practisedNow = () => new Date().toISOString()
+
 /* Deliberately different sentences, because the dancer can act on the
    difference. "Could not be read" also carries the news that their existing
    loops are still there, in a file this app has refused to touch — reporting
@@ -165,8 +176,11 @@ export const useLoops = (
   )
 
   const save = useCallback(
-    (clipId: string, loop: SavedLoop) =>
-      write((held) => withLoop(held, clipId, loop), `“${loop.name}”`),
+    (clipId: string, loop: SavedLoop) => {
+      const at = practisedNow()
+
+      return write((held) => withLoop(held, clipId, loop, at), `“${loop.name}”`)
+    },
     [write],
   )
 
@@ -174,8 +188,11 @@ export const useLoops = (
      to is still on screen when the sentence appears — the dancer can see which
      one it is, and a name repeated back adds nothing. */
   const remove = useCallback(
-    (clipId: string, id: string) =>
-      write((held) => withoutLoop(held, clipId, id), 'That removal'),
+    (clipId: string, id: string) => {
+      const at = practisedNow()
+
+      return write((held) => withoutLoop(held, clipId, id, at), 'That removal')
+    },
     [write],
   )
 
