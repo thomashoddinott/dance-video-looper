@@ -1,6 +1,8 @@
+import { useRef, useState } from 'react'
+
 import { formatDuration } from '../clips/format'
 import type { Loop } from './playback'
-import { ratioOf, spanned } from './scrubSpan'
+import { ratioOf, secondsAt, spanned } from './scrubSpan'
 
 /* Where you are in the clip, drawn on the clip itself. The video carried no
    position indicator at all before this — no `controls`, nothing of our own — so
@@ -20,22 +22,40 @@ export function VideoProgress({
   duration,
   loop,
   looping,
+  onScrub,
   rounded,
 }: {
   readonly time: number
   readonly duration: number
   readonly loop: Loop
   readonly looping: boolean
+  readonly onScrub: (seconds: number) => void
   /* Follows the clip's own corners, so the scrim does not square off a rounded
      video. Zen has no rounding to follow. */
   readonly rounded?: string | undefined
 }) {
+  const track = useRef<HTMLDivElement>(null)
+  const [dragging, setDragging] = useState(false)
+
   const span = spanned({ loop, looping, duration })
   const at = `${ratioOf(time, span) * 100}%`
 
+  const scrubTo = (clientX: number) =>
+    onScrub(
+      secondsAt({
+        clientX,
+        track: track.current?.getBoundingClientRect() ?? { left: 0, width: 0 },
+        span,
+      }),
+    )
+
   return (
+    /* `pointer-events-none` on the whole scrim, taken back only by the grab
+       strip below. The video surface is the play/pause target, so a bar owning
+       the bottom of the frame would cost the dancer tapping the clip to pause
+       it — and the scrim is a good deal taller than the line it draws. */
     <div
-      className={`absolute inset-x-0 bottom-0 select-none bg-gradient-to-t from-black/70 to-transparent px-2 pb-2 pt-8 ${rounded ?? ''}`}
+      className={`pointer-events-none absolute inset-x-0 bottom-0 select-none bg-gradient-to-t from-black/70 to-transparent px-2 pb-2 pt-8 ${rounded ?? ''}`}
     >
       {/* Two facts, and the row has room for both.
 
@@ -59,11 +79,44 @@ export function VideoProgress({
         </span>
       </div>
 
-      <div className="scrub-track py-3">
-        <div className="relative h-0.5 w-full rounded-full bg-white/20">
+      {/* Capture keeps the drag alive when the finger slides off the strip, as
+          it does on the loop handles — and optional-called for their reason too,
+          because jsdom implements no pointer capture and a bare call would throw
+          in every test that drags. */}
+      <div
+        ref={track}
+        className="scrub-track group pointer-events-auto -my-3 cursor-pointer py-3"
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture?.(event.pointerId)
+          setDragging(true)
+          scrubTo(event.clientX)
+        }}
+        /* A move with no drag behind it is a mouse passing over the bar on its
+           way somewhere else; seeking on that would make the clip jump whenever
+           the pointer crossed the video. */
+        onPointerMove={(event) => {
+          if (dragging) scrubTo(event.clientX)
+        }}
+        onPointerUp={(event) => {
+          event.currentTarget.releasePointerCapture?.(event.pointerId)
+          setDragging(false)
+        }}
+        onPointerCancel={() => setDragging(false)}
+      >
+        <div
+          className={`relative w-full rounded-full bg-white/20 transition-[height] ${
+            dragging ? 'h-1' : 'h-0.5 group-hover:h-1'
+          }`}
+        >
           <div
             className="scrub-fill absolute inset-y-0 left-0 rounded-full bg-white"
             style={{ width: at }}
+          />
+          <div
+            className={`absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow transition-transform ${
+              dragging ? 'scale-100' : 'scale-0 group-hover:scale-100'
+            }`}
+            style={{ left: at }}
           />
         </div>
       </div>

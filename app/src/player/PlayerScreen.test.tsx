@@ -2476,3 +2476,91 @@ describe('the position bar once a loop is armed', () => {
     expect(screen.queryByText('0:02 – 0:06')).toBeNull()
   })
 })
+
+/* A drag reads where the pointer landed against the width of the bar, and jsdom
+   lays nothing out — so the bar has to be given a size first, exactly as the loop
+   track is. 200px makes every position a round number. */
+const aLaidOutBar = ({ width = 200 } = {}) => {
+  const bar = scrubTrack()
+
+  if (!bar) throw new Error('The player drew no position bar')
+
+  return laidOut(bar, { width })
+}
+
+const scrubAt = (clientX: number) =>
+  fireEvent.pointerDown(aLaidOutBar(), { pointerId: 1, clientX })
+
+describe('scrubbing the position bar', () => {
+  it('seeks to where the bar was touched', () => {
+    const clip = aReadyClip({ seconds: 12 })
+
+    scrubAt(100)
+
+    expect(clip.currentTime).toBe(6)
+  })
+
+  /* The same pixel, a different moment. Halfway along a bar spanning the whole
+     12s clip is 6s; halfway along one spanning a 4-to-6 loop is 5s — which is the
+     rescale doing its work through the real screen rather than in arithmetic. */
+  it('seeks within the loop once the bar spans one', () => {
+    const clip = aClipLoopingPartOfIt({ seconds: 20, a: 4, b: 6 })
+
+    scrubAt(100)
+
+    expect(clip.currentTime).toBe(5)
+  })
+
+  /* Criterion four. There is nothing clamping here — the far end of the bar *is*
+     B, so a drag that carries on past it has nowhere further to go. */
+  it('travels exactly the loop and no further', () => {
+    const clip = aClipLoopingPartOfIt({ seconds: 20, a: 4, b: 6 })
+
+    /* Off A first, or the assertion below is satisfied by the playhead space
+       already left at B and says nothing about the drag. */
+    toStartOfLoop()
+    scrubAt(900)
+
+    expect(clip.currentTime).toBe(6)
+  })
+
+  it('follows the pointer as the drag moves', () => {
+    const clip = aReadyClip({ seconds: 12 })
+
+    fireEvent.pointerDown(aLaidOutBar(), { pointerId: 1, clientX: 50 })
+    fireEvent.pointerMove(aLaidOutBar(), { pointerId: 1, clientX: 150 })
+
+    expect(clip.currentTime).toBe(9)
+  })
+
+  /* A move with no drag behind it is a mouse passing over the bar on its way
+     somewhere else. Seeking on that would make the clip jump whenever the pointer
+     crossed the video. */
+  it('ignores a pointer merely passing over it', () => {
+    const clip = aReadyClip({ seconds: 12 })
+
+    fireEvent.pointerMove(aLaidOutBar(), { pointerId: 1, clientX: 150 })
+
+    expect(clip.currentTime).toBe(0)
+  })
+
+  /* The separation the loop track already keeps, kept here too: scrubbing and
+     framing are different acts, and a bar that dragged a boundary along with the
+     playhead would destroy the loop every time the dancer looked elsewhere. */
+  it('never moves A or B', () => {
+    aClipLoopingPartOfIt({ seconds: 20, a: 4, b: 6 })
+
+    scrubAt(20)
+
+    expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '4')
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '6')
+  })
+
+  it('draws the playhead where the drag left it', () => {
+    aReadyClip({ seconds: 20 })
+
+    scrubAt(50)
+
+    expect(scrubFill()).toHaveStyle({ width: '25%' })
+  })
+})

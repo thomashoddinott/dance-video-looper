@@ -721,6 +721,7 @@ function OpenedClip({
                   duration={playback.duration}
                   loop={playback.loop}
                   looping={playback.looping}
+                  onScrub={seekTo}
                   rounded={isolated ? undefined : 'rounded-b-lg'}
                 />
               )}
