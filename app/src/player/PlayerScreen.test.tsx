@@ -2660,6 +2660,66 @@ describe('scrubbing faster than the seeks can land', () => {
     expect(clip.currentTime).toBe(9)
   })
 
+  /* #23 made a slow drag resolve frame by frame, which is the thing the bar
+     exists for — and every one of those frames lands its own fragment of sound.
+     Dragging slowly through two seconds of a turn is a burst of clicks and
+     half-syllables, and the finer the scrub the worse it gets: the same backwards
+     relationship #21's rescale was built to break.
+
+     Riding on `adjusting` rather than on the bar, so it covers every surface that
+     drags the playhead — the scrub bar and both loop handles. */
+  describe('the sound while a hand is on the clip', () => {
+    it('goes quiet for the length of the drag', () => {
+      const clip = aReadyClip({ seconds: 12 })
+
+      dragAcross(50, 150)
+
+      expect(clip.muted).toBe(true)
+    })
+
+    it('comes back when the bar is let go', () => {
+      const clip = aReadyClip({ seconds: 12 })
+
+      dragAcross(50, 150)
+      fireEvent.pointerUp(aLaidOutBar(), { pointerId: 1 })
+
+      expect(clip.muted).toBe(false)
+    })
+
+    /* Put back the way it was, not switched on. A dancer practising silently in a
+       studio has the clip muted already, and a scrub that handed them audio would
+       be a worse bug than the one this fixes. */
+    it('leaves a clip the dancer had already muted alone', () => {
+      const clip = aReadyClip({ seconds: 12 })
+      clip.muted = true
+
+      dragAcross(50, 150)
+      fireEvent.pointerUp(aLaidOutBar(), { pointerId: 1 })
+
+      expect(clip.muted).toBe(true)
+    })
+
+    /* Both surfaces, not just the bar. Dragging A or B seeks continuously too,
+       and what comes out is the clip sped up or slowed to whatever rate the hand
+       is moving at — the same noise arriving by a different route. */
+    it('goes quiet while a loop boundary is being dragged', () => {
+      const clip = aReadyClip({ seconds: 12 })
+
+      fireEvent.pointerDown(boundary('Loop start'), { pointerId: 1, clientX: 0 })
+
+      expect(clip.muted).toBe(true)
+    })
+
+    it('brings the sound back when the boundary is let go', () => {
+      const clip = aReadyClip({ seconds: 12 })
+
+      fireEvent.pointerDown(boundary('Loop start'), { pointerId: 1, clientX: 0 })
+      fireEvent.pointerUp(boundary('Loop start'), { pointerId: 1 })
+
+      expect(clip.muted).toBe(false)
+    })
+  })
+
   /* The other half of keeping up, and the one that is visible rather than
      measurable. Dropping the queue stops the clip falling behind; this stops the
      *bar* falling behind, which is what the thumb is actually watching.

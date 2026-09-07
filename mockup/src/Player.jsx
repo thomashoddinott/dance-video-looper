@@ -148,7 +148,7 @@ function SpeedStepper({ speed, onChange }) {
   )
 }
 
-function LoopSlider({ duration, time, loop, onScrub, onLoopChange }) {
+function LoopSlider({ duration, time, loop, onScrub, onLoopChange, onHold }) {
   const trackRef = useRef(null)
   const [dragging, setDragging] = useState(null)
 
@@ -160,6 +160,7 @@ function LoopSlider({ duration, time, loop, onScrub, onLoopChange }) {
   const startDrag = (handle) => (event) => {
     event.currentTarget.setPointerCapture(event.pointerId)
     setDragging(handle)
+    onHold?.(true)
   }
 
   const onPointerMove = (event) => {
@@ -177,6 +178,7 @@ function LoopSlider({ duration, time, loop, onScrub, onLoopChange }) {
     if (!dragging) return
     event.currentTarget.releasePointerCapture(event.pointerId)
     setDragging(null)
+    onHold?.(false)
   }
 
   const pct = (t) => (duration ? (t / duration) * 100 : 0)
@@ -605,11 +607,30 @@ function Player({ clip, onBack }) {
     flushSeek()
   }
 
-  /* Release settles the clip exactly where the finger left it. Mid-drag the
+  /* The clip goes quiet for as long as a hand is on it. Scrubbing resolves frame
+     by frame now, and every one of those frames lands its own fragment of sound —
+     scanning slowly through a turn is a burst of clicks and half-syllables, and
+     the finer the scrub the worse it gets. Dragging A or B is the same noise by a
+     different route: the clip sped up or slowed to whatever rate the hand happens
+     to be moving at.
+
+     Put back the way it was rather than switched on, because a clip practised
+     silently is already muted and handing it audio would be worse than the noise
+     this removes. */
+  const mutedBefore = useRef(false)
+
+  /* Release also settles the clip exactly where the finger left it. Mid-drag the
      newest target wins and the rest are dropped, so the last one asked for may
      well have been dropped too — this is what puts it back. */
   const holdScrub = (held) => {
     holdingRef.current = held
+
+    const video = videoRef.current
+    if (video) {
+      if (held) mutedBefore.current = video.muted
+      video.muted = held || mutedBefore.current
+    }
+
     if (held) return
 
     pendingRef.current = targetRef.current
@@ -779,6 +800,7 @@ function Player({ clip, onBack }) {
             loop={loop}
             onScrub={scrub}
             onLoopChange={changeLoop}
+            onHold={holdScrub}
           />
 
           {/* Only worth showing where there is a keyboard to press */}

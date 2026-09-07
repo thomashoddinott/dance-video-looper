@@ -369,6 +369,39 @@ function OpenedClip({
      too, where settling an idle gate is a no-op. */
   const seekLanded = () => issue(settled(gate.current))
 
+  /* Whether the clip was already silent when the bar was taken hold of, so
+     letting go can put the sound back the way it was rather than switching it
+     on. A dancer practising silently in a studio has the clip muted already, and
+     a scrub that handed them audio would be a worse bug than the one below. */
+  const mutedBefore = useRef(false)
+
+  /* The clip goes quiet for as long as a hand is on it. #23 made a slow drag
+     resolve frame by frame — the thing the bar exists for — and every one of
+     those frames lands its own fragment of sound, so scanning slowly through a
+     turn is a burst of clicks and half-syllables. The finer the scrub the worse
+     it gets, which is the backwards relationship #21's rescale was built to
+     break.
+
+     Both surfaces, not just the bar. Dragging A or B seeks continuously too, and
+     what comes out is the clip sped up or slowed to whatever rate the hand
+     happens to be moving at — the same noise arriving by a different route.
+
+     It rides on `adjusting` because that is already the app's answer to "is the
+     dancer holding the playhead", set by the scrub bar and both loop handles
+     (BR-19). A second flag tracking the same fact could only ever disagree with
+     it. */
+  const hushWhileHeld = (held: boolean) => {
+    const video = surface.current
+
+    if (video) {
+      if (held) mutedBefore.current = video.muted
+
+      video.muted = held || mutedBefore.current
+    }
+
+    setAdjusting(held)
+  }
+
   /* Written straight onto the element, because `playbackRate` is a property
      rather than an attribute React could render. Nothing here plays, pauses or
      touches `looping`, and the enforcement below does not take the rate as a
@@ -805,7 +838,7 @@ function OpenedClip({
                   loop={playback.loop}
                   looping={playback.looping}
                   onScrub={seekTo}
-                  onHold={setAdjusting}
+                  onHold={hushWhileHeld}
                   rounded={isolated ? undefined : 'rounded-b-lg'}
                 />
               )}
@@ -878,7 +911,7 @@ function OpenedClip({
                   time={time}
                   onSeek={seekTo}
                   onLoopChange={changeLoop}
-                  onHold={setAdjusting}
+                  onHold={hushWhileHeld}
                 />
               )}
             </div>
