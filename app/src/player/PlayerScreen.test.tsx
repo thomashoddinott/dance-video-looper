@@ -2637,3 +2637,31 @@ describe('scrubbing while the loop runs', () => {
     expect(clip.currentTime).toBe(5)
   })
 })
+
+/* Three facts this suite cannot actually check. jsdom implements neither
+   `pointer-events` nor `touch-action`, and it has no notion of how big a thumb
+   is — so what follows asserts that the classes carrying them are *present*, not
+   that they work. It is a guard against them being dropped in a refactor, and
+   the real check is a smoke test on a phone.
+
+   Said once, as one test, rather than spread over three that would read like
+   behavioural coverage of the criteria they stand in for. */
+describe('the position bar under a thumb', () => {
+  it('keeps the classes the phone depends on', () => {
+    aReadyClip({ seconds: 12 })
+
+    const strip = scrubTrack()
+
+    /* A drag down the bottom of a video is otherwise a page scroll. */
+    expect(strip).toHaveClass('touch-none')
+    /* A 2px line is not a touch target: the line stays hairline and the strip
+       around it is padded to something a thumb can find. */
+    expect(strip).toHaveClass('py-3')
+    /* The scrim is a tall gradient over the bottom of the frame, and the video
+       under it is the play/pause target — so it takes no pointer events and only
+       the strip takes them back. Without this, tapping the clip to pause it
+       would stop working wherever the bar happens to be. */
+    expect(strip).toHaveClass('pointer-events-auto')
+    expect(strip?.parentElement).toHaveClass('pointer-events-none')
+  })
+})

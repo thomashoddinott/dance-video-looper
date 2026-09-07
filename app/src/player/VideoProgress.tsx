@@ -109,7 +109,12 @@ export function VideoProgress({
           in every test that drags. */}
       <div
         ref={track}
-        className="scrub-track group pointer-events-auto -my-3 cursor-pointer py-3"
+        /* A 2px line is not a touch target. The padding gives a thumb ~28px to
+           land in while the line itself stays hairline, and the negative margin
+           keeps that height from pushing the bar off the bottom of the frame.
+           `touch-none` is the other half: without it a drag down the bottom of a
+           video is read as a page scroll and the bar never sees it. */
+        className="scrub-track group pointer-events-auto -my-3 cursor-pointer touch-none py-3"
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture?.(event.pointerId)
           grab()
