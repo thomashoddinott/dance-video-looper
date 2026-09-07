@@ -385,6 +385,19 @@ describe('the player', () => {
     expect(clipSurface(container)).toHaveAttribute('src', '/wave-practice.mp4')
   })
 
+  /* The default fetches metadata and stops, so scrubbing past whatever happened
+     to arrive turns every seek into a network fetch *and* a decode — which is
+     most of what read as the clip freezing under the thumb. Chrome had 4.9s of a
+     26.7s clip in hand when the mockup gate measured it, on localhost.
+
+     Clips are ~6MB and the app is cache-first anyway, so there is no version of
+     this where fetching the rest later is the better trade. */
+  it('fetches the whole clip rather than only its metadata', () => {
+    const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
+
+    expect(clipSurface(container)).toHaveAttribute('preload', 'auto')
+  })
+
   it('reserves the controls their places, in the order they will be used', () => {
     const { container } = renderPlayer(getClip({ src: '/shuffle-drill.mp4' }))
 

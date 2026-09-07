@@ -762,6 +762,15 @@ function OpenedClip({
                     : 'mx-auto block max-h-[50vh] max-w-full rounded-lg bg-black lg:max-h-[80vh]'
                 }
                 playsInline
+                /* The default fetches metadata and stops, so scrubbing past
+                   whatever happened to arrive turns every seek into a network
+                   fetch *and* a decode — most of what read as the clip freezing
+                   under the thumb. The mockup gate found Chrome holding 4.9s of a
+                   26.7s clip, on localhost.
+
+                   Clips are ~6MB and the app is cache-first regardless, so there
+                   is no version of this where fetching the rest later wins. */
+                preload="auto"
                 onLoadedMetadata={(event) =>
                   setPlayback(decoded(event.currentTarget.duration))
                 }
