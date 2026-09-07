@@ -23,7 +23,7 @@ describe('what the scrub bar spans', () => {
   it('spans A to B when a loop is armed over part of the clip', () => {
     expect(
       spanned({ loop: aLoop({ a: 3, b: 9 }), looping: true, duration: 12 }),
-    ).toEqual({ from: 3, to: 9 })
+    ).toEqual({ from: 3, to: 9, rescaled: true })
   })
 
   /* The case that makes the rest of the clip reachable at all. With looping off
@@ -31,13 +31,14 @@ describe('what the scrub bar spans', () => {
   it('spans the whole clip when looping is off', () => {
     expect(
       spanned({ loop: aLoop({ a: 3, b: 9 }), looping: false, duration: 12 }),
-    ).toEqual({ from: 0, to: 12 })
+    ).toEqual({ from: 0, to: 12, rescaled: false })
   })
 
   it('spans the whole clip when the loop already is the whole clip', () => {
     expect(spanned({ loop: aLoop(), looping: true, duration: 12 })).toEqual({
       from: 0,
       to: 12,
+      rescaled: false,
     })
   })
 
@@ -48,13 +49,13 @@ describe('what the scrub bar spans', () => {
   it('counts a B a rounding error short of the end as the end', () => {
     expect(
       spanned({ loop: aLoop({ b: 12 - EDGE / 2 }), looping: true, duration: 12 }),
-    ).toEqual({ from: 0, to: 12 })
+    ).toEqual({ from: 0, to: 12, rescaled: false })
   })
 
   it('counts an A a rounding error past the start as the start', () => {
     expect(
       spanned({ loop: aLoop({ a: EDGE / 2 }), looping: true, duration: 12 }),
-    ).toEqual({ from: 0, to: 12 })
+    ).toEqual({ from: 0, to: 12, rescaled: false })
   })
 
   /* One end being meaningfully inside is enough to be penned in, so a loop that
@@ -64,7 +65,7 @@ describe('what the scrub bar spans', () => {
   it('spans a loop that reaches the end but starts well inside', () => {
     expect(
       spanned({ loop: aLoop({ a: 5, b: 12 }), looping: true, duration: 12 }),
-    ).toEqual({ from: 5, to: 12 })
+    ).toEqual({ from: 5, to: 12, rescaled: true })
   })
 
   /* Before metadata there is no clip to span. Answering 0..0 rather than
@@ -73,6 +74,7 @@ describe('what the scrub bar spans', () => {
     expect(spanned({ loop: aLoop(), looping: true, duration: 0 })).toEqual({
       from: 0,
       to: 0,
+      rescaled: false,
     })
   })
 
@@ -82,7 +84,7 @@ describe('what the scrub bar spans', () => {
   it('spans the whole clip rather than an inverted loop', () => {
     expect(
       spanned({ loop: aLoop({ a: 9, b: 3 }), looping: true, duration: 12 }),
-    ).toEqual({ from: 0, to: 12 })
+    ).toEqual({ from: 0, to: 12, rescaled: false })
   })
 })
 

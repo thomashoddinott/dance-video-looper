@@ -37,10 +37,23 @@ export function VideoProgress({
     <div
       className={`absolute inset-x-0 bottom-0 select-none bg-gradient-to-t from-black/70 to-transparent px-2 pb-2 pt-8 ${rounded ?? ''}`}
     >
-      {/* Where you actually are, absolute rather than relative to the span — it
-          is the number you came for, and a rescaled bar must not change what the
-          clock says. */}
-      <div className="mb-1.5 flex items-baseline justify-end gap-2">
+      {/* Two facts, and the row has room for both.
+
+          Left: what the bar spans, shown only once that is no longer the whole
+          clip. It is what carries the rescale, which is otherwise abrupt and
+          invisible — the bar's meaning changes in a single frame, and without
+          this a playhead sitting mid-bar at 1:03 of a 2:28 clip simply looks
+          wrong.
+
+          Right: where you actually are, absolute rather than relative to the
+          span. That is the number you came for, and a rescaled bar must not
+          change what the clock says. */}
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <span className="text-[11px] tabular-nums text-white/60 drop-shadow">
+          {span.rescaled
+            ? `${formatDuration(span.from)} – ${formatDuration(span.to)}`
+            : ''}
+        </span>
         <span className="text-[11px] tabular-nums text-white/80 drop-shadow">
           {formatDuration(time)} / {formatDuration(duration)}
         </span>

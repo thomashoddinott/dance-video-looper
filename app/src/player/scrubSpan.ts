@@ -40,14 +40,16 @@ export const spanned = ({
   readonly loop: Loop
   readonly looping: boolean
   readonly duration: number
-}): Span => {
+}): Span & { readonly rescaled: boolean } => {
   const penned =
     looping &&
     duration > 0 &&
     loop.b > loop.a &&
     (loop.a > EDGE || loop.b < duration - EDGE)
 
-  return penned ? { from: loop.a, to: loop.b } : { from: 0, to: duration }
+  return penned
+    ? { from: loop.a, to: loop.b, rescaled: true }
+    : { from: 0, to: duration, rescaled: false }
 }
 
 /* Where a moment sits along the bar, as a fraction of the span rather than of

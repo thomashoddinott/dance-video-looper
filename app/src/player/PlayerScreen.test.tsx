@@ -2346,11 +2346,9 @@ describe('the loops this clip already had', () => {
 /* #21. Where you are in the clip, drawn on the clip — the video carried no
    position indicator at all before this, no `controls` and nothing of our own,
    so it simply played blind. */
-const scrubTrack = (container: HTMLElement) =>
-  container.querySelector('.scrub-track')
+const scrubTrack = () => document.querySelector('.scrub-track')
 
-const scrubFill = (container: HTMLElement) =>
-  container.querySelector('.scrub-fill')
+const scrubFill = () => document.querySelector('.scrub-fill')
 
 const seekForward = () =>
   fireEvent.click(screen.getByRole('button', { name: 'Forward 1 second' }))
@@ -2372,12 +2370,11 @@ describe('the position bar on the clip', () => {
   })
 
   it('fills the bar to where the playhead is', () => {
-    const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
+    aReadyClip({ seconds: 20 })
 
-    fireEvent.loadedMetadata(playable(clipSurface(container), { seconds: 20 }))
     seekForward()
 
-    expect(scrubFill(container)).toHaveStyle({ width: '5%' })
+    expect(scrubFill()).toHaveStyle({ width: '5%' })
   })
 
   it('says the time the playhead moved to', () => {
@@ -2392,9 +2389,9 @@ describe('the position bar on the clip', () => {
      no length to lay a bar out against, and a bar spanning an unknown clip would
      be inviting a drag against nothing. */
   it('draws no bar until the clip has a length', () => {
-    const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
+    renderPlayer(getClip({ src: '/wave-practice.mp4' }))
 
-    expect(scrubTrack(container)).toBeNull()
+    expect(scrubTrack()).toBeNull()
   })
 
   /* The reason it rides inside the video wrapper rather than under the card:
@@ -2406,7 +2403,76 @@ describe('the position bar on the clip', () => {
     fireEvent.loadedMetadata(playable(clipSurface(container), { seconds: 12 }))
     fireEvent.click(screen.getByRole('button', { name: 'Isolate the video' }))
 
-    expect(scrubTrack(container)).toBeInTheDocument()
+    expect(scrubTrack()).toBeInTheDocument()
     expect(screen.getByText('0:00 / 0:12')).toBeVisible()
+  })
+})
+
+/* The rescale, which is the whole reason this bar is not the loop slider: a
+   six-second loop in a 2:28 clip is 4% of the slider's width, and the tighter the
+   loop the worse it gets — backwards, because a tight loop is exactly when you
+   most need to move inside it. */
+const aClipLoopingPartOfIt = ({ seconds = 12, a = 2, b = 6 } = {}) => {
+  const clip = aReadyClip({ seconds })
+
+  clip.currentTime = a
+  press('Space')
+  clip.currentTime = b
+  press('Space')
+
+  return clip
+}
+
+const releaseTheLoop = () =>
+  fireEvent.click(screen.getByRole('button', { name: 'LOOPING' }))
+
+/* Space marks a boundary off the element's own `currentTime`, which React never
+   hears about — so a playhead put there by hand draws at zero. These two move it
+   through the controls the dancer would use, which is what makes the drawn
+   position real. */
+const toStartOfLoop = () =>
+  fireEvent.click(screen.getByRole('button', { name: 'START' }))
+
+describe('the position bar once a loop is armed', () => {
+  it('labels its ends with the two times it spans', () => {
+    aClipLoopingPartOfIt({ a: 2, b: 6 })
+
+    expect(screen.getByText('0:02 – 0:06')).toBeInTheDocument()
+  })
+
+  /* The bar is full at B, not four-twelfths along at the end of the clip. This
+     and the test below it are one assertion in two halves: the same playhead, the
+     same clip, and a different reading the moment the loop stops penning it in. */
+  it('fills against the loop rather than against the clip', () => {
+    aClipLoopingPartOfIt({ seconds: 20, a: 4, b: 6 })
+
+    toStartOfLoop()
+    seekForward()
+
+    expect(scrubFill()).toHaveStyle({ width: '50%' })
+  })
+
+  it('reads the same playhead against the whole clip once the loop is released', () => {
+    aClipLoopingPartOfIt({ seconds: 20, a: 4, b: 6 })
+
+    toStartOfLoop()
+    seekForward()
+    releaseTheLoop()
+
+    expect(scrubFill()).toHaveStyle({ width: '25%' })
+  })
+
+  it('says nothing about a range while the loop is the whole clip', () => {
+    aReadyClip({ seconds: 12 })
+
+    expect(screen.queryByText(/–/)).toBeNull()
+  })
+
+  it('drops the range label when the loop is released', () => {
+    aClipLoopingPartOfIt({ a: 2, b: 6 })
+
+    releaseTheLoop()
+
+    expect(screen.queryByText('0:02 – 0:06')).toBeNull()
   })
 })
