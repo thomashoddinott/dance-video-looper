@@ -23,6 +23,23 @@ export type Track = {
 export const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max)
 
+/* How far along an element a pointer is, as a fraction. Both bars on this screen
+   ask this — the loop track against the clip, the position bar against whatever
+   it currently spans (`scrubSpan.ts`) — and they differ only in what they
+   multiply it by, so the reading itself is stated once.
+
+   A track that has not been laid out has no width, and dividing by it gives
+   Infinity — which would then be written to `currentTime`. Answering 0 makes
+   both callers land on the start of their own range without either needing a
+   case for it. */
+export const ratioAt = ({
+  clientX,
+  track,
+}: {
+  readonly clientX: number
+  readonly track: Track
+}) => (track.width <= 0 ? 0 : clamp((clientX - track.left) / track.width, 0, 1))
+
 export const timeAt = ({
   clientX,
   track,
@@ -31,11 +48,7 @@ export const timeAt = ({
   readonly clientX: number
   readonly track: Track
   readonly duration: number
-}) => {
-  if (track.width <= 0) return 0
-
-  return clamp((clientX - track.left) / track.width, 0, 1) * duration
-}
+}) => ratioAt({ clientX, track }) * duration
 
 /* The one place a boundary moves. The drag, the arrow keys and Home/End all come
    through here, so the floor and the clip's own bounds cannot be enforced on one

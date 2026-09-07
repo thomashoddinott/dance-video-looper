@@ -2342,3 +2342,326 @@ describe('the loops this clip already had', () => {
     expect(nameField()).toHaveAttribute('placeholder', 'Loop 2')
   })
 })
+
+/* #21. Where you are in the clip, drawn on the clip — the video carried no
+   position indicator at all before this, no `controls` and nothing of our own,
+   so it simply played blind. */
+const scrubTrack = () => document.querySelector('.scrub-track')
+
+const scrubFill = () => document.querySelector('.scrub-fill')
+
+const seekForward = () =>
+  fireEvent.click(screen.getByRole('button', { name: 'Forward 1 second' }))
+
+describe('the position bar on the clip', () => {
+  it('writes the elapsed and total time on the clip', () => {
+    aReadyClip({ seconds: 12 })
+
+    expect(screen.getByText('0:00 / 0:12')).toBeInTheDocument()
+  })
+
+  /* Written with `formatDuration` like every other length on this screen, rather
+     than the mockup's own spelling — the player should not write a time
+     differently from the tile it was opened from. */
+  it('writes a longer clip the way the grid writes lengths', () => {
+    aReadyClip({ seconds: 148 })
+
+    expect(screen.getByText('0:00 / 2:28')).toBeInTheDocument()
+  })
+
+  it('fills the bar to where the playhead is', () => {
+    aReadyClip({ seconds: 20 })
+
+    seekForward()
+
+    expect(scrubFill()).toHaveStyle({ width: '5%' })
+  })
+
+  it('says the time the playhead moved to', () => {
+    aReadyClip({ seconds: 20 })
+
+    seekForward()
+
+    expect(screen.getByText('0:01 / 0:20')).toBeInTheDocument()
+  })
+
+  /* Gated exactly as the slider and the transport are. Before metadata there is
+     no length to lay a bar out against, and a bar spanning an unknown clip would
+     be inviting a drag against nothing. */
+  it('draws no bar until the clip has a length', () => {
+    renderPlayer(getClip({ src: '/wave-practice.mp4' }))
+
+    expect(scrubTrack()).toBeNull()
+  })
+
+  /* The reason it rides inside the video wrapper rather than under the card:
+     zen hides the whole control strip, so this is the only thing left that says
+     where the clip has got to — and that is where it matters most. */
+  it('stays on the clip in zen, where the control strip is not', () => {
+    const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
+
+    fireEvent.loadedMetadata(playable(clipSurface(container), { seconds: 12 }))
+    fireEvent.click(screen.getByRole('button', { name: 'Isolate the video' }))
+
+    expect(scrubTrack()).toBeInTheDocument()
+    expect(screen.getByText('0:00 / 0:12')).toBeVisible()
+  })
+})
+
+/* The rescale, which is the whole reason this bar is not the loop slider: a
+   six-second loop in a 2:28 clip is 4% of the slider's width, and the tighter the
+   loop the worse it gets — backwards, because a tight loop is exactly when you
+   most need to move inside it. */
+const aClipLoopingPartOfIt = ({ seconds = 12, a = 2, b = 6 } = {}) => {
+  const clip = aReadyClip({ seconds })
+
+  clip.currentTime = a
+  press('Space')
+  clip.currentTime = b
+  press('Space')
+
+  return clip
+}
+
+const releaseTheLoop = () =>
+  fireEvent.click(screen.getByRole('button', { name: 'LOOPING' }))
+
+/* Space marks a boundary off the element's own `currentTime`, which React never
+   hears about — so a playhead put there by hand draws at zero. These two move it
+   through the controls the dancer would use, which is what makes the drawn
+   position real. */
+const toStartOfLoop = () =>
+  fireEvent.click(screen.getByRole('button', { name: 'START' }))
+
+describe('the position bar once a loop is armed', () => {
+  it('labels its ends with the two times it spans', () => {
+    aClipLoopingPartOfIt({ a: 2, b: 6 })
+
+    expect(screen.getByText('0:02 – 0:06')).toBeInTheDocument()
+  })
+
+  /* The bar is full at B, not four-twelfths along at the end of the clip. This
+     and the test below it are one assertion in two halves: the same playhead, the
+     same clip, and a different reading the moment the loop stops penning it in. */
+  it('fills against the loop rather than against the clip', () => {
+    aClipLoopingPartOfIt({ seconds: 20, a: 4, b: 6 })
+
+    toStartOfLoop()
+    seekForward()
+
+    expect(scrubFill()).toHaveStyle({ width: '50%' })
+  })
+
+  it('reads the same playhead against the whole clip once the loop is released', () => {
+    aClipLoopingPartOfIt({ seconds: 20, a: 4, b: 6 })
+
+    toStartOfLoop()
+    seekForward()
+    releaseTheLoop()
+
+    expect(scrubFill()).toHaveStyle({ width: '25%' })
+  })
+
+  it('says nothing about a range while the loop is the whole clip', () => {
+    aReadyClip({ seconds: 12 })
+
+    expect(screen.queryByText(/–/)).toBeNull()
+  })
+
+  it('drops the range label when the loop is released', () => {
+    aClipLoopingPartOfIt({ a: 2, b: 6 })
+
+    releaseTheLoop()
+
+    expect(screen.queryByText('0:02 – 0:06')).toBeNull()
+  })
+})
+
+/* A drag reads where the pointer landed against the width of the bar, and jsdom
+   lays nothing out — so the bar has to be given a size first, exactly as the loop
+   track is. 200px makes every position a round number. */
+const aLaidOutBar = ({ width = 200 } = {}) => {
+  const bar = scrubTrack()
+
+  if (!bar) throw new Error('The player drew no position bar')
+
+  return laidOut(bar, { width })
+}
+
+const scrubAt = (clientX: number) =>
+  fireEvent.pointerDown(aLaidOutBar(), { pointerId: 1, clientX })
+
+describe('scrubbing the position bar', () => {
+  it('seeks to where the bar was touched', () => {
+    const clip = aReadyClip({ seconds: 12 })
+
+    scrubAt(100)
+
+    expect(clip.currentTime).toBe(6)
+  })
+
+  /* The same pixel, a different moment. Halfway along a bar spanning the whole
+     12s clip is 6s; halfway along one spanning a 4-to-6 loop is 5s — which is the
+     rescale doing its work through the real screen rather than in arithmetic. */
+  it('seeks within the loop once the bar spans one', () => {
+    const clip = aClipLoopingPartOfIt({ seconds: 20, a: 4, b: 6 })
+
+    scrubAt(100)
+
+    expect(clip.currentTime).toBe(5)
+  })
+
+  /* Criterion four. There is nothing clamping here — the far end of the bar *is*
+     B, so a drag that carries on past it has nowhere further to go. */
+  it('travels exactly the loop and no further', () => {
+    const clip = aClipLoopingPartOfIt({ seconds: 20, a: 4, b: 6 })
+
+    /* Off A first, or the assertion below is satisfied by the playhead space
+       already left at B and says nothing about the drag. */
+    toStartOfLoop()
+    scrubAt(900)
+
+    expect(clip.currentTime).toBe(6)
+  })
+
+  it('follows the pointer as the drag moves', () => {
+    const clip = aReadyClip({ seconds: 12 })
+
+    fireEvent.pointerDown(aLaidOutBar(), { pointerId: 1, clientX: 50 })
+    fireEvent.pointerMove(aLaidOutBar(), { pointerId: 1, clientX: 150 })
+
+    expect(clip.currentTime).toBe(9)
+  })
+
+  /* A move with no drag behind it is a mouse passing over the bar on its way
+     somewhere else. Seeking on that would make the clip jump whenever the pointer
+     crossed the video. */
+  it('ignores a pointer merely passing over it', () => {
+    const clip = aReadyClip({ seconds: 12 })
+
+    fireEvent.pointerMove(aLaidOutBar(), { pointerId: 1, clientX: 150 })
+
+    expect(clip.currentTime).toBe(0)
+  })
+
+  /* The separation the loop track already keeps, kept here too: scrubbing and
+     framing are different acts, and a bar that dragged a boundary along with the
+     playhead would destroy the loop every time the dancer looked elsewhere. */
+  it('never moves A or B', () => {
+    aClipLoopingPartOfIt({ seconds: 20, a: 4, b: 6 })
+
+    scrubAt(20)
+
+    expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '4')
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '6')
+  })
+
+  it('draws the playhead where the drag left it', () => {
+    aReadyClip({ seconds: 20 })
+
+    scrubAt(50)
+
+    expect(scrubFill()).toHaveStyle({ width: '25%' })
+  })
+})
+
+/* BR-19 again, and the one piece of behaviour the mockup left for the app to
+   settle. Dragging to the far end of a rescaled bar lands exactly on B, and
+   enforcement fires on `currentTime >= b` — so the playhead would jump to A
+   while the finger is still at the right-hand edge, and the fill would snap to
+   empty under it. The drag and enforcement are the same clip pulled two ways,
+   which is precisely the fight a held handle already stands enforcement down
+   for. */
+describe('scrubbing while the loop runs', () => {
+  const aRunningLoop = () => {
+    const clip = aClipLoopingPartOfIt({ seconds: 20, a: 4, b: 6 })
+
+    /* Off B first: space left the playhead there, and enforcement would send it
+       to A on the first frame of playback before the drag happened at all. */
+    toStartOfLoop()
+    fireEvent.play(clip)
+
+    return clip
+  }
+
+  it('stays where the drag reached rather than restarting the loop', () => {
+    vi.useFakeTimers()
+    const clip = aRunningLoop()
+
+    scrubAt(900)
+    act(() => vi.advanceTimersByTime(A_FEW_FRAMES))
+
+    expect(clip.currentTime).toBe(6)
+  })
+
+  /* Standing down lasts the length of the drag and no longer. Letting go is the
+     dancer saying they are done moving about, and the loop they were listening
+     to is what they want back — so landing on B and releasing wraps to A, which
+     is the loop doing its job rather than fighting the finger. */
+  it('takes the loop back up as soon as the drag ends', () => {
+    vi.useFakeTimers()
+    const clip = aRunningLoop()
+    const bar = aLaidOutBar()
+
+    fireEvent.pointerDown(bar, { pointerId: 1, clientX: 900 })
+    fireEvent.pointerUp(bar, { pointerId: 1 })
+    act(() => vi.advanceTimersByTime(A_FEW_FRAMES))
+
+    expect(clip.currentTime).toBe(4)
+  })
+
+  /* A drag that leaves the window never sees its own pointer-up. Without this
+     the loop would stay stood down for the rest of the session, and the dancer
+     would have a clip that quietly stopped looping. */
+  it('takes the loop back up when the drag is cancelled', () => {
+    vi.useFakeTimers()
+    const clip = aRunningLoop()
+    const bar = aLaidOutBar()
+
+    fireEvent.pointerDown(bar, { pointerId: 1, clientX: 900 })
+    fireEvent.pointerCancel(bar, { pointerId: 1 })
+    act(() => vi.advanceTimersByTime(A_FEW_FRAMES))
+
+    expect(clip.currentTime).toBe(4)
+  })
+
+  /* Scrubbing to somewhere inside the loop is the ordinary case, and it must
+     keep playing from there rather than being pulled anywhere. */
+  it('plays on from a scrub that lands inside the loop', () => {
+    vi.useFakeTimers()
+    const clip = aRunningLoop()
+
+    scrubAt(100)
+    act(() => vi.advanceTimersByTime(A_FEW_FRAMES))
+
+    expect(clip.currentTime).toBe(5)
+  })
+})
+
+/* Three facts this suite cannot actually check. jsdom implements neither
+   `pointer-events` nor `touch-action`, and it has no notion of how big a thumb
+   is — so what follows asserts that the classes carrying them are *present*, not
+   that they work. It is a guard against them being dropped in a refactor, and
+   the real check is a smoke test on a phone.
+
+   Said once, as one test, rather than spread over three that would read like
+   behavioural coverage of the criteria they stand in for. */
+describe('the position bar under a thumb', () => {
+  it('keeps the classes the phone depends on', () => {
+    aReadyClip({ seconds: 12 })
+
+    const strip = scrubTrack()
+
+    /* A drag down the bottom of a video is otherwise a page scroll. */
+    expect(strip).toHaveClass('touch-none')
+    /* A 2px line is not a touch target: the line stays hairline and the strip
+       around it is padded to something a thumb can find. */
+    expect(strip).toHaveClass('py-3')
+    /* The scrim is a tall gradient over the bottom of the frame, and the video
+       under it is the play/pause target — so it takes no pointer events and only
+       the strip takes them back. Without this, tapping the clip to pause it
+       would stop working wherever the bar happens to be. */
+    expect(strip).toHaveClass('pointer-events-auto')
+    expect(strip?.parentElement).toHaveClass('pointer-events-none')
+  })
+})
