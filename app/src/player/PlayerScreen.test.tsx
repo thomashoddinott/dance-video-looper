@@ -2646,6 +2646,47 @@ describe('scrubbing faster than the seeks can land', () => {
 
     expect(clip.currentTime).toBe(9)
   })
+
+  /* The other half of keeping up, and the one that is visible rather than
+     measurable. Dropping the queue stops the clip falling behind; this stops the
+     *bar* falling behind, which is what the thumb is actually watching.
+
+     BR-07 samples `currentTime` every frame, so a seek still in flight would have
+     the marker snap back to wherever the decoder had got to — the finger at 75%
+     and the fill at 25% under it, a frame after the drag put it there. That
+     rubber-band is what reads as the bar fighting the thumb.
+
+     Enforcement already stands down for a held boundary under BR-19. This is the
+     same clip pulled two ways by the same hand, so the marker stands down with
+     it. */
+  describe('while the seek catches up', () => {
+    it('draws where the finger is, not where the decoder is', () => {
+      vi.useFakeTimers()
+      const clip = aReadyClip({ seconds: 12 })
+      holdSeeks(clip)
+      fireEvent.play(clip)
+
+      dragAcross(50, 150)
+      act(() => vi.advanceTimersByTime(A_FEW_FRAMES))
+
+      expect(scrubFill()).toHaveStyle({ width: '75%' })
+    })
+
+    /* The half that stops this becoming a marker that freezes. Standing down is
+       for the length of the hold and no longer. */
+    it('goes back to tracking the clip once the drag is released', () => {
+      vi.useFakeTimers()
+      const clip = aReadyClip({ seconds: 12 })
+      fireEvent.play(clip)
+
+      dragAcross(150)
+      fireEvent.pointerUp(aLaidOutBar(), { pointerId: 1 })
+      clip.currentTime = 6
+      act(() => vi.advanceTimersByTime(A_FEW_FRAMES))
+
+      expect(scrubFill()).toHaveStyle({ width: '50%' })
+    })
+  })
 })
 
 /* BR-19 again, and the one piece of behaviour the mockup left for the app to

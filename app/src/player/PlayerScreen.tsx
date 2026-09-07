@@ -386,9 +386,20 @@ function OpenedClip({
      got to. Gated on playing alone, so a paused clip still schedules nothing.
 
      The rate is not a dependency here either: a slowed clip reports a slower
-     `currentTime` and the marker follows it, so there is nothing to recompute. */
+     `currentTime` and the marker follows it, so there is nothing to recompute.
+
+     `adjusting` stands it down for #23, the way it already stands enforcement
+     down under BR-19 — and for the same reason, one step further along. A seek
+     takes ~50 ms to land and a pointermove arrives every few, so through a drag
+     the element's `currentTime` is wherever the decoder has got to rather than
+     where the finger is. Sampling it then snaps the marker back behind the thumb
+     a frame after the drag put it there — the finger at 75% and the fill at 25%
+     underneath it, which is the rubber-band that read as the bar fighting the
+     hand. While the drag holds, `seekTo`'s own optimistic `setTime` is the only
+     thing that moves the marker, so it tracks the finger and the clip catches
+     up. */
   useEffect(() => {
-    if (playback.kind !== 'ready' || !playing) return
+    if (playback.kind !== 'ready' || !playing || adjusting) return
 
     let frame = 0
     const tick = () => {
@@ -400,7 +411,7 @@ function OpenedClip({
     frame = requestAnimationFrame(tick)
 
     return () => cancelAnimationFrame(frame)
-  }, [playback.kind, playing])
+  }, [playback.kind, playing, adjusting])
 
   /* BR-07: per animation frame, not on the video's own progress events. Those
      fire at about 4 Hz, and the spike measured 86 ms of overshoot on a two-second
