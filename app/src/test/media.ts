@@ -14,12 +14,34 @@
    can stop playback the way the outside world does, by firing pause. It is the
    one piece of mutable state here, and it is mutable because the thing being
    stood in for is. */
+/* What a test needs to reach about a clip's seeking that the element itself does
+   not expose: whether its seeks are landing yet, and every position written to it
+   so far. Held beside the element rather than on it, so the double keeps a real
+   element's public shape and nothing under test can read it by accident. */
+type Seeking = {
+  held: boolean
+  readonly writes: number[]
+}
+
+const seeking = new WeakMap<HTMLVideoElement, Seeking>()
+
+const controlFor = (video: HTMLVideoElement) => {
+  const control = seeking.get(video)
+
+  if (!control) throw new Error('That clip surface was never made playable')
+
+  return control
+}
+
 export const playable = (
   video: HTMLVideoElement,
   { seconds }: { readonly seconds: number },
 ) => {
   let paused = true
   let currentTime = 0
+  const control: Seeking = { held: false, writes: [] }
+
+  seeking.set(video, control)
 
   Object.defineProperty(video, 'duration', {
     value: seconds,
@@ -28,13 +50,23 @@ export const playable = (
 
   /* jsdom implements no seeking either: `currentTime` reads 0 forever and writing
      it does nothing, so a test could neither move the playhead nor watch anything
-     move it back. A real element would fire `seeked` and `timeupdate` off this;
-     nothing reads those, so it stays a plain readable-writable position — which is
-     all the loop and START need it to be. */
+     move it back.
+
+     It fires `seeked` off a write because a real element does, and because the
+     scrub gate reads it — a seek is only over when the element says so, and a
+     double that never said so would leave the gate wedged shut in every test
+     while working perfectly in a browser. That is the exact shape of bug this
+     file exists to keep out.
+
+     Landing immediately is the fast case, not the only one. `holdSeeks` below is
+     how a test gets the slow one, which is where the gate does its work. */
   Object.defineProperty(video, 'currentTime', {
     get: () => currentTime,
     set: (position: number) => {
       currentTime = position
+      control.writes.push(position)
+
+      if (!control.held) video.dispatchEvent(new Event('seeked'))
     },
     configurable: true,
   })
@@ -62,6 +94,31 @@ export const playable = (
 
   return video
 }
+
+/* A clip whose seeks are in flight and have not landed. The mockup gate measured
+   a median of 49 ms for one on a buffered clip, against a pointer stream arriving
+   every few milliseconds — so this, not the instant landing above, is what a drag
+   actually meets, and it is the only condition under which the gate does anything
+   at all.
+
+   Returns the lander: calling it announces that the outstanding seek arrived, the
+   way the element would. */
+export const holdSeeks = (video: HTMLVideoElement) => {
+  const control = controlFor(video)
+
+  control.held = true
+
+  return () => {
+    control.held = false
+    video.dispatchEvent(new Event('seeked'))
+  }
+}
+
+/* Every position written to the element, in order. What a test needs to say that
+   the positions between the first and the newest were never issued — an assertion
+   the element's final `currentTime` cannot make, because a queue and a gate agree
+   about where the drag ended and disagree about everything on the way. */
+export const seeksSeen = (video: HTMLVideoElement) => [...controlFor(video).writes]
 
 /* A clip reaching its own end, in the order a browser does it: the element stops
    *first* and `ended` announces it afterwards — the state change precedes the

@@ -25,7 +25,7 @@ import { A_REFUSAL, useFakeLoops } from '../loops/loopsHandle.factory'
 import { NO_LOOPS } from '../loops/loopsFile'
 import { inDocumentOrder } from '../test/documentOrder'
 import { laidOut } from '../test/layout'
-import { playable, runsOut } from '../test/media'
+import { holdSeeks, playable, runsOut, seeksSeen } from '../test/media'
 import { PlayerScreen } from './PlayerScreen'
 
 /* The player reaches Drive now, for a clip this device has never held
@@ -2562,6 +2562,57 @@ describe('scrubbing the position bar', () => {
     scrubAt(50)
 
     expect(scrubFill()).toHaveStyle({ width: '25%' })
+  })
+})
+
+/* The half of #19 that turned out to matter. A pointermove fires far faster than
+   a seek on a ~6MB clip can land — the mockup gate measured a median of 49 ms
+   against a pointer stream arriving every few milliseconds — so seeking on every
+   one of them builds a queue the decoder works through late, and the clip chases
+   where the finger was half a second ago.
+
+   Dropping the intermediate positions rather than queueing them is what keeps the
+   clip under the thumb. It is not a compromise on precision: a slow drag, where
+   seeks land faster than the finger asks, still resolves every frame. */
+describe('scrubbing faster than the seeks can land', () => {
+  const dragAcross = (...positions: readonly number[]) => {
+    fireEvent.pointerDown(aLaidOutBar(), { pointerId: 1, clientX: positions[0] })
+
+    for (const clientX of positions.slice(1))
+      fireEvent.pointerMove(aLaidOutBar(), { pointerId: 1, clientX })
+  }
+
+  it('holds a position back while the last seek is still in flight', () => {
+    const clip = aReadyClip({ seconds: 12 })
+    holdSeeks(clip)
+
+    dragAcross(50, 150)
+
+    expect(clip.currentTime).toBe(3)
+  })
+
+  it('seeks to the newest position once the one in flight lands', () => {
+    const clip = aReadyClip({ seconds: 12 })
+    const land = holdSeeks(clip)
+
+    dragAcross(50, 150)
+    land()
+
+    expect(clip.currentTime).toBe(9)
+  })
+
+  /* The line between this and a queue, and the only assertion that can draw it —
+     a queue and a gate agree about where the drag ended and disagree about
+     everything on the way. 100 and 120 are where the finger was and had left
+     before either could be issued. */
+  it('never seeks to the positions it passed over', () => {
+    const clip = aReadyClip({ seconds: 12 })
+    const land = holdSeeks(clip)
+
+    dragAcross(50, 100, 120, 150)
+    land()
+
+    expect(seeksSeen(clip)).toEqual([3, 9])
   })
 })
 

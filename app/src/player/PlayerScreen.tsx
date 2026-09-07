@@ -32,6 +32,7 @@ import {
   StartGlyph,
   TransportButton,
 } from './TransportButton'
+import { type Gate, idle, type Move, requested, settled } from './seekGate'
 import { VideoProgress } from './VideoProgress'
 
 /* Asked of the element every time, rather than of a flag the screen keeps.
@@ -299,13 +300,46 @@ function OpenedClip({
   const saved = loopsFor(loops.loops, clip.id)
   const [loopName, setLoopName] = useState('')
 
+  /* One seek in flight at a time, and the rest of the drag dropped rather than
+     queued — #23. A ref rather than state because every read and write happens
+     inside the same pointermove, and re-rendering per move would put a frame
+     between the finger and the seek it asked for. */
+  const gate = useRef<Gate>(idle)
+
+  /* Whatever the finger last asked for, kept because the gate may well have
+     dropped it: releasing has to settle on where the drag ended, not on the last
+     position that happened to be issued. */
+  const wanted = useRef(0)
+
+  const issue = (move: Move) => {
+    gate.current = move.gate
+
+    /* Exact, never `fastSeek`. That was tried at the mockup gate and removed: it
+       snaps to the nearest keyframe, seconds away on this footage, so it *is* the
+       freeze-and-jump it looks like a cure for and it takes the frame-by-frame
+       resolution with it. */
+    if (move.seek !== null && surface.current)
+      surface.current.currentTime = move.seek
+  }
+
   /* Writes both, because a scrub while paused moves the playhead and no frame is
      scheduled to notice: the marker would sit where the clip used to be until
-     something else started it. */
+     something else started it.
+
+     `setTime` takes the position asked for rather than the one issued, so the
+     drawn playhead follows the finger even while the seek that will catch up to
+     it is still in flight. */
   const seekTo = (seconds: number) => {
-    if (surface.current) surface.current.currentTime = seconds
+    wanted.current = seconds
+    issue(requested(gate.current, seconds))
     setTime(seconds)
   }
+
+  /* The element saying the seek arrived, which is the only thing that can. Loop
+     enforcement writes `currentTime` straight onto the element without asking the
+     gate — a correctness rule, not a drag — and the `seeked` it fires lands here
+     too, where settling an idle gate is a no-op. */
+  const seekLanded = () => issue(settled(gate.current))
 
   /* Written straight onto the element, because `playbackRate` is a property
      rather than an attribute React could render. Nothing here plays, pauses or
@@ -693,6 +727,7 @@ function OpenedClip({
                   setPlayback(decoded(event.currentTarget.duration))
                 }
                 onError={() => setPlayback(undecodable)}
+                onSeeked={seekLanded}
                 onClick={(event) => togglePlay(event.currentTarget)}
                 onPlay={() => setPlaying(true)}
                 onPause={() => setPlaying(false)}
