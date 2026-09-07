@@ -295,7 +295,25 @@ function BigButton({ label, active, onClick, children }) {
    The container stays `pointer-events-none` and only the grab strip takes them
    back: the video surface is the play/pause target, so a bar that swallowed the
    whole bottom of the frame would cost you tapping the clip to pause it. */
-function VideoProgress({ time, duration, loop, looping, onScrub, rounded }) {
+/* The drag is 1:1 with the finger, and stays that way. Velocity-adaptive gain
+   and the iPhone's drag-down precision modes were both built here and tried
+   against it on 2026-09-07; both lost. The bar felt wrong because seeks were
+   queueing behind the finger, not because a pixel was worth the wrong number of
+   seconds, and no gain curve fixes latency. Gain that varies also gives up the
+   one property this has and the loop slider does not — drag out and back and you
+   land exactly where you started.
+
+   What buys precision instead is #21's rescale, which is reversible, visible,
+   and already there. */
+function VideoProgress({
+  time,
+  duration,
+  loop,
+  looping,
+  onScrub,
+  onHold,
+  rounded,
+}) {
   const track = useRef(null)
   const [dragging, setDragging] = useState(false)
 
@@ -335,10 +353,26 @@ function VideoProgress({ time, duration, loop, looping, onScrub, rounded }) {
     return domain.from + ratio * span
   }
 
+  const grab = (event) => {
+    setDragging(true)
+    onHold?.(true)
+    onScrub(timeAt(event.clientX))
+  }
+
+  const move = (event) => {
+    if (dragging) onScrub(timeAt(event.clientX))
+  }
+
+  const letGo = () => {
+    setDragging(false)
+    onHold?.(false)
+  }
+
   return (
     <div
       className={`pointer-events-none absolute inset-x-0 bottom-0 select-none bg-gradient-to-t from-black/70 to-transparent px-2 pb-2 pt-8 ${rounded}`}
     >
+
       {/* Two facts, and the row has room for both. Left: what the bar spans, shown
           only when that is no longer the whole clip — without it a playhead
           sitting mid-bar at 01:03 of a 02:28 clip is simply wrong-looking, and
@@ -361,19 +395,21 @@ function VideoProgress({ time, duration, loop, looping, onScrub, rounded }) {
         className="group pointer-events-auto -my-3 cursor-pointer touch-none py-3"
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture?.(event.pointerId)
-          setDragging(true)
-          onScrub(timeAt(event.clientX))
+          grab(event)
         }}
-        onPointerMove={(event) => dragging && onScrub(timeAt(event.clientX))}
+        onPointerMove={move}
         onPointerUp={(event) => {
           event.currentTarget.releasePointerCapture?.(event.pointerId)
-          setDragging(false)
+          letGo()
         }}
-        onPointerCancel={() => setDragging(false)}
+        onPointerCancel={letGo}
       >
+        {/* The bar thickens under the thumb the way the iPhone's does. It is not
+            decoration — it is the only confirmation that the drag was caught,
+            and on a phone the finger is covering the knob. */}
         <div
-          className={`relative w-full rounded-full bg-white/20 transition-[height] ${
-            dragging ? 'h-1' : 'h-0.5 group-hover:h-1'
+          className={`relative w-full rounded-full bg-white/25 transition-[height] duration-150 ${
+            dragging ? 'h-1.5' : 'h-0.5 group-hover:h-1'
           }`}
         >
           <div
@@ -381,8 +417,10 @@ function VideoProgress({ time, duration, loop, looping, onScrub, rounded }) {
             style={{ width: `${pct(time)}%` }}
           />
           <div
-            className={`absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow transition-transform ${
-              dragging ? 'scale-100' : 'scale-0 group-hover:scale-100'
+            className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow transition-[height,width,transform] duration-150 ${
+              dragging
+                ? 'h-4 w-4 scale-100'
+                : 'h-3 w-3 scale-0 group-hover:scale-100'
             }`}
             style={{ left: `${pct(time)}%` }}
           />
@@ -418,17 +456,47 @@ function Player({ clip, onBack }) {
     nextPointRef.current = nextPoint
   }, [loop, looping, nextPoint])
 
+  /* Held while a finger is on the scrub bar. Two things stand down for it, and
+     the second is the whole responsiveness fix. */
+  const holdingRef = useRef(false)
+  /* The newest seek the drag has asked for, and whether one is already in
+     flight. Only ever one outstanding: a seek that has not landed yet is not
+     replaced by queueing another behind it, it is replaced by forgetting it. */
+  const pendingRef = useRef(null)
+  const targetRef = useRef(0)
+  const seekingRef = useRef(false)
+  const flushSeekRef = useRef(null)
+
   // enforce the loop far more tightly than timeupdate's ~4hz would
   useEffect(() => {
     let frame
     const tick = () => {
       const video = videoRef.current
       if (video) {
+        /* Backstop only — the drag flushes itself, and `seeked` flushes the
+           next one. This catches a `seeked` that never arrives, which would
+           otherwise wedge the gate shut for the rest of the drag. */
+        flushSeekRef.current?.()
+
         const { a, b } = loopRef.current
-        if (loopingRef.current && b > a && video.currentTime >= b) {
+        /* Dragging to the far end of a rescaled bar lands exactly on B, and this
+           fires on `>= b` — so without standing it down the clip jumps to A
+           while the finger is still at the right-hand edge. */
+        if (
+          !holdingRef.current &&
+          loopingRef.current &&
+          b > a &&
+          video.currentTime >= b
+        ) {
           video.currentTime = a
         }
-        setTime(video.currentTime)
+
+        /* The drawn playhead follows the finger, not the decoder. This line used
+           to run unconditionally, which chained the knob to whatever frame had
+           actually been decoded — so every optimistic update from a scrub was
+           overwritten a frame later and the bar rubber-banded behind the thumb.
+           While the drag holds, `scrub` is the only thing that moves it. */
+        if (!holdingRef.current) setTime(video.currentTime)
       }
       frame = requestAnimationFrame(tick)
     }
@@ -504,9 +572,48 @@ function Player({ clip, onBack }) {
     video.playbackRate = speed
   }
 
+  /* One seek in flight, always to the newest position asked for. A pointermove
+     fires far faster than a seek can land, so assigning currentTime on every one
+     of them builds a queue the decoder then works through late — the clip ends
+     up chasing where the finger was half a second ago, which is the freeze.
+
+     Dropping the intermediate targets instead means a fast drag shows fewer
+     frames but never falls behind, and a slow drag — where seeks land faster
+     than the finger asks for them — still resolves every frame. Exact seeks
+     throughout: fastSeek would snap to keyframes seconds apart and take the
+     frame-by-frame resolution with it. */
+  const flushSeek = () => {
+    const video = videoRef.current
+    const target = pendingRef.current
+
+    if (!video || target === null || seekingRef.current) return
+
+    pendingRef.current = null
+    seekingRef.current = true
+    video.currentTime = target
+  }
+
+  // the rAF loop subscribes once, so it reaches the flush through a ref
+  useEffect(() => {
+    flushSeekRef.current = flushSeek
+  })
+
   const scrub = (t) => {
-    videoRef.current.currentTime = t
+    targetRef.current = t
+    pendingRef.current = t
     setTime(t)
+    flushSeek()
+  }
+
+  /* Release settles the clip exactly where the finger left it. Mid-drag the
+     newest target wins and the rest are dropped, so the last one asked for may
+     well have been dropped too — this is what puts it back. */
+  const holdScrub = (held) => {
+    holdingRef.current = held
+    if (held) return
+
+    pendingRef.current = targetRef.current
+    flushSeek()
   }
 
   const nudge = (delta) => () =>
@@ -612,7 +719,19 @@ function Player({ clip, onBack }) {
                   : 'mx-auto block max-h-[50vh] max-w-full rounded-lg bg-black lg:max-h-[80vh]'
               }
               playsInline
+              /* The default only fetches metadata, so scrubbing past what
+                 happens to have arrived turns every seek into a network fetch
+                 and a decode — which is most of what reads as the clip freezing.
+                 These are ~6MB and the app is cache-first anyway, so there is no
+                 reason not to have the whole thing before the first drag. */
+              preload="auto"
               onLoadedMetadata={onLoadedMetadata}
+              /* The gate. The next seek goes out when the last one lands, so
+                 there is never a queue to fall behind. */
+              onSeeked={() => {
+                seekingRef.current = false
+                flushSeek()
+              }}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
               onClick={togglePlay}
@@ -624,6 +743,7 @@ function Player({ clip, onBack }) {
               loop={loop}
               looping={looping}
               onScrub={scrub}
+              onHold={holdScrub}
               /* Follows the clip's own corners so the scrim doesn't square off a
                  rounded video. Zen has no rounding to follow. */
               rounded={zen ? undefined : 'rounded-b-lg'}

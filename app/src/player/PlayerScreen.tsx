@@ -32,6 +32,14 @@ import {
   StartGlyph,
   TransportButton,
 } from './TransportButton'
+import {
+  type Gate,
+  idle,
+  type Move,
+  requested,
+  SEEK_BACKSTOP,
+  settled,
+} from './seekGate'
 import { VideoProgress } from './VideoProgress'
 
 /* Asked of the element every time, rather than of a flag the screen keeps.
@@ -299,13 +307,67 @@ function OpenedClip({
   const saved = loopsFor(loops.loops, clip.id)
   const [loopName, setLoopName] = useState('')
 
+  /* One seek in flight at a time, and the rest of the drag dropped rather than
+     queued — #23. A ref rather than state because every read and write happens
+     inside the same pointermove, and re-rendering per move would put a frame
+     between the finger and the seek it asked for. */
+  const gate = useRef<Gate>(idle)
+
+  /* The way back out of a seek that never reports. Armed with the seek and
+     cleared by whatever settles it, so at most one is ever outstanding. */
+  const backstop = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const disarm = () => {
+    if (backstop.current !== null) clearTimeout(backstop.current)
+    backstop.current = null
+  }
+
+  const issue = (move: Move) => {
+    gate.current = move.gate
+
+    /* Nothing going out. The backstop stands down only when there is no longer a
+       seek for it to cover — a request that was *held back* leaves the one before
+       it still in flight, and clearing the timer then would take away the only
+       way back out of a seek that never reports. */
+    if (move.seek === null) {
+      if (!move.gate.inFlight) disarm()
+      return
+    }
+
+    disarm()
+
+    /* Armed before the write, not after: the element can report back inside the
+       assignment itself, and a backstop armed afterwards would outlive the seek
+       it was covering. */
+    backstop.current = setTimeout(
+      () => issue(settled(gate.current)),
+      SEEK_BACKSTOP,
+    )
+
+    /* Exact, never `fastSeek`. That was tried at the mockup gate and removed: it
+       snaps to the nearest keyframe, seconds away on this footage, so it *is* the
+       freeze-and-jump it looks like a cure for and it takes the frame-by-frame
+       resolution with it. */
+    if (surface.current) surface.current.currentTime = move.seek
+  }
+
   /* Writes both, because a scrub while paused moves the playhead and no frame is
      scheduled to notice: the marker would sit where the clip used to be until
-     something else started it. */
+     something else started it.
+
+     `setTime` takes the position asked for rather than the one issued, so the
+     drawn playhead follows the finger even while the seek that will catch up to
+     it is still in flight. */
   const seekTo = (seconds: number) => {
-    if (surface.current) surface.current.currentTime = seconds
+    issue(requested(gate.current, seconds))
     setTime(seconds)
   }
+
+  /* The element saying the seek arrived, which is the only thing that can. Loop
+     enforcement writes `currentTime` straight onto the element without asking the
+     gate — a correctness rule, not a drag — and the `seeked` it fires lands here
+     too, where settling an idle gate is a no-op. */
+  const seekLanded = () => issue(settled(gate.current))
 
   /* Written straight onto the element, because `playbackRate` is a property
      rather than an attribute React could render. Nothing here plays, pauses or
@@ -324,9 +386,20 @@ function OpenedClip({
      got to. Gated on playing alone, so a paused clip still schedules nothing.
 
      The rate is not a dependency here either: a slowed clip reports a slower
-     `currentTime` and the marker follows it, so there is nothing to recompute. */
+     `currentTime` and the marker follows it, so there is nothing to recompute.
+
+     `adjusting` stands it down for #23, the way it already stands enforcement
+     down under BR-19 — and for the same reason, one step further along. A seek
+     takes ~50 ms to land and a pointermove arrives every few, so through a drag
+     the element's `currentTime` is wherever the decoder has got to rather than
+     where the finger is. Sampling it then snaps the marker back behind the thumb
+     a frame after the drag put it there — the finger at 75% and the fill at 25%
+     underneath it, which is the rubber-band that read as the bar fighting the
+     hand. While the drag holds, `seekTo`'s own optimistic `setTime` is the only
+     thing that moves the marker, so it tracks the finger and the clip catches
+     up. */
   useEffect(() => {
-    if (playback.kind !== 'ready' || !playing) return
+    if (playback.kind !== 'ready' || !playing || adjusting) return
 
     let frame = 0
     const tick = () => {
@@ -338,7 +411,7 @@ function OpenedClip({
     frame = requestAnimationFrame(tick)
 
     return () => cancelAnimationFrame(frame)
-  }, [playback.kind, playing])
+  }, [playback.kind, playing, adjusting])
 
   /* BR-07: per animation frame, not on the video's own progress events. Those
      fire at about 4 Hz, and the spike measured 86 ms of overshoot on a two-second
@@ -689,10 +762,20 @@ function OpenedClip({
                     : 'mx-auto block max-h-[50vh] max-w-full rounded-lg bg-black lg:max-h-[80vh]'
                 }
                 playsInline
+                /* The default fetches metadata and stops, so scrubbing past
+                   whatever happened to arrive turns every seek into a network
+                   fetch *and* a decode — most of what read as the clip freezing
+                   under the thumb. The mockup gate found Chrome holding 4.9s of a
+                   26.7s clip, on localhost.
+
+                   Clips are ~6MB and the app is cache-first regardless, so there
+                   is no version of this where fetching the rest later wins. */
+                preload="auto"
                 onLoadedMetadata={(event) =>
                   setPlayback(decoded(event.currentTarget.duration))
                 }
                 onError={() => setPlayback(undecodable)}
+                onSeeked={seekLanded}
                 onClick={(event) => togglePlay(event.currentTarget)}
                 onPlay={() => setPlaying(true)}
                 onPause={() => setPlaying(false)}

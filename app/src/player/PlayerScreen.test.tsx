@@ -25,7 +25,8 @@ import { A_REFUSAL, useFakeLoops } from '../loops/loopsHandle.factory'
 import { NO_LOOPS } from '../loops/loopsFile'
 import { inDocumentOrder } from '../test/documentOrder'
 import { laidOut } from '../test/layout'
-import { playable, runsOut } from '../test/media'
+import { holdSeeks, playable, runsOut, seeksSeen } from '../test/media'
+import { SEEK_BACKSTOP } from './seekGate'
 import { PlayerScreen } from './PlayerScreen'
 
 /* The player reaches Drive now, for a clip this device has never held
@@ -382,6 +383,19 @@ describe('the player', () => {
     const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
 
     expect(clipSurface(container)).toHaveAttribute('src', '/wave-practice.mp4')
+  })
+
+  /* The default fetches metadata and stops, so scrubbing past whatever happened
+     to arrive turns every seek into a network fetch *and* a decode — which is
+     most of what read as the clip freezing under the thumb. Chrome had 4.9s of a
+     26.7s clip in hand when the mockup gate measured it, on localhost.
+
+     Clips are ~6MB and the app is cache-first anyway, so there is no version of
+     this where fetching the rest later is the better trade. */
+  it('fetches the whole clip rather than only its metadata', () => {
+    const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
+
+    expect(clipSurface(container)).toHaveAttribute('preload', 'auto')
   })
 
   it('reserves the controls their places, in the order they will be used', () => {
@@ -2562,6 +2576,129 @@ describe('scrubbing the position bar', () => {
     scrubAt(50)
 
     expect(scrubFill()).toHaveStyle({ width: '25%' })
+  })
+})
+
+/* The half of #19 that turned out to matter. A pointermove fires far faster than
+   a seek on a ~6MB clip can land — the mockup gate measured a median of 49 ms
+   against a pointer stream arriving every few milliseconds — so seeking on every
+   one of them builds a queue the decoder works through late, and the clip chases
+   where the finger was half a second ago.
+
+   Dropping the intermediate positions rather than queueing them is what keeps the
+   clip under the thumb. It is not a compromise on precision: a slow drag, where
+   seeks land faster than the finger asks, still resolves every frame. */
+describe('scrubbing faster than the seeks can land', () => {
+  const dragAcross = (...positions: readonly number[]) => {
+    fireEvent.pointerDown(aLaidOutBar(), { pointerId: 1, clientX: positions[0] })
+
+    for (const clientX of positions.slice(1))
+      fireEvent.pointerMove(aLaidOutBar(), { pointerId: 1, clientX })
+  }
+
+  it('holds a position back while the last seek is still in flight', () => {
+    const clip = aReadyClip({ seconds: 12 })
+    holdSeeks(clip)
+
+    dragAcross(50, 150)
+
+    expect(clip.currentTime).toBe(3)
+  })
+
+  it('seeks to the newest position once the one in flight lands', () => {
+    const clip = aReadyClip({ seconds: 12 })
+    const land = holdSeeks(clip)
+
+    dragAcross(50, 150)
+    land()
+
+    expect(clip.currentTime).toBe(9)
+  })
+
+  /* The line between this and a queue, and the only assertion that can draw it —
+     a queue and a gate agree about where the drag ended and disagree about
+     everything on the way. 100 and 120 are where the finger was and had left
+     before either could be issued. */
+  it('never seeks to the positions it passed over', () => {
+    const clip = aReadyClip({ seconds: 12 })
+    const land = holdSeeks(clip)
+
+    dragAcross(50, 100, 120, 150)
+    land()
+
+    expect(seeksSeen(clip)).toEqual([3, 9])
+  })
+
+  /* Not a hypothetical lost event. Assigning `currentTime` the value the element
+     already holds fires no `seeked` at all — so a drag that comes back to where
+     it started, or a nudge against the end of the clip, would leave the gate
+     waiting for a report that is never coming. Without a way back out, the bar
+     would simply stop moving for the rest of the session. */
+  /* Where the drag ended is the one position that must survive being dropped —
+     it is where the dancer chose to leave the clip. It survives because it is
+     never superseded: the gate holds the newest ask, and after the finger lifts
+     there is no newer one for it to be replaced by. */
+  it('settles where the finger left it, not where the last issued seek was', () => {
+    const clip = aReadyClip({ seconds: 12 })
+    const land = holdSeeks(clip)
+
+    dragAcross(50, 100, 150)
+    fireEvent.pointerUp(aLaidOutBar(), { pointerId: 1 })
+    land()
+
+    expect(clip.currentTime).toBe(9)
+  })
+
+  it('reopens the gate when a seek never reports back', () => {
+    vi.useFakeTimers()
+    const clip = aReadyClip({ seconds: 12 })
+    holdSeeks(clip)
+
+    dragAcross(50, 150)
+    act(() => vi.advanceTimersByTime(SEEK_BACKSTOP))
+
+    expect(clip.currentTime).toBe(9)
+  })
+
+  /* The other half of keeping up, and the one that is visible rather than
+     measurable. Dropping the queue stops the clip falling behind; this stops the
+     *bar* falling behind, which is what the thumb is actually watching.
+
+     BR-07 samples `currentTime` every frame, so a seek still in flight would have
+     the marker snap back to wherever the decoder had got to — the finger at 75%
+     and the fill at 25% under it, a frame after the drag put it there. That
+     rubber-band is what reads as the bar fighting the thumb.
+
+     Enforcement already stands down for a held boundary under BR-19. This is the
+     same clip pulled two ways by the same hand, so the marker stands down with
+     it. */
+  describe('while the seek catches up', () => {
+    it('draws where the finger is, not where the decoder is', () => {
+      vi.useFakeTimers()
+      const clip = aReadyClip({ seconds: 12 })
+      holdSeeks(clip)
+      fireEvent.play(clip)
+
+      dragAcross(50, 150)
+      act(() => vi.advanceTimersByTime(A_FEW_FRAMES))
+
+      expect(scrubFill()).toHaveStyle({ width: '75%' })
+    })
+
+    /* The half that stops this becoming a marker that freezes. Standing down is
+       for the length of the hold and no longer. */
+    it('goes back to tracking the clip once the drag is released', () => {
+      vi.useFakeTimers()
+      const clip = aReadyClip({ seconds: 12 })
+      fireEvent.play(clip)
+
+      dragAcross(150)
+      fireEvent.pointerUp(aLaidOutBar(), { pointerId: 1 })
+      clip.currentTime = 6
+      act(() => vi.advanceTimersByTime(A_FEW_FRAMES))
+
+      expect(scrubFill()).toHaveStyle({ width: '50%' })
+    })
   })
 })
 
