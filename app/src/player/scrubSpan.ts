@@ -1,4 +1,4 @@
-import { clamp, type Track } from './loopRange'
+import { clamp, ratioAt, type Track } from './loopRange'
 import type { Loop } from './playback'
 
 /* How close to an end of the clip still counts as being at it. A and B arrive
@@ -82,10 +82,4 @@ export const secondsAt = ({
   readonly clientX: number
   readonly track: Track
   readonly span: Span
-}) => {
-  if (track.width <= 0) return span.from
-
-  const ratio = clamp((clientX - track.left) / track.width, 0, 1)
-
-  return span.from + ratio * (span.to - span.from)
-}
+}) => span.from + ratioAt({ clientX, track }) * (span.to - span.from)
