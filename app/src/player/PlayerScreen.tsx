@@ -32,6 +32,7 @@ import {
   StartGlyph,
   TransportButton,
 } from './TransportButton'
+import { VideoProgress } from './VideoProgress'
 
 /* Asked of the element every time, rather than of a flag the screen keeps.
    Playback stops for reasons the app never hears about — the clip ends, the phone
@@ -708,6 +709,21 @@ function OpenedClip({
                   void surface.current?.play()
                 }}
               />
+
+              {/* Gated on a ready clip like the slider and the transport: before
+                  metadata there is no length to lay a bar out against, and a bar
+                  spanning an unknown clip would invite a drag against nothing.
+                  Inside this wrapper rather than in the strip below, which is
+                  what carries it through zen. */}
+              {playback.kind === 'ready' && (
+                <VideoProgress
+                  time={time}
+                  duration={playback.duration}
+                  loop={playback.loop}
+                  looping={playback.looping}
+                  rounded={isolated ? undefined : 'rounded-b-lg'}
+                />
+              )}
 
               {/* On the video itself, so a dancer who does not know the
                   shortcut is not trapped once the controls are gone. It is one

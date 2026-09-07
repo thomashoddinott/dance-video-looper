@@ -2342,3 +2342,71 @@ describe('the loops this clip already had', () => {
     expect(nameField()).toHaveAttribute('placeholder', 'Loop 2')
   })
 })
+
+/* #21. Where you are in the clip, drawn on the clip — the video carried no
+   position indicator at all before this, no `controls` and nothing of our own,
+   so it simply played blind. */
+const scrubTrack = (container: HTMLElement) =>
+  container.querySelector('.scrub-track')
+
+const scrubFill = (container: HTMLElement) =>
+  container.querySelector('.scrub-fill')
+
+const seekForward = () =>
+  fireEvent.click(screen.getByRole('button', { name: 'Forward 1 second' }))
+
+describe('the position bar on the clip', () => {
+  it('writes the elapsed and total time on the clip', () => {
+    aReadyClip({ seconds: 12 })
+
+    expect(screen.getByText('0:00 / 0:12')).toBeInTheDocument()
+  })
+
+  /* Written with `formatDuration` like every other length on this screen, rather
+     than the mockup's own spelling — the player should not write a time
+     differently from the tile it was opened from. */
+  it('writes a longer clip the way the grid writes lengths', () => {
+    aReadyClip({ seconds: 148 })
+
+    expect(screen.getByText('0:00 / 2:28')).toBeInTheDocument()
+  })
+
+  it('fills the bar to where the playhead is', () => {
+    const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
+
+    fireEvent.loadedMetadata(playable(clipSurface(container), { seconds: 20 }))
+    seekForward()
+
+    expect(scrubFill(container)).toHaveStyle({ width: '5%' })
+  })
+
+  it('says the time the playhead moved to', () => {
+    aReadyClip({ seconds: 20 })
+
+    seekForward()
+
+    expect(screen.getByText('0:01 / 0:20')).toBeInTheDocument()
+  })
+
+  /* Gated exactly as the slider and the transport are. Before metadata there is
+     no length to lay a bar out against, and a bar spanning an unknown clip would
+     be inviting a drag against nothing. */
+  it('draws no bar until the clip has a length', () => {
+    const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
+
+    expect(scrubTrack(container)).toBeNull()
+  })
+
+  /* The reason it rides inside the video wrapper rather than under the card:
+     zen hides the whole control strip, so this is the only thing left that says
+     where the clip has got to — and that is where it matters most. */
+  it('stays on the clip in zen, where the control strip is not', () => {
+    const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
+
+    fireEvent.loadedMetadata(playable(clipSurface(container), { seconds: 12 }))
+    fireEvent.click(screen.getByRole('button', { name: 'Isolate the video' }))
+
+    expect(scrubTrack(container)).toBeInTheDocument()
+    expect(screen.getByText('0:00 / 0:12')).toBeVisible()
+  })
+})
