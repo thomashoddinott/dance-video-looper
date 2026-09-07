@@ -32,7 +32,14 @@ import {
   StartGlyph,
   TransportButton,
 } from './TransportButton'
-import { type Gate, idle, type Move, requested, settled } from './seekGate'
+import {
+  type Gate,
+  idle,
+  type Move,
+  requested,
+  SEEK_BACKSTOP,
+  settled,
+} from './seekGate'
 import { VideoProgress } from './VideoProgress'
 
 /* Asked of the element every time, rather than of a flag the screen keeps.
@@ -311,15 +318,42 @@ function OpenedClip({
      position that happened to be issued. */
   const wanted = useRef(0)
 
+  /* The way back out of a seek that never reports. Armed with the seek and
+     cleared by whatever settles it, so at most one is ever outstanding. */
+  const backstop = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const disarm = () => {
+    if (backstop.current !== null) clearTimeout(backstop.current)
+    backstop.current = null
+  }
+
   const issue = (move: Move) => {
     gate.current = move.gate
+
+    /* Nothing going out. The backstop stands down only when there is no longer a
+       seek for it to cover — a request that was *held back* leaves the one before
+       it still in flight, and clearing the timer then would take away the only
+       way back out of a seek that never reports. */
+    if (move.seek === null) {
+      if (!move.gate.inFlight) disarm()
+      return
+    }
+
+    disarm()
+
+    /* Armed before the write, not after: the element can report back inside the
+       assignment itself, and a backstop armed afterwards would outlive the seek
+       it was covering. */
+    backstop.current = setTimeout(
+      () => issue(settled(gate.current)),
+      SEEK_BACKSTOP,
+    )
 
     /* Exact, never `fastSeek`. That was tried at the mockup gate and removed: it
        snaps to the nearest keyframe, seconds away on this footage, so it *is* the
        freeze-and-jump it looks like a cure for and it takes the frame-by-frame
        resolution with it. */
-    if (move.seek !== null && surface.current)
-      surface.current.currentTime = move.seek
+    if (surface.current) surface.current.currentTime = move.seek
   }
 
   /* Writes both, because a scrub while paused moves the playhead and no frame is

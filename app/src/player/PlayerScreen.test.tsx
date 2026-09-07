@@ -26,6 +26,7 @@ import { NO_LOOPS } from '../loops/loopsFile'
 import { inDocumentOrder } from '../test/documentOrder'
 import { laidOut } from '../test/layout'
 import { holdSeeks, playable, runsOut, seeksSeen } from '../test/media'
+import { SEEK_BACKSTOP } from './seekGate'
 import { PlayerScreen } from './PlayerScreen'
 
 /* The player reaches Drive now, for a clip this device has never held
@@ -2613,6 +2614,22 @@ describe('scrubbing faster than the seeks can land', () => {
     land()
 
     expect(seeksSeen(clip)).toEqual([3, 9])
+  })
+
+  /* Not a hypothetical lost event. Assigning `currentTime` the value the element
+     already holds fires no `seeked` at all — so a drag that comes back to where
+     it started, or a nudge against the end of the clip, would leave the gate
+     waiting for a report that is never coming. Without a way back out, the bar
+     would simply stop moving for the rest of the session. */
+  it('reopens the gate when a seek never reports back', () => {
+    vi.useFakeTimers()
+    const clip = aReadyClip({ seconds: 12 })
+    holdSeeks(clip)
+
+    dragAcross(50, 150)
+    act(() => vi.advanceTimersByTime(SEEK_BACKSTOP))
+
+    expect(clip.currentTime).toBe(9)
   })
 })
 

@@ -24,6 +24,21 @@ export type Gate = {
 
 export const idle: Gate = { inFlight: false, pending: null }
 
+/* How long to wait for a seek to report back before assuming it never will.
+
+   This is not a guard against a hypothetically lost event. Assigning
+   `currentTime` the value the element already holds fires no `seeked` at all —
+   so a drag that comes back to where it started, or a nudge against the end of
+   the clip, would leave the gate waiting for a report that is never coming and
+   the bar would stop moving for the rest of the session.
+
+   Well above the 88 ms worst case the mockup gate measured, because the cost of
+   being wrong in each direction is not symmetric: too long only delays the
+   recovery from a seek that was never going to land, while too short would issue
+   a second seek over a first that was merely slow, which is the queue this whole
+   thing exists to avoid. */
+export const SEEK_BACKSTOP = 400
+
 /* Both readings return the gate's next state and the seek to issue, if any, so
    the caller never has to work out which it is. `null` means issue nothing. */
 export type Move = {
