@@ -313,11 +313,6 @@ function OpenedClip({
      between the finger and the seek it asked for. */
   const gate = useRef<Gate>(idle)
 
-  /* Whatever the finger last asked for, kept because the gate may well have
-     dropped it: releasing has to settle on where the drag ended, not on the last
-     position that happened to be issued. */
-  const wanted = useRef(0)
-
   /* The way back out of a seek that never reports. Armed with the seek and
      cleared by whatever settles it, so at most one is ever outstanding. */
   const backstop = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -364,7 +359,6 @@ function OpenedClip({
      drawn playhead follows the finger even while the seek that will catch up to
      it is still in flight. */
   const seekTo = (seconds: number) => {
-    wanted.current = seconds
     issue(requested(gate.current, seconds))
     setTime(seconds)
   }

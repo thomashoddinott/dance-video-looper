@@ -2621,6 +2621,21 @@ describe('scrubbing faster than the seeks can land', () => {
      it started, or a nudge against the end of the clip, would leave the gate
      waiting for a report that is never coming. Without a way back out, the bar
      would simply stop moving for the rest of the session. */
+  /* Where the drag ended is the one position that must survive being dropped —
+     it is where the dancer chose to leave the clip. It survives because it is
+     never superseded: the gate holds the newest ask, and after the finger lifts
+     there is no newer one for it to be replaced by. */
+  it('settles where the finger left it, not where the last issued seek was', () => {
+    const clip = aReadyClip({ seconds: 12 })
+    const land = holdSeeks(clip)
+
+    dragAcross(50, 100, 150)
+    fireEvent.pointerUp(aLaidOutBar(), { pointerId: 1 })
+    land()
+
+    expect(clip.currentTime).toBe(9)
+  })
+
   it('reopens the gate when a seek never reports back', () => {
     vi.useFakeTimers()
     const clip = aReadyClip({ seconds: 12 })
