@@ -23,6 +23,7 @@ export function VideoProgress({
   loop,
   looping,
   onScrub,
+  onHold,
   rounded,
 }: {
   readonly time: number
@@ -30,6 +31,15 @@ export function VideoProgress({
   readonly loop: Loop
   readonly looping: boolean
   readonly onScrub: (seconds: number) => void
+  /* BR-19, reaching the second surface that can pull the playhead. Dragging to
+     the far end of a rescaled bar lands exactly on B, and enforcement fires on
+     `currentTime >= b` — so without this the clip jumps to A while the finger is
+     still at the right-hand edge and the fill snaps to empty underneath it.
+
+     The mockup left this open, and it is settled the way a held handle already
+     settles it: the clip genuinely is at B, it was put there on purpose, and no
+     reading of `currentTime` can tell that apart from having arrived. */
+  readonly onHold: (held: boolean) => void
   /* Follows the clip's own corners, so the scrim does not square off a rounded
      video. Zen has no rounding to follow. */
   readonly rounded?: string | undefined
@@ -48,6 +58,20 @@ export function VideoProgress({
         span,
       }),
     )
+
+  /* Both edges of the window in one place, beside the state already tracking the
+     drag, so the hold and the drag cannot come to different answers about
+     whether the dancer has hold of the playhead — the arrangement `LoopSlider`
+     uses for the same reason. */
+  const grab = () => {
+    setDragging(true)
+    onHold(true)
+  }
+
+  const letGo = () => {
+    setDragging(false)
+    onHold(false)
+  }
 
   return (
     /* `pointer-events-none` on the whole scrim, taken back only by the grab
@@ -88,7 +112,7 @@ export function VideoProgress({
         className="scrub-track group pointer-events-auto -my-3 cursor-pointer py-3"
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture?.(event.pointerId)
-          setDragging(true)
+          grab()
           scrubTo(event.clientX)
         }}
         /* A move with no drag behind it is a mouse passing over the bar on its
@@ -99,9 +123,11 @@ export function VideoProgress({
         }}
         onPointerUp={(event) => {
           event.currentTarget.releasePointerCapture?.(event.pointerId)
-          setDragging(false)
+          letGo()
         }}
-        onPointerCancel={() => setDragging(false)}
+        /* A drag that leaves the window never sees its own pointer-up, and a
+           loop left stood down would be a clip that quietly stopped looping. */
+        onPointerCancel={letGo}
       >
         <div
           className={`relative w-full rounded-full bg-white/20 transition-[height] ${

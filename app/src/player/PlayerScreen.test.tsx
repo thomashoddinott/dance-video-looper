@@ -2564,3 +2564,76 @@ describe('scrubbing the position bar', () => {
     expect(scrubFill()).toHaveStyle({ width: '25%' })
   })
 })
+
+/* BR-19 again, and the one piece of behaviour the mockup left for the app to
+   settle. Dragging to the far end of a rescaled bar lands exactly on B, and
+   enforcement fires on `currentTime >= b` — so the playhead would jump to A
+   while the finger is still at the right-hand edge, and the fill would snap to
+   empty under it. The drag and enforcement are the same clip pulled two ways,
+   which is precisely the fight a held handle already stands enforcement down
+   for. */
+describe('scrubbing while the loop runs', () => {
+  const aRunningLoop = () => {
+    const clip = aClipLoopingPartOfIt({ seconds: 20, a: 4, b: 6 })
+
+    /* Off B first: space left the playhead there, and enforcement would send it
+       to A on the first frame of playback before the drag happened at all. */
+    toStartOfLoop()
+    fireEvent.play(clip)
+
+    return clip
+  }
+
+  it('stays where the drag reached rather than restarting the loop', () => {
+    vi.useFakeTimers()
+    const clip = aRunningLoop()
+
+    scrubAt(900)
+    act(() => vi.advanceTimersByTime(A_FEW_FRAMES))
+
+    expect(clip.currentTime).toBe(6)
+  })
+
+  /* Standing down lasts the length of the drag and no longer. Letting go is the
+     dancer saying they are done moving about, and the loop they were listening
+     to is what they want back — so landing on B and releasing wraps to A, which
+     is the loop doing its job rather than fighting the finger. */
+  it('takes the loop back up as soon as the drag ends', () => {
+    vi.useFakeTimers()
+    const clip = aRunningLoop()
+    const bar = aLaidOutBar()
+
+    fireEvent.pointerDown(bar, { pointerId: 1, clientX: 900 })
+    fireEvent.pointerUp(bar, { pointerId: 1 })
+    act(() => vi.advanceTimersByTime(A_FEW_FRAMES))
+
+    expect(clip.currentTime).toBe(4)
+  })
+
+  /* A drag that leaves the window never sees its own pointer-up. Without this
+     the loop would stay stood down for the rest of the session, and the dancer
+     would have a clip that quietly stopped looping. */
+  it('takes the loop back up when the drag is cancelled', () => {
+    vi.useFakeTimers()
+    const clip = aRunningLoop()
+    const bar = aLaidOutBar()
+
+    fireEvent.pointerDown(bar, { pointerId: 1, clientX: 900 })
+    fireEvent.pointerCancel(bar, { pointerId: 1 })
+    act(() => vi.advanceTimersByTime(A_FEW_FRAMES))
+
+    expect(clip.currentTime).toBe(4)
+  })
+
+  /* Scrubbing to somewhere inside the loop is the ordinary case, and it must
+     keep playing from there rather than being pulled anywhere. */
+  it('plays on from a scrub that lands inside the loop', () => {
+    vi.useFakeTimers()
+    const clip = aRunningLoop()
+
+    scrubAt(100)
+    act(() => vi.advanceTimersByTime(A_FEW_FRAMES))
+
+    expect(clip.currentTime).toBe(5)
+  })
+})

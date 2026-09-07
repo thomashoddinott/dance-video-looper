@@ -722,6 +722,7 @@ function OpenedClip({
                   loop={playback.loop}
                   looping={playback.looping}
                   onScrub={seekTo}
+                  onHold={setAdjusting}
                   rounded={isolated ? undefined : 'rounded-b-lg'}
                 />
               )}
