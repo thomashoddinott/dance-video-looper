@@ -283,6 +283,115 @@ function BigButton({ label, active, onClick, children }) {
   )
 }
 
+/* Where you are in the clip, drawn on the clip itself, and how you go somewhere
+   else. Deliberately the same shape as the loop slider below it, because the two
+   answer different questions about the same timeline: this one is "where am I",
+   that one is "which few seconds am I working on". Neither can do the other's job.
+
+   Rides inside the video wrapper rather than under the card, so it survives zen
+   mode — which is where it matters most, since the whole control strip is hidden
+   there and the clip is otherwise playing completely blind.
+
+   The container stays `pointer-events-none` and only the grab strip takes them
+   back: the video surface is the play/pause target, so a bar that swallowed the
+   whole bottom of the frame would cost you tapping the clip to pause it. */
+function VideoProgress({ time, duration, loop, looping, onScrub, rounded }) {
+  const track = useRef(null)
+  const [dragging, setDragging] = useState(false)
+
+  /* Whether the loop pens the playhead in. A loop spanning the whole clip
+     constrains nothing, so scrubbing is free — which is the case that matters,
+     because it is how you get to look at the rest of the clip at all.
+
+     The epsilon is not fussiness: A and B arrive from a drag across real
+     geometry, so "the whole clip" is 0.0000001 short of it about half the time. */
+  const penned =
+    looping && duration > 0 && loop.b > loop.a && (loop.a > 0.05 || loop.b < duration - 0.05)
+
+  /* The bar spans the loop, not the clip, whenever there is a loop to span. Six
+     seconds of a 2:28 clip is 4% of the width — technically scrubbable, actually
+     impossible, and the narrower the loop the worse it gets, which is backwards:
+     a tight loop is exactly when you most need to move within it.
+
+     Rescaling turns that around. The full width always buys you the loop, so the
+     tighter the loop the finer the scrub — 40x here, and it costs nothing to
+     reach because it is the width you were already dragging across.
+
+     It also subsumes the clamping this used to do. Nothing has to refuse a drag
+     or dim what is out of reach: outside the loop is simply off the end of the
+     bar, and a ratio cannot leave 0..1. */
+  const domain = penned ? { from: loop.a, to: loop.b } : { from: 0, to: duration }
+  const span = domain.to - domain.from
+
+  const pct = (seconds) =>
+    span > 0 ? Math.min(Math.max(((seconds - domain.from) / span) * 100, 0), 100) : 0
+
+  const timeAt = (clientX) => {
+    const rect = track.current?.getBoundingClientRect()
+    if (!rect || rect.width === 0) return domain.from
+
+    const ratio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1)
+
+    return domain.from + ratio * span
+  }
+
+  return (
+    <div
+      className={`pointer-events-none absolute inset-x-0 bottom-0 select-none bg-gradient-to-t from-black/70 to-transparent px-2 pb-2 pt-8 ${rounded}`}
+    >
+      {/* Two facts, and the row has room for both. Left: what the bar spans, shown
+          only when that is no longer the whole clip — without it a playhead
+          sitting mid-bar at 01:03 of a 02:28 clip is simply wrong-looking, and
+          the rescale is invisible. Right: where you actually are, unchanged and
+          always absolute, because that is the number you came for. */}
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <span className="text-[11px] tabular-nums text-white/60 drop-shadow">
+          {penned ? `${formatTime(domain.from)} – ${formatTime(domain.to)}` : ''}
+        </span>
+        <span className="text-[11px] tabular-nums text-white/80 drop-shadow">
+          {formatTime(time)} / {formatTime(duration)}
+        </span>
+      </div>
+
+      {/* A 2px line is not a touch target. The padding gives the thumb ~28px to
+          land in while the line stays hairline-thin, and `touch-none` stops the
+          drag being read as a page scroll on a phone. */}
+      <div
+        ref={track}
+        className="group pointer-events-auto -my-3 cursor-pointer touch-none py-3"
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture?.(event.pointerId)
+          setDragging(true)
+          onScrub(timeAt(event.clientX))
+        }}
+        onPointerMove={(event) => dragging && onScrub(timeAt(event.clientX))}
+        onPointerUp={(event) => {
+          event.currentTarget.releasePointerCapture?.(event.pointerId)
+          setDragging(false)
+        }}
+        onPointerCancel={() => setDragging(false)}
+      >
+        <div
+          className={`relative w-full rounded-full bg-white/20 transition-[height] ${
+            dragging ? 'h-1' : 'h-0.5 group-hover:h-1'
+          }`}
+        >
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-white"
+            style={{ width: `${pct(time)}%` }}
+          />
+          <div
+            className={`absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow transition-transform ${
+              dragging ? 'scale-100' : 'scale-0 group-hover:scale-100'
+            }`}
+            style={{ left: `${pct(time)}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Player({ clip, onBack }) {
   const videoRef = useRef(null)
   const [duration, setDuration] = useState(0)
@@ -507,6 +616,17 @@ function Player({ clip, onBack }) {
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
               onClick={togglePlay}
+            />
+
+            <VideoProgress
+              time={time}
+              duration={duration}
+              loop={loop}
+              looping={looping}
+              onScrub={scrub}
+              /* Follows the clip's own corners so the scrim doesn't square off a
+                 rounded video. Zen has no rounding to follow. */
+              rounded={zen ? undefined : 'rounded-b-lg'}
             />
 
             <button
