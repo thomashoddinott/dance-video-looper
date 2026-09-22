@@ -14,7 +14,7 @@ loop rather than a list of near-duplicates.
 ## Acceptance Criteria
 
 - [ ] Given a loop opened from the list, when **Save** is used, then **that entry is updated in place** — its A, B and speed take the player's current values — and no new entry appears (BR-20)
-- [ ] Given an updated entry, when the list re-renders, then it keeps its **position** in the list
+- [ ] Given an updated entry, when it is written, then it is **replaced in place** rather than removed and re-added — what the panel *shows* has been start order since #28, so a correction that moves A moves the row by that rule rather than as a side effect of this one
 - [ ] Given a loop is open, when the panel renders, then the action reads **Update** rather than **Save**
 - [ ] Given a loop is open, when the line beneath the field renders, then it names the entry the write would land on **by the name it is stored under**, reading `updates chasse to 0:03 - 0:07 · 1x`
 - [ ] Given a loop is open and the field holds a different name, when **Update** is used, then the entry is **renamed** as well as re-pointed (BR-10)
@@ -52,6 +52,16 @@ loop rather than a list of near-duplicates.
 - **`unsaved` sits outside the row's own button.** The button's accessible name is what the loop *is*; a word coming and going inside it renames the control under anyone listening to the page.
 - **`Save as new` stays put and greys while the loop is half-set**, rather than leaving with the line it sits on. It reads the same guard the button does, and a control that vanishes on a press of space is a worse answer to "why can I not save" than one that is visibly refusing.
 - **The merge gains a third operation, not a bigger one.** BR-12 rests on the operations being small enough that replaying one onto whatever Drive holds *is* the merge. A correction is written as a **replace by id** rather than a removal followed by an append, so it stays one small operation — and it does nothing at all where the id has gone, because appending instead would resurrect a loop the other device had deleted.
+
+### Where this meets #28, settled at the merge
+
+A chain of ticked loops and an open loop are two different answers to "what is
+the player set to" — *which loops to play* against *which entry a save writes
+over* — and four rows ticked have no single answer to the second. So **ticking
+releases the open loop**: a save then adds the run rather than replacing one of
+its parts with a span covering all of them. The other direction is #28's own
+rule read from this side — tapping a loop takes the ticks off, and it is that
+loop a save writes over.
 
 ### Open questions
 

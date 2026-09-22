@@ -1,4 +1,5 @@
 import type { SavedLoop } from '../loops/loop'
+import { inStartOrder } from './chain'
 import type { Loop } from './playback'
 import { nextLoopName, summarise } from './savedLoops'
 
@@ -37,6 +38,7 @@ export function SavedLoopsPanel({
   speed,
   halfSet,
   saved,
+  chain,
   name,
   editing,
   unwritten,
@@ -47,11 +49,16 @@ export function SavedLoopsPanel({
   onSaveAsNew,
   onRecall,
   onRemove,
+  onChain,
 }: {
   readonly loop: Loop | null
   readonly speed: number
   readonly halfSet: boolean
   readonly saved: readonly SavedLoop[]
+  /* Which loops are ticked into the run being played (#28). Ids rather than the
+     loops themselves, because what is ticked has to survive the list changing
+     underneath it — a save, a removal, or the other device's copy arriving. */
+  readonly chain: readonly string[]
   readonly name: string
   /* The entry a save writes over, or null for a new one (#30). Handed down
      rather than worked out here: the screen has to know it anyway — the `s` key
@@ -78,6 +85,7 @@ export function SavedLoopsPanel({
   readonly onSaveAsNew: () => void
   readonly onRecall: (entry: SavedLoop) => void
   readonly onRemove: (id: string) => void
+  readonly onChain: (id: string) => void
 }) {
   return (
     <section aria-label="Saved loops" className="mt-6 rounded-xl bg-shell/60 p-4">
@@ -196,8 +204,14 @@ export function SavedLoopsPanel({
             </p>
           )}
 
+          {/* Listed the way the clip runs rather than the way they were saved
+              (#28). Loops arrive in save order — `withLoop` appends — so a
+              section framed last sits below sections that come after it in the
+              clip, and a run of ticked rows would read as rows with something
+              unrelated between them. The ordering is `chain`'s to state, because
+              it is the ordering the chain rests on. */}
           <ul className="mt-3 flex flex-col gap-1.5">
-            {saved.map((entry) => (
+            {inStartOrder(saved).map((entry) => (
               <li
                 key={entry.id}
                 className={`flex items-center gap-1 rounded-lg pr-1 ${
@@ -206,6 +220,28 @@ export function SavedLoopsPanel({
                     : 'bg-control/50'
                 }`}
               >
+                {/* #28. No label and no hint: what the box does is visible the
+                    moment a second one is ticked, and a column of explanatory
+                    text beside every loop would cost more room than the feature
+                    is worth on a phone.
+
+                    Drawn only once there are two loops, because a box on a lone
+                    loop is a control that cannot do anything — the dead control
+                    US-01-07 refused to draw, in its smallest form.
+
+                    The ring above is left to `isCurrent` alone. A run of two
+                    marks no row, which is the truth: the player is on a span
+                    that is no saved loop, and the ticks already say which ones
+                    made it. */}
+                {saved.length > 1 && (
+                  <input
+                    type="checkbox"
+                    checked={chain.includes(entry.id)}
+                    onChange={() => onChain(entry.id)}
+                    aria-label={`Chain ${entry.name}`}
+                    className="ml-3 h-4 w-4 shrink-0 accent-accent"
+                  />
+                )}
                 {/* `aria-current` as well as the ring, so "you are here" is a
                     fact anything reading the page can have rather than a colour
                     only a sighted dancer can see. */}

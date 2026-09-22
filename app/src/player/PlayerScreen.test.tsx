@@ -20,6 +20,7 @@ import type { TokenSource } from '../drive/gisTokenSource'
 import type { TokenStore } from '../drive/tokenStore'
 import { getClip } from '../clips/clip.factory'
 import { holdsNothing } from '../clips/clipCache.factory'
+import type { SavedLoop } from '../loops/loop'
 import { getLoop } from '../loops/loop.factory'
 import { A_REFUSAL, useFakeLoops } from '../loops/loopsHandle.factory'
 import { NO_LOOPS } from '../loops/loopsFile'
@@ -2200,7 +2201,11 @@ describe('correcting the loop the player is set to', () => {
     expect(savedEntries()).toEqual(['chasse0:02 - 0:07 · 1x'])
   })
 
-  it('leaves it where it was in the list', async () => {
+  /* In the file, which is what the replacement is about: the entry is written
+     over rather than removed and re-added. What the panel *shows* has been start
+     order since #28, so a correction that moves A moves the row with it — by
+     that rule rather than as a side effect of this one. */
+  it('leaves it where it was rather than sending it to the end', async () => {
     aReadyClip({ seconds: 12 })
 
     await userEvent.click(saveControl())
@@ -2692,6 +2697,189 @@ describe('the loops this clip already had', () => {
   })
 })
 
+/* #28. Two sections of a routine kept the way a dancer drills them — the opening,
+   then the answer to it — at the two tempos they were each learned at. Seeded
+   rather than framed and saved four times over, because what these are about is
+   what the ticks do with loops that are already there. */
+const withSections = (...sections: readonly SavedLoop[]) => ({
+  seed: { ...NO_LOOPS, clips: { 'shuffle-drill': sections } },
+})
+
+const theOpening = getLoop({
+  id: 'opening',
+  name: 'the opening',
+  a: 4,
+  b: 11,
+  speed: 0.8,
+})
+
+const theAnswer = getLoop({
+  id: 'answer',
+  name: 'the answer',
+  a: 11,
+  b: 18,
+  speed: 1,
+})
+
+const theEnding = getLoop({ id: 'ending', name: 'the ending', a: 18, b: 24 })
+
+const aClipWithTwoSections = () =>
+  aReadyClip({ seconds: 24, ...withSections(theOpening, theAnswer) })
+
+const chainBox = (name: string) =>
+  panel().getByRole('checkbox', { name: `Chain ${name}` })
+
+/* #28. Learning a routine goes segment 1, segment 2, then 1+2 together. The third
+   of those had no answer here: running two sections as one meant framing and
+   keeping a third loop that duplicated both. */
+describe('chaining saved loops together', () => {
+  it('offers a tick box on each loop once there are two to chain', () => {
+    aClipWithTwoSections()
+
+    expect(chainBox('the opening')).toBeInTheDocument()
+    expect(chainBox('the answer')).toBeInTheDocument()
+  })
+
+  /* A box on a lone loop would be a control that cannot do anything: there is
+     nothing to chain it to. */
+  it('offers none on the only loop a clip has', () => {
+    aReadyClip({ seconds: 24, ...withSections(theOpening) })
+
+    expect(panel().queryByRole('checkbox')).toBeNull()
+  })
+
+  it('runs from the first section’s start to the last one’s end', async () => {
+    aClipWithTwoSections()
+
+    await userEvent.click(chainBox('the opening'))
+    await userEvent.click(chainBox('the answer'))
+
+    expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '4')
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '18')
+  })
+
+  it('puts the clip at the start of the run, ready to take it from the top', async () => {
+    const clip = aClipWithTwoSections()
+
+    await userEvent.click(chainBox('the opening'))
+    await userEvent.click(chainBox('the answer'))
+
+    expect(clip.currentTime).toBe(4)
+  })
+
+  /* The point of ticking two is to run them round, so the loop is taken back up
+     for the same reason recalling one does it. */
+  it('takes the loop back up rather than leaving it released', async () => {
+    aClipWithTwoSections()
+
+    await userEvent.click(screen.getByRole('button', { name: 'LOOPING' }))
+    await userEvent.click(chainBox('the opening'))
+    await userEvent.click(chainBox('the answer'))
+
+    expect(screen.getByRole('button', { name: 'LOOPING' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  /* BR-09: the tempo is part of the loop. A chain is one loop, so it carries one
+     tempo — the one the section it opens with was learned at. */
+  it('runs at the tempo the opening section was learned at', async () => {
+    aClipWithTwoSections()
+
+    await userEvent.click(chainBox('the answer'))
+    await userEvent.click(chainBox('the opening'))
+
+    expect(speedShown()).toBe('0.8')
+  })
+
+  /* The whole reason the feature exists rather than being a third Save: a chain
+     is a way to play the loops already kept, not another loop to keep. */
+  it('adds nothing to the list — a chain is played, not saved', async () => {
+    aClipWithTwoSections()
+
+    await userEvent.click(chainBox('the opening'))
+    await userEvent.click(chainBox('the answer'))
+
+    expect(savedEntries()).toEqual([
+      'the opening0:04 - 0:11 · 0.8x',
+      'the answer0:11 - 0:18 · 1x',
+    ])
+  })
+
+  it('falls back to the section still ticked when one comes off', async () => {
+    aClipWithTwoSections()
+
+    await userEvent.click(chainBox('the opening'))
+    await userEvent.click(chainBox('the answer'))
+    await userEvent.click(chainBox('the answer'))
+
+    expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '4')
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '11')
+  })
+
+  /* Unticking the last box is not a request to go anywhere. The dancer is
+     standing in a section; taking the marks off the list must not move it. */
+  it('leaves the loop where it is once the last tick comes off', async () => {
+    aClipWithTwoSections()
+
+    await userEvent.click(chainBox('the opening'))
+    await userEvent.click(chainBox('the answer'))
+    await userEvent.click(chainBox('the answer'))
+    await userEvent.click(chainBox('the opening'))
+
+    expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '4')
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '11')
+  })
+
+  /* Tapping a loop is a whole answer to "what am I practising now". Ticks left
+     behind it would be a second answer disagreeing with the first. */
+  it('clears the ticks when a loop is opened by tapping it', async () => {
+    aClipWithTwoSections()
+
+    await userEvent.click(chainBox('the opening'))
+    await userEvent.click(chainBox('the answer'))
+    await userEvent.click(savedLoop('the answer'))
+
+    expect(chainBox('the opening')).not.toBeChecked()
+    expect(chainBox('the answer')).not.toBeChecked()
+    expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '11')
+  })
+
+  it('drops the tick of a loop that is removed, and stays where it is', async () => {
+    aReadyClip({
+      seconds: 24,
+      ...withSections(theOpening, theAnswer, theEnding),
+    })
+
+    await userEvent.click(chainBox('the opening'))
+    await userEvent.click(chainBox('the answer'))
+    await userEvent.click(removeControl('the answer'))
+
+    expect(chainBox('the opening')).toBeChecked()
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '18')
+  })
+})
+
+/* #28 rests on this: ticked rows have to read down the list as one run, and they
+   only can if the list runs the way the clip does. Loops arrive in the order they
+   were saved, which is not that order — frame the ending first and it would sit
+   above the opening forever. */
+describe('the order the panel lists loops in', () => {
+  it('runs the way the clip does, not the way they were saved', () => {
+    aReadyClip({
+      seconds: 24,
+      ...withSections(theEnding, theOpening, theAnswer),
+    })
+
+    expect(savedEntries()).toEqual([
+      'the opening0:04 - 0:11 · 0.8x',
+      'the answer0:11 - 0:18 · 1x',
+      'the ending0:18 - 0:24 · 1x',
+    ])
+  })
+})
+
 /* #21. Where you are in the clip, drawn on the clip — the video carried no
    position indicator at all before this, no `controls` and nothing of our own,
    so it simply played blind. */
@@ -3167,6 +3355,54 @@ describe('scrubbing while the loop runs', () => {
     act(() => vi.advanceTimersByTime(A_FEW_FRAMES))
 
     expect(clip.currentTime).toBe(5)
+  })
+})
+
+/* Where #28 and #30 meet, settled when they were merged. A chain and an open
+   loop are two different answers to "what is the player set to" — one is *which
+   loops to play*, the other is *which entry a save writes over* — and four rows
+   ticked have no single answer to the second. */
+describe('ticking a run while a loop is open', () => {
+  it('releases the open loop, so a save adds rather than overwrites', async () => {
+    aClipWithTwoSections()
+
+    await userEvent.click(savedLoop('the opening'))
+    await userEvent.click(chainBox('the opening'))
+    await userEvent.click(chainBox('the answer'))
+    await userEvent.click(saveControl())
+
+    /* Listed in start order since #28, so the run sits beside the section it
+       opens with rather than at the end. */
+    expect(savedEntries()).toEqual([
+      'the opening0:04 - 0:11 · 0.8x',
+      'Loop 10:04 - 0:18 · 0.8x',
+      'the answer0:11 - 0:18 · 1x',
+    ])
+  })
+
+  it('leaves no entry claiming to be the one a save writes to', async () => {
+    aClipWithTwoSections()
+
+    await userEvent.click(savedLoop('the opening'))
+    await userEvent.click(chainBox('the answer'))
+
+    expect(markedEntries()).toEqual([])
+  })
+
+  /* The other direction is #28's own rule, read from this side: opening a loop
+     takes the ticks off, and it is that loop a save then writes over. */
+  it('takes the open loop back up when one is tapped again', async () => {
+    aClipWithTwoSections()
+
+    await userEvent.click(chainBox('the opening'))
+    await userEvent.click(chainBox('the answer'))
+    await userEvent.click(savedLoop('the answer'))
+    await userEvent.click(updateControl())
+
+    expect(savedEntries()).toEqual([
+      'the opening0:04 - 0:11 · 0.8x',
+      'the answer0:11 - 0:18 · 1x',
+    ])
   })
 })
 

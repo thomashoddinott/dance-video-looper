@@ -29,6 +29,30 @@ function summarise(loop, speed) {
   return `${formatTime(loop.a)} - ${formatTime(loop.b)} · ${formatSpeed(speed)}x`
 }
 
+/* Ticking saved loops chains them into one: earliest start to latest end. Drill
+   segment 1, drill segment 2, then run 1+2 — that habit is what this is for, and
+   it beats saving a third loop that duplicates the other two.
+
+   Whether the segments actually meet is deliberately NOT a condition. A and B
+   are dragged by hand and never land on the same frame twice, so a near miss
+   would otherwise decide whether the box is even there, which is a rule you can
+   feel but not see. Tick whatever you like; the span is what you get. */
+
+const inTimeOrder = (loops) => [...loops].sort((one, two) => one.a - two.a)
+
+/* Sorted by where each loop starts — the only ordering under which a chain reads
+   down the list as one run. The end is the furthest B in the selection rather
+   than the last row's, which is the same thing for segments laid end to end and
+   still a valid loop when one of them happens to swallow another. */
+function spanOf(loops) {
+  const [first] = inTimeOrder(loops)
+  return {
+    a: first.a,
+    b: loops.reduce((end, loop) => Math.max(end, loop.b), first.b),
+    speed: first.speed,
+  }
+}
+
 const CONTROL = 'bg-control text-ink/90 hover:bg-control-hi'
 
 /* Inline SVG rather than glyphs: ⏮ and ⏸ carry emoji presentation on macOS and
@@ -448,6 +472,7 @@ function Player({ clip, onBack }) {
   const [loop, setLoop] = useState({ a: 0, b: 0 })
   const [speed, setSpeed] = useState(1)
   const [saved, setSaved] = useState([])
+  const [chain, setChain] = useState([])
   const [name, setName] = useState('')
   const [nextId, setNextId] = useState(1)
   /* Which saved loop the controls are currently *on*. Set by opening one from
@@ -738,6 +763,7 @@ function Player({ clip, onBack }) {
   })
 
   const loadLoop = (item) => {
+    setChain([])
     setLoop({ a: item.a, b: item.b })
     setSpeed(item.speed)
     setLooping(true)
@@ -751,7 +777,37 @@ function Player({ clip, onBack }) {
     scrub(item.a)
   }
 
-  const removeLoop = (id) => setSaved(saved.filter((item) => item.id !== id))
+  const removeLoop = (id) => {
+    setSaved(saved.filter((item) => item.id !== id))
+    setChain(chain.filter((one) => one !== id))
+  }
+
+  /* One loop or six, a run plays as a single loop, at the speed the earliest one
+     was saved at. Nothing is written to the saved list — a chain is a way to
+     play the loops you already have, not another loop. */
+  const playRun = (run) => {
+    // the last untick leaves the loop points exactly where they were
+    if (run.length === 0) return
+    const { a, b, speed: runSpeed } = spanOf(run)
+    setLoop({ a, b })
+    setSpeed(runSpeed)
+    setLooping(true)
+    setNextPoint('a')
+    scrub(a)
+  }
+
+  const toggleChain = (id) => {
+    const next = chain.includes(id)
+      ? chain.filter((one) => one !== id)
+      : [...chain, id]
+    setChain(next)
+    /* And nothing is open any more. A run is not a loop: four ticked rows have
+       no single answer to which entry a save writes over, and leaving the last
+       one open would let the next press replace it with a span covering all
+       four. */
+    setEditingId(null)
+    playRun(saved.filter((item) => next.includes(item.id)))
+  }
 
   return (
     <div className="min-h-screen bg-shell text-ink">
@@ -966,8 +1022,14 @@ function Player({ clip, onBack }) {
               )}
             </p>
 
+            {/* Ordered by where they start, not by when they were saved or what
+                they were called: a chain is a run through the clip, so the rows
+                you tick have to be the rows next to each other. Sorted any other
+                way, ticking two segments that follow each other lights up two
+                rows with something unrelated sitting between them, and the span
+                it plays stops looking like the rows it came from. */}
             <ul className="mt-3 flex flex-col gap-1.5">
-              {saved.map((item) => (
+              {inTimeOrder(saved).map((item) => (
                 <li
                   key={item.id}
                   /* Held by id now, not by whether the numbers happen to match.
@@ -980,6 +1042,17 @@ function Player({ clip, onBack }) {
                       : 'bg-control/50'
                   }`}
                 >
+                  {/* Nothing to chain a lone loop to, so the column only appears
+                      once there are two — no box, no gutter, nothing to explain. */}
+                  {saved.length > 1 && (
+                    <input
+                      type="checkbox"
+                      checked={chain.includes(item.id)}
+                      onChange={() => toggleChain(item.id)}
+                      aria-label={`Chain ${item.name}`}
+                      className="ml-3 h-4 w-4 shrink-0 accent-accent"
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={() => loadLoop(item)}
