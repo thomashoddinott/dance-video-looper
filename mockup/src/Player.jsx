@@ -22,6 +22,13 @@ function formatSpeed(speed) {
   return String(Math.round(speed * 100) / 100)
 }
 
+/* Written once, because the panel says it twice: under the field as what a write
+   would keep, and under each entry as what one already did. The line above the
+   list is a preview of the line below it, so two copies would be free to drift. */
+function summarise(loop, speed) {
+  return `${formatTime(loop.a)} - ${formatTime(loop.b)} · ${formatSpeed(speed)}x`
+}
+
 const CONTROL = 'bg-control text-ink/90 hover:bg-control-hi'
 
 /* Inline SVG rather than glyphs: ⏮ and ⏸ carry emoji presentation on macOS and
@@ -447,7 +454,7 @@ function Player({ clip, onBack }) {
      the list, and also by saving — so the loop you just wrote is the loop you
      are now editing, and a second press of Save corrects it rather than laying
      down Loop 4, Loop 5, Loop 6 beside it. Making a new one is a deliberate
-     act now ("save as new"), which is the right way round: the common move
+     act now ("Save as new"), which is the right way round: the common move
      after loading a loop is to fix it. */
   const [editingId, setEditingId] = useState(null)
   const [nextPoint, setNextPoint] = useState('a')
@@ -668,13 +675,13 @@ function Player({ clip, onBack }) {
   const halfSet = nextPoint === 'b'
 
   /* Looked up rather than held, so deleting the loop you were editing simply
-     stops there being one — the button goes back to Save and the name field
-     still has what you called it, which is how you'd put it back. */
+     stops there being one and the button goes back to Save. */
   const editing = saved.find((item) => item.id === editingId) ?? null
 
-  // an emptied field falls back rather than saving a nameless loop
-  const willName =
-    name.trim() || editing?.name || `Loop ${saved.length + 1}`
+  /* An emptied field falls back rather than saving a nameless loop — to the open
+     loop's own name where there is one, because clearing the box is not a
+     request to rename `chasse` to `Loop 4`. */
+  const willName = name.trim() || editing?.name || `Loop ${saved.length + 1}`
 
   /* Whether Update would actually write anything. Only used to mark the row —
      the button stays live either way, because a disabled Save is a worse
@@ -697,12 +704,16 @@ function Player({ clip, onBack }) {
           : item,
       ),
     )
-    setName(willName)
+    setName('')
   }
 
   /* The way out. Loading a loop and then wanting a *second* one from the same
      stretch of clip is a real move — it is just the rarer one, so it gets the
-     smaller button instead of the default. */
+     smaller button instead of the default.
+
+     No `editing` in the name, so it takes the next number rather than the open
+     loop's: two rows called `chasse` are indistinguishable in a list with no
+     reorder. */
   const saveAsNew = () => {
     if (halfSet) return
 
@@ -716,7 +727,7 @@ function Player({ clip, onBack }) {
 
     setSaved([...saved, added])
     setNextId(nextId + 1)
-    setName(added.name)
+    setName('')
     setEditingId(added.id)
   }
 
@@ -732,7 +743,11 @@ function Player({ clip, onBack }) {
     setLooping(true)
     setNextPoint('a')
     setEditingId(item.id)
-    setName(item.name)
+    /* Cleared rather than pre-filled with the name: a value would have to be
+       deleted before a new one could be typed over it, and the placeholder says
+       the same thing without being in the way. It also means whatever was
+       half-typed before you tapped the row cannot quietly rename it. */
+    setName('')
     scrub(item.a)
   }
 
@@ -928,35 +943,26 @@ function Player({ clip, onBack }) {
                 new one, and "updates Loop 3" is the fact you need to not lose
                 Loop 3 by accident. */}
             <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 text-xs tabular-nums text-ink/40">
-              {halfSet ? (
-                <span className="tracking-wide">set B to finish the loop</span>
-              ) : (
-                <>
-                  <span>
-                    {editing ? (
-                      <>
-                        updates{' '}
-                        <span className="font-medium text-ink/60">
-                          {editing.name}
-                        </span>{' '}
-                        to{' '}
-                      </>
-                    ) : (
-                      'saves '
-                    )}
-                    {formatTime(loop.a)} - {formatTime(loop.b)} &middot;{' '}
-                    {formatSpeed(speed)}x
-                  </span>
-                  {editing && (
-                    <button
-                      type="button"
-                      onClick={saveAsNew}
-                      className="font-medium text-accent hover:underline"
-                    >
-                      save as new
-                    </button>
-                  )}
-                </>
+              <span className={halfSet ? 'tracking-wide' : undefined}>
+                {halfSet
+                  ? 'set B to finish the loop'
+                  : editing
+                    ? `updates ${editing.name} to ${summarise(loop, speed)}`
+                    : `saves ${summarise(loop, speed)}`}
+              </span>
+              {/* Stays put and greys while the loop is half-set rather than
+                  leaving with the line beside it — a control that vanishes on a
+                  press of space is a worse answer to "why can I not save" than
+                  one that is visibly refusing. */}
+              {editing && (
+                <button
+                  type="button"
+                  onClick={saveAsNew}
+                  disabled={halfSet}
+                  className="font-medium text-accent hover:underline disabled:pointer-events-none disabled:opacity-40"
+                >
+                  Save as new
+                </button>
               )}
             </p>
 
@@ -983,18 +989,20 @@ function Player({ clip, onBack }) {
                       {item.name}
                     </span>
                     <span className="block text-xs tabular-nums text-ink/50">
-                      {formatTime(item.a)} - {formatTime(item.b)} &middot;{' '}
-                      {formatSpeed(item.speed)}x
-                      {/* Still the stored numbers, because they are what you
-                          stand to lose. The pending ones are under the field
-                          above; this only has to say they differ. */}
-                      {dirty && item.id === editing.id && (
-                        <span className="ml-2 font-medium text-accent">
-                          unsaved
-                        </span>
-                      )}
+                      {summarise(item, item.speed)}
                     </span>
                   </button>
+                  {/* Still the stored numbers beside it, because they are what
+                      you stand to lose — the pending ones are already on the
+                      line under the field. Outside the row's own button rather
+                      than inside it: the button is named by what the loop *is*,
+                      and a word coming and going in there renames the control
+                      under anyone listening to the page. */}
+                  {dirty && item.id === editing.id && (
+                    <span className="shrink-0 px-1 text-[11px] font-medium text-accent">
+                      unsaved
+                    </span>
+                  )}
                   <button
                     type="button"
                     aria-label={`Delete ${item.name}`}
