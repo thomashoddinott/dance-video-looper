@@ -5,7 +5,12 @@ import { withdrewConsent } from '../drive/driveErrors'
 import { useDriveSession } from '../drive/driveSession'
 import { applyToLoops, type LoopsChange, LoopsRefused, readLoops } from './driveLoops'
 import type { SavedLoop } from './loop'
-import { withLoop, withOpens, withoutLoop } from './loopsChange'
+import {
+  withLoop,
+  withLoopReplaced,
+  withOpens,
+  withoutLoop,
+} from './loopsChange'
 import type { LoopsCache } from './loopsCache'
 import { browserLoopsCache } from './loopsCache'
 import type { LoopsFile } from './loopsFile'
@@ -13,10 +18,10 @@ import { NO_LOOPS } from './loopsFile'
 
 export type LoopsHandle = {
   readonly loops: LoopsFile
-  /* Whether a save or a removal is in flight. The panel reads it to hold the
-     Save button, which is what makes "write first, then show" visible rather
-     than merely true — otherwise the two hundred milliseconds look like a
-     button that did nothing. */
+  /* Whether a save, a correction or a removal is in flight. The panel reads it
+     to hold the Save button, which is what makes "write first, then show"
+     visible rather than merely true — otherwise the two hundred milliseconds
+     look like a button that did nothing. */
   readonly writing: boolean
   /* What to tell the dancer about the last write that did not land. Null while
      nothing has gone wrong, and cleared the moment the next one is attempted. */
@@ -25,6 +30,11 @@ export type LoopsHandle = {
      must not do it on one that failed — a dancer who typed "the hard bit" and
      lost the write should not also lose what they called it. */
   readonly save: (clipId: string, loop: SavedLoop) => Promise<boolean>
+  /* #30: the same loop, corrected. Takes a whole `SavedLoop` rather than an id
+     and a patch, because everything but the id can change at once — the dancer
+     may have moved both boundaries, slowed the clip and renamed it before
+     pressing Update, and a patch would be a second shape for the same thing. */
+  readonly update: (clipId: string, loop: SavedLoop) => Promise<boolean>
   readonly remove: (clipId: string, id: string) => Promise<boolean>
 }
 
@@ -129,10 +139,10 @@ export const useLoops = (
     }
   }, [api, cache, folderToken, reportIfWithdrawn, status])
 
-  /* One path for both changes, because they differ only in the function they
-     hand to `applyToLoops` — and that function is what the whole merge rests
-     on (UC-01 Q-05). Two copies of this would be two chances to get the
-     order of "write, then show" wrong in one of them. */
+  /* One path for all three changes, because they differ only in the function
+     they hand to `applyToLoops` — and that function is what the whole merge
+     rests on (UC-01 Q-05). Three copies of this would be three chances to get
+     the order of "write, then show" wrong in one of them. */
   const write = useCallback(
     async (change: LoopsChange, what: string) => {
       setNotice(null)
@@ -183,6 +193,17 @@ export const useLoops = (
     [write],
   )
 
+  /* Named by the loop, as a save is, and told in the same sentence. "Was not
+     saved to Drive" is as true of a correction as of a first save, and the
+     unreadable-file wording — "Nothing was overwritten" — is if anything more
+     to the point here: an update is the one change with something to
+     overwrite. */
+  const update = useCallback(
+    (clipId: string, loop: SavedLoop) =>
+      write((held) => withLoopReplaced(held, clipId, loop), `“${loop.name}”`),
+    [write],
+  )
+
   /* Named "the removal" rather than by the loop, because the entry it refers
      to is still on screen when the sentence appears — the dancer can see which
      one it is, and a name repeated back adds nothing. */
@@ -192,5 +213,5 @@ export const useLoops = (
     [write],
   )
 
-  return { loops, writing, notice, save, remove }
+  return { loops, writing, notice, save, update, remove }
 }

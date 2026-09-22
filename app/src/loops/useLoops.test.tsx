@@ -288,6 +288,65 @@ describe('saving a loop', () => {
   })
 })
 
+/* #30. Same path as a save — write first, then show — and the same two things
+   worth pinning: what actually went into Drive, and that a refusal leaves the
+   entry the dancer was correcting exactly as it was. */
+describe('updating a loop', () => {
+  it('writes it over the entry that was there, in place', async () => {
+    const first = getLoop({ id: 'first' })
+    const corrected = getLoop({ id: 'second', a: 3, b: 7 })
+    const api = holding({ [A_CLIP]: [first, { ...corrected, a: 4, b: 9 }] })
+
+    const { result } = renderLoops(api)
+
+    await waitFor(() => {
+      expect(result.current.loops.clips[A_CLIP]).toHaveLength(2)
+    })
+    await result.current.update(A_CLIP, corrected)
+
+    await waitFor(() => {
+      expect(result.current.loops.clips[A_CLIP]).toEqual([first, corrected])
+    })
+    expect(bodyWritten(api).clips[A_CLIP]).toEqual([first, corrected])
+  })
+
+  it('says whether the write landed', async () => {
+    const loop = getLoop()
+    const api = holding({ [A_CLIP]: [loop] })
+
+    const { result } = renderLoops(api)
+
+    await waitFor(() => {
+      expect(result.current.loops.clips[A_CLIP]).toEqual([loop])
+    })
+    await expect(result.current.update(A_CLIP, { ...loop, a: 9 })).resolves.toBe(
+      true,
+    )
+  })
+
+  /* The worst way this could fail: the dancer corrects a loop, the write is
+     refused, and the panel shows the correction anyway — so the loop they think
+     they fixed is still wrong in Drive and they have no way to know. */
+  it('leaves the entry as it was when the write does not land', async () => {
+    const loop = getLoop({ name: 'The hard bit', a: 3 })
+    const api = holding({ [A_CLIP]: [loop] })
+
+    vi.mocked(api.writeJson).mockRejectedValue(new DriveError('boom', 500))
+
+    const { result } = renderLoops(api)
+
+    await waitFor(() => {
+      expect(result.current.loops.clips[A_CLIP]).toEqual([loop])
+    })
+    await result.current.update(A_CLIP, { ...loop, a: 9 })
+
+    await waitFor(() => {
+      expect(result.current.notice).toContain('The hard bit')
+    })
+    expect(result.current.loops.clips).toEqual({ [A_CLIP]: [loop] })
+  })
+})
+
 describe('removing a loop', () => {
   it('takes it out of Drive, and then out of the list', async () => {
     const going = getLoop({ id: 'going' })
