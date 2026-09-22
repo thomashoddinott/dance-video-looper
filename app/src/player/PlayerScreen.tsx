@@ -9,6 +9,7 @@ import { browserDriveApi } from '../drive/driveApi'
 import type { SavedLoop } from '../loops/loop'
 import { loopsFor } from '../loops/loopsChange'
 import type { LoopsHandle } from '../loops/useLoops'
+import { chainedSpan } from './chain'
 import { useClipSource } from './clipSource'
 import { clamp, type Handle, NUDGE } from './loopRange'
 import { LoopSlider } from './LoopSlider'
@@ -306,6 +307,15 @@ function OpenedClip({
      back through a ref; one owner costs less than a second copy. */
   const saved = loopsFor(loops.loops, clip.id)
   const [loopName, setLoopName] = useState('')
+  /* Which saved loops are ticked into one run (#28). Ids rather than loops, so a
+     list changing underneath — a save, a removal, the other device's copy
+     arriving — cannot leave a stale copy of a loop ticked.
+
+     Held here rather than in the panel because ticking one *plays* it: the loop,
+     the tempo and the playhead all move, and those live on this screen. It is
+     not written anywhere, and that is the point — a chain is a way to play the
+     loops already saved, not another loop to save. */
+  const [chain, setChain] = useState<readonly string[]>([])
 
   /* One seek in flight at a time, and the rest of the drag dropped rather than
      queued — #23. A ref rather than state because every read and write happens
@@ -660,29 +670,67 @@ function OpenedClip({
     seekTo(clamp(surface.current.currentTime + by, 0, playback.duration))
   }
 
-  /* UC-01 step 21, and BR-09's other half. The speed was saved *with* the loop
-     rather than beside it, so recalling one has to bring the tempo back or the
-     section returns unlearnable at the rate it was learned at.
+  /* Going to a loop the dancer already has, by either route into one: tapping an
+     entry (UC-01 step 21) and ticking a run of them (#28). One function because
+     the arrival is the same act — the two differ only in which loop they work
+     out, and a second copy of this would be free to drift on the three things
+     below that are easy to forget.
 
-     The loop and `looping` move in a single updater, because the point of a
-     recall is to be ready to run the section — restored boundaries with the loop
-     still released would be half an answer, and two `setPlayback` calls could be
-     torn apart by a render between them.
+     BR-09's other half. The speed was saved *with* the loop rather than beside
+     it, so arriving at one has to bring the tempo back or the section returns
+     unlearnable at the rate it was learned at.
 
-     Space is re-armed for A, because a recalled loop is a whole one: left
-     pointing at B, the next press would move the boundary of a section the
-     dancer had just asked to have back. Nothing here plays — step 21 says
-     restore and seek, and starting the clip would be a second thing nobody
-     asked for. */
-  const recallLoop = (entry: SavedLoop) => {
+     The loop and `looping` move in a single updater, because the point is to be
+     ready to run the section — restored boundaries with the loop still released
+     would be half an answer, and two `setPlayback` calls could be torn apart by
+     a render between them.
+
+     Space is re-armed for A, because what arrives is a whole loop: left pointing
+     at B, the next press would move the boundary of a section the dancer had just
+     asked for. Nothing here plays — step 21 says restore and seek, and starting
+     the clip would be a second thing nobody asked for. */
+  const takeUp = ({
+    loop,
+    speed: rate,
+  }: {
+    readonly loop: Loop
+    readonly speed: number
+  }) => {
     setPlayback((held) =>
-      held.kind === 'ready'
-        ? { ...held, loop: { a: entry.a, b: entry.b }, looping: true }
-        : held,
+      held.kind === 'ready' ? { ...held, loop, looping: true } : held,
     )
-    setSpeed(entry.speed)
+    setSpeed(rate)
     setNextPoint('a')
-    seekTo(entry.a)
+    seekTo(loop.a)
+  }
+
+  const recallLoop = (entry: SavedLoop) => {
+    /* Tapping a loop is a whole answer to what is being practised now, so the
+       ticks behind it come off (#28). Left on, they would be a second answer
+       disagreeing with the first — boxes claiming a run that is no longer what
+       the player is set to. */
+    setChain([])
+    takeUp({ loop: { a: entry.a, b: entry.b }, speed: entry.speed })
+  }
+
+  /* #28. Ticking a loop plays what is ticked: the run from the earliest start to
+     the furthest end, at the tempo of the section it opens with. One box or four,
+     it is the same act — which is why unticking down to a single loop lands on
+     that loop rather than on anything special.
+
+     Unticking the last one plays nothing. The dancer is standing in a section,
+     and taking the marks off the list is not a request to go anywhere — `chain`
+     empties and the loop stays exactly where it was. */
+  const chainLoop = (id: string) => {
+    const ticked = chain.includes(id)
+      ? chain.filter((held) => held !== id)
+      : [...chain, id]
+
+    setChain(ticked)
+
+    const run = chainedSpan({ saved, chain: ticked })
+
+    if (run) takeUp(run)
   }
 
   /* UC-01 step 22. By id rather than by index or by name: the dancer can save two
@@ -693,6 +741,11 @@ function OpenedClip({
      from the panel and stayed in Drive would come back on the next reload,
      which is a worse lie than the entry staying put. */
   const removeLoop = (id: string) => {
+    /* The tick goes with the row, and nothing else moves (#28). `chainedSpan`
+       would drop a stale id on its own, but the run is not recomputed here on
+       purpose: a dancer who reached for × asked to lose a loop, not to have the
+       section they are standing in shrink under them. */
+    setChain(chain.filter((held) => held !== id))
     void loops.remove(clip.id, id)
   }
 
@@ -965,6 +1018,7 @@ function OpenedClip({
               speed={speed}
               halfSet={halfSet}
               saved={saved}
+              chain={chain}
               name={loopName}
               writing={loops.writing}
               notice={loops.notice}
@@ -972,6 +1026,7 @@ function OpenedClip({
               onSave={saveLoop}
               onRecall={recallLoop}
               onRemove={removeLoop}
+              onChain={chainLoop}
             />
           </div>
         </div>

@@ -739,12 +739,11 @@ function Player({ clip, onBack }) {
     playRun(saved.filter((item) => next.includes(item.id)))
   }
 
+  /* Which row the player is actually set to. A run of two matches no row, which
+     is the truth — the span it plays is no saved loop, and the ticks already say
+     which ones made it. */
   const isCurrent = (item) =>
     item.a === loop.a && item.b === loop.b && item.speed === speed
-
-  // while a run is ticked it is what the list is showing, not whatever matches A/B
-  const isLit = (item) =>
-    chain.length ? chain.includes(item.id) : isCurrent(item)
 
   return (
     <div className="min-h-screen bg-shell text-ink">
@@ -932,7 +931,7 @@ function Player({ clip, onBack }) {
                 <li
                   key={item.id}
                   className={`flex items-center gap-1 rounded-lg pr-1 ${
-                    isLit(item) ? 'bg-accent/25 ring-1 ring-accent/60' : 'bg-control/50'
+                    isCurrent(item) ? 'bg-accent/25 ring-1 ring-accent/60' : 'bg-control/50'
                   }`}
                 >
                   {/* Nothing to chain a lone loop to, so the column only appears
