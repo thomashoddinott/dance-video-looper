@@ -19,7 +19,7 @@ import {
   type Playback,
   undecodable,
 } from './playback'
-import { nextLoopName } from './savedLoops'
+import { beingEdited, nameToKeep, unwritten } from './savedLoops'
 import { SavedLoopsPanel } from './SavedLoopsPanel'
 import { BackGlyph, ForwardGlyph, SeekButton } from './SeekButton'
 import { isTyping, spaceSets } from './shortcuts'
@@ -306,6 +306,18 @@ function OpenedClip({
      back through a ref; one owner costs less than a second copy. */
   const saved = loopsFor(loops.loops, clip.id)
   const [loopName, setLoopName] = useState('')
+  /* Which saved loop the player is *on*, and therefore the one a save writes
+     over (#30). Set by opening one from the list, and — the half that is easy
+     to miss — by saving one: without that, the first save of a new loop is
+     still followed by Loop 2, Loop 3, Loop 4 as the dancer corrects it, which
+     is the whole complaint.
+
+     An id rather than the loop itself, looked up against the list below. The
+     list is Drive's, not this screen's, so a held copy would be a second answer
+     free to disagree with it — and a loop removed, here or on the other device,
+     has to stop being the one a save writes to rather than linger as a stale
+     target. */
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   /* One seek in flight at a time, and the rest of the drag dropped rather than
      queued — #23. A ref rather than state because every read and write happens
@@ -515,6 +527,25 @@ function OpenedClip({
      obeys the same rule". */
   const halfSet = nextPoint === 'b'
 
+  /* The entry a save writes over, or null for a new one. Looked up against the
+     list every render rather than held, so it cannot outlive the loop it names:
+     remove the entry being corrected and the panel goes back to adding, which
+     is what its label then says. */
+  const editing = beingEdited(saved, editingId)
+
+  /* Whether that entry and the player have parted company. Worked out here
+     because this is where every part of the comparison already is — the loop,
+     the rate, and the name the field would keep. */
+  const unsaved =
+    editing !== null &&
+    playback.kind === 'ready' &&
+    unwritten({
+      entry: editing,
+      loop: playback.loop,
+      speed,
+      name: nameToKeep({ typed: loopName, editing, saved }),
+    })
+
   /* UC-01 steps 18–19, and BR-09: what is kept is the name, A, B *and* the speed,
      because the tempo a section was learned at is part of the loop rather than a
      setting that happened to be on at the time.
@@ -522,35 +553,70 @@ function OpenedClip({
      The boundaries come off `playback`, which is where the loop actually is —
      never off a copy, for the reason `nudge` and `togglePlay` both give.
 
-     BR-10: an empty field means the name that was offered, and a field holding
-     only spaces is empty in every sense the dancer intends.
+     BR-10: an empty field means the name that was offered — the open loop's own,
+     or the next number going (`nameToKeep`) — and a field holding only spaces is
+     empty in every sense the dancer intends.
 
-     The id is minted here because this is the one place a loop is saved. It is a
-     UUID rather than a count so that the laptop's third loop and the phone's
-     third loop do not claim the same identity in `loops.json`.
+     A UUID rather than a count, so that the laptop's third loop and the phone's
+     third loop do not claim the same identity in `loops.json`. Minted only where
+     there is no entry: a correction is the same loop, and the id is what makes
+     it the same loop in a file two devices are both writing.
 
      Refused while a write is already going, alongside BR-04's half-set guard
      and for a reason of the same kind: there is nothing to save right now.
      Without it, a Save pressed twice inside the two hundred milliseconds keeps
      the same section again under the next offered name.
 
-     The field is emptied only once Drive has taken the loop. A dancer who typed
-     "the hard bit" and lost the write should not lose what they called it as
-     well — the retry is then one press rather than a re-type. */
-  const saveLoop = () => {
+     Everything the two writes have in common lives here, and what differs —
+     which id the loop carries, and which way it goes into Drive — is a
+     parameter rather than a second copy of the guard. That is what BR-04 means
+     by the guard being single, now across four routes in rather than three. */
+  const writeLoop = (
+    entry: SavedLoop | null,
+    to: (loop: SavedLoop) => Promise<boolean>,
+  ) => {
     if (playback.kind !== 'ready' || halfSet || loops.writing) return
 
     const kept: SavedLoop = {
-      id: crypto.randomUUID(),
-      name: loopName.trim() || nextLoopName(saved),
+      id: entry?.id ?? crypto.randomUUID(),
+      name: nameToKeep({ typed: loopName, editing: entry, saved }),
       a: playback.loop.a,
       b: playback.loop.b,
       speed,
     }
 
-    void loops.save(clip.id, kept).then((written) => {
-      if (written) setLoopName('')
+    /* The field is emptied only once Drive has taken the loop, and the loop
+       just written becomes the one the next press corrects. A dancer who typed
+       "the hard bit" and lost the write should not lose what they called it as
+       well — the retry is then one press rather than a re-type. */
+    void to(kept).then((written) => {
+      if (!written) return
+
+      setEditingId(kept.id)
+      setLoopName('')
     })
+  }
+
+  /* Two writes wearing one control (#30). With a loop open it corrects that loop
+     in place; with none it adds one, exactly as before. */
+  const saveLoop = () => {
+    if (editing) {
+      writeLoop(editing, (kept) => loops.update(clip.id, kept))
+      return
+    }
+
+    saveAsNew()
+  }
+
+  /* The way out, and deliberately the smaller control. Opening a loop and then
+     wanting a second one out of the same stretch of clip is a real move — it is
+     just the rarer one, and it is the one that can be undone by a removal.
+
+     It passes no entry, so the name falls back to the next number going rather
+     than to the open loop's: two entries called `chasse` would be
+     indistinguishable in a list that has no reorder and, until now, no rename. */
+  const saveAsNew = () => {
+    writeLoop(null, (kept) => loops.save(clip.id, kept))
   }
 
   /* The key handler below subscribes on the loop and the armed boundary, and
@@ -564,9 +630,11 @@ function OpenedClip({
      copy of an answer, so there is still exactly one place that decides what
      saving means. */
   const saveLoopRef = useRef(saveLoop)
+  const saveAsNewRef = useRef(saveAsNew)
 
   useEffect(() => {
     saveLoopRef.current = saveLoop
+    saveAsNewRef.current = saveAsNew
   })
 
   /* UC-01 steps 9–10: the section is marked while it goes past, so the shortcut
@@ -615,8 +683,14 @@ function OpenedClip({
          half-set check beside it, which is what BR-04 means by the guard being
          single — the key and the button cannot disagree about what half a loop
          is because there is only one place that decides. */
+      /* Shift is the way to the other write, exactly as the smaller control
+         beside the button is (#30) — so the key stays one key meaning whichever
+         write the panel is offering, and the alternative is reachable without
+         leaving the clip. Both go through the same guard. */
       if (event.code === 'KeyS') {
-        saveLoopRef.current()
+        if (event.shiftKey) saveAsNewRef.current()
+        else saveLoopRef.current()
+
         return
       }
 
@@ -682,6 +756,16 @@ function OpenedClip({
     )
     setSpeed(entry.speed)
     setNextPoint('a')
+    /* And the loop is now the one a save writes over (#30) — which is the whole
+       point of opening it: the common thing to do next is correct it.
+
+       The field is cleared with it rather than pre-filled with the name, so the
+       panel offers that name as a placeholder instead. A value would have to be
+       deleted before a new name could be typed over it, which is the argument
+       the field already made for BR-10. It also means whatever was half-typed
+       before the entry was tapped cannot silently rename it. */
+    setEditingId(entry.id)
+    setLoopName('')
     seekTo(entry.a)
   }
 
@@ -919,6 +1003,7 @@ function OpenedClip({
             <ShortcutHint
               next={playback.kind === 'ready' ? nextPoint : null}
               halfSet={halfSet}
+              editing={editing !== null}
             />
 
             {/* The transport appears once there is something to control. Before
@@ -966,10 +1051,13 @@ function OpenedClip({
               halfSet={halfSet}
               saved={saved}
               name={loopName}
+              editing={editing}
+              unwritten={unsaved}
               writing={loops.writing}
               notice={loops.notice}
               onNameChange={setLoopName}
               onSave={saveLoop}
+              onSaveAsNew={saveAsNew}
               onRecall={recallLoop}
               onRemove={removeLoop}
             />

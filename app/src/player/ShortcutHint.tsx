@@ -30,9 +30,14 @@ function Key({ children }: { readonly children: ReactNode }) {
 export function ShortcutHint({
   next,
   halfSet,
+  editing,
 }: {
   readonly next: Handle | null
   readonly halfSet: boolean
+  /* Whether there is a saved loop open, which decides what `s` would do and
+     whether shift is worth naming at all (#30). A fourth segment on every clip
+     would be a key with nothing to be an alternative to. */
+  readonly editing: boolean
 }) {
   return (
     <p
@@ -53,8 +58,24 @@ export function ShortcutHint({
               Reading the same `halfSet` the button and the key do, so the line
               cannot advertise a save that BR-04 would refuse. */}
           <span className={halfSet ? 'opacity-40' : undefined}>
-            <Key>s</Key> {halfSet ? 'saves once B is set' : 'saves the loop'}
+            <Key>s</Key>{' '}
+            {halfSet
+              ? 'saves once B is set'
+              : editing
+                ? 'updates it'
+                : 'saves the loop'}
           </span>
+          {/* Named only while there is a loop for it to be an alternative to,
+              and not while the loop is half-set — a second way to reach a save
+              BR-04 is refusing is not worth a segment. */}
+          {editing && !halfSet && (
+            <>
+              <span className="px-2">&middot;</span>
+              <span>
+                <Key>&#8679;s</Key> saves a new one
+              </span>
+            </>
+          )}
           <span className="px-2">&middot;</span>
           <Key>f</Key> toggles zen mode
         </>

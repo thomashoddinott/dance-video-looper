@@ -1,9 +1,17 @@
 import type { SavedLoop } from '../loops/loop'
 import type { Loop } from './playback'
-import { isCurrent, nextLoopName, summarise } from './savedLoops'
+import { nextLoopName, summarise } from './savedLoops'
 
 const SAVE_BUTTON =
   'rounded-lg bg-control px-4 py-2.5 text-sm font-semibold text-ink/90 transition hover:bg-control-hi active:scale-95 disabled:pointer-events-none disabled:opacity-40'
+
+/* Deliberately not a second button beside the first. Two of them would put "make
+   another one" under the thumb at exactly the moment it is the wrong answer, and
+   the whole of #30 is that correcting the open loop is the common move. It sits
+   on the line that already says what the write would do, in the weight of a link
+   rather than a control. */
+const AS_NEW_BUTTON =
+  'font-medium text-accent transition hover:underline disabled:pointer-events-none disabled:opacity-40'
 
 /* The last of the five regions US-01-05 reserved, and where a clip's four seconds
    stop being framed and start being kept (UC-01 steps 17–22).
@@ -30,10 +38,13 @@ export function SavedLoopsPanel({
   halfSet,
   saved,
   name,
+  editing,
+  unwritten,
   writing,
   notice,
   onNameChange,
   onSave,
+  onSaveAsNew,
   onRecall,
   onRemove,
 }: {
@@ -42,6 +53,15 @@ export function SavedLoopsPanel({
   readonly halfSet: boolean
   readonly saved: readonly SavedLoop[]
   readonly name: string
+  /* The entry a save writes over, or null for a new one (#30). Handed down
+     rather than worked out here: the screen has to know it anyway — the `s` key
+     is bound at the window and saves through the same two routes — and a second
+     answer derived in here could only ever disagree with it. */
+  readonly editing: SavedLoop | null
+  /* Whether that entry and the player have parted company. Its own prop rather
+     than something recomputed per row, because it is a fact about one entry and
+     the screen already holds every part of the comparison. */
+  readonly unwritten: boolean
   /* Whether a change is on its way to Drive. US-01-15 writes first and lists
      second, so there is a moment — about two hundred milliseconds — when the
      dancer has pressed Save and the list has not moved. Saying so is what
@@ -55,6 +75,7 @@ export function SavedLoopsPanel({
   readonly notice: string | null
   readonly onNameChange: (name: string) => void
   readonly onSave: () => void
+  readonly onSaveAsNew: () => void
   readonly onRecall: (entry: SavedLoop) => void
   readonly onRemove: (id: string) => void
 }) {
@@ -89,7 +110,11 @@ export function SavedLoopsPanel({
 
                 onSave()
               }}
-              placeholder={nextLoopName(saved)}
+              /* What an empty field would keep, which since #30 is one of two
+                 things: the name the open loop already has, or the next number
+                 going. Clearing the box is not a request to rename `chasse` to
+                 `Loop 4`. */
+              placeholder={editing ? editing.name : nextLoopName(saved)}
               aria-label="Loop name"
               className="min-w-0 flex-1 rounded-lg bg-ink/10 px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink/40"
             />
@@ -98,13 +123,23 @@ export function SavedLoopsPanel({
                 to save right now — and routing them through one `disabled`
                 keeps the button and the `s` key agreeing, which is what BR-04
                 means by the guard being single. */}
+            {/* One control saying which of the two writes it would make, rather
+                than two controls to choose between (#30). Lit while there is
+                something unwritten under it, because that is the moment it is
+                worth pressing — and flat again the instant it has been, which
+                is the only confirmation a write that changes nothing on screen
+                can give. */}
             <button
               type="button"
               onClick={onSave}
               disabled={halfSet || writing}
-              className={SAVE_BUTTON}
+              className={
+                editing && unwritten
+                  ? `${SAVE_BUTTON} bg-gradient-to-br from-accent to-accent-2 text-on-accent hover:bg-control-hi`
+                  : SAVE_BUTTON
+              }
             >
-              Save
+              {editing ? 'Update' : 'Save'}
             </button>
           </div>
 
@@ -115,11 +150,36 @@ export function SavedLoopsPanel({
               Half-set, there is nothing to preview: B is still parked at the end
               of the clip, so the honest line is the one naming what is missing
               rather than a pair of times nobody chose (BR-04). */}
-          <p className="mt-1.5 text-xs tabular-nums text-ink/40">
-            {halfSet ? (
-              <span className="tracking-wide">set B to finish the loop</span>
-            ) : (
-              `saves ${summarise({ ...loop, speed })}`
+          {/* Naming the entry by the name it is **stored** under, not by what
+              the field is showing — the field may already be holding the new
+              name, and "updates chasse" is the fact that stops chasse going by
+              accident (#30). */}
+          <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 text-xs tabular-nums text-ink/40">
+            <span className={halfSet ? 'tracking-wide' : undefined}>
+              {halfSet
+                ? 'set B to finish the loop'
+                : editing
+                  ? `updates ${editing.name} to ${summarise({ ...loop, speed })}`
+                  : `saves ${summarise({ ...loop, speed })}`}
+            </span>
+            {/* Only where there is something to be an alternative *to*. On a
+                clip with nothing open, Save already adds one and a second
+                control saying so would be the same action twice.
+
+                It stays put and greys while the loop is half-set, rather than
+                leaving with the line beside it: it reads the same guard the
+                button does (BR-04), and a control that vanishes on a press of
+                space is a worse answer to "why can I not save" than one that
+                is visibly refusing. */}
+            {editing && (
+              <button
+                type="button"
+                onClick={onSaveAsNew}
+                disabled={halfSet || writing}
+                className={AS_NEW_BUTTON}
+              >
+                Save as new
+              </button>
             )}
           </p>
 
@@ -141,7 +201,7 @@ export function SavedLoopsPanel({
               <li
                 key={entry.id}
                 className={`flex items-center gap-1 rounded-lg pr-1 ${
-                  isCurrent({ entry, loop, speed })
+                  entry.id === editing?.id
                     ? 'bg-accent/25 ring-1 ring-accent/60'
                     : 'bg-control/50'
                 }`}
@@ -151,7 +211,7 @@ export function SavedLoopsPanel({
                     only a sighted dancer can see. */}
                 <button
                   type="button"
-                  aria-current={isCurrent({ entry, loop, speed })}
+                  aria-current={entry.id === editing?.id}
                   onClick={() => onRecall(entry)}
                   className="min-w-0 flex-1 px-3 py-2 text-left"
                 >
@@ -166,6 +226,23 @@ export function SavedLoopsPanel({
                     {summarise(entry)}
                   </span>
                 </button>
+                {/* The entry saying that the loop on the sliders is no longer
+                    the loop in Drive — which is what dropping the mark used to
+                    say, said by the thing it is actually about (#30).
+
+                    Outside the recall rather than inside it: the button's
+                    accessible name is what the entry *is*, and a word about
+                    unwritten changes appearing and disappearing inside it would
+                    rename the control under anyone listening to it.
+
+                    The stored times stay as they are beside it. They are what
+                    the dancer stands to lose, and the pending ones are already
+                    on the line above the list. */}
+                {entry.id === editing?.id && unwritten && (
+                  <span className="shrink-0 px-1 text-[11px] font-medium text-accent">
+                    unsaved
+                  </span>
+                )}
                 {/* Its own target beside the recall, not a corner of it. The
                     dancer is reaching for these with a thumb, and a removal
                     reached by mistake costs the loop it took a minute to frame
