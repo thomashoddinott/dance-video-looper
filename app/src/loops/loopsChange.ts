@@ -107,10 +107,11 @@ export const withLoop = (
   loop: SavedLoop,
 ): LoopsFile => withClip(loops, clipId, [...loopsFor(loops, clipId), loop])
 
-/* #30: the same entry, reading differently — new points, a new rate, a new name,
-   under the id it already had. In place, because the panel lists these in the
-   order they were saved and nothing reorders them, so an entry that jumped to
-   the end every time it was corrected would be a second thing happening.
+/* BR-20 (#30): the same entry, reading differently — new points, a new rate, a
+   new name, under the id it already had. In place, because the panel lists these
+   in the order they were saved and nothing reorders them, so an entry that
+   jumped to the end every time it was corrected would be a second thing
+   happening.
 
    Written as a replacement rather than a removal followed by an append for the
    same reason `withoutLoop` is not a rewrite of the whole list: it stays one

@@ -57,8 +57,8 @@ export const nextLoopName = (saved: readonly SavedLoop[]) => {
   return `Loop ${free}`
 }
 
-/* UC-01 step 20: which of the loops on this clip the player is set to, and the
-   entry a save therefore writes over.
+/* UC-01 step 20 and BR-20: which of the loops on this clip the player is set to,
+   and the entry a save therefore writes over.
 
    **By id, which reverses what US-01-11's approval gate settled** (#30). That gate
    chose value equality — A, B and the speed all matching — on the reasoning that

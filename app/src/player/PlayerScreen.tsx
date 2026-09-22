@@ -597,8 +597,8 @@ function OpenedClip({
     })
   }
 
-  /* Two writes wearing one control (#30). With a loop open it corrects that loop
-     in place; with none it adds one, exactly as before. */
+  /* BR-20: two writes wearing one control (#30). With a loop open it corrects
+     that loop in place; with none it adds one, exactly as before. */
   const saveLoop = () => {
     if (editing) {
       writeLoop(editing, (kept) => loops.update(clip.id, kept))
