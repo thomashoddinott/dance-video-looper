@@ -1,14 +1,15 @@
 import type { SavedLoop } from './loop'
 import type { LoopsFile } from './loopsFile'
 
-/* The only two things a device ever does to `loops.json`, and the reason UC-01
+/* The only three things a device ever does to `loops.json`, and the reason UC-01
    Q-05 settled on a merge rather than on last-write-wins with a warning.
 
-   Because a change is only ever "append this loop" or "drop this id", replaying
-   one onto whatever Drive currently holds *is* the merge. There are no
-   tombstones to keep, and a loop the other device removed does not come back to
-   life the way a union of two lists would resurrect it. The merge falls out of
-   how small the operations are rather than having to be designed.
+   Because a change is only ever "append this loop", "drop this id" or "this id
+   now reads like so", replaying one onto whatever Drive currently holds *is* the
+   merge. There are no tombstones to keep, and a loop the other device removed
+   does not come back to life the way a union of two lists would resurrect it.
+   The merge falls out of how small the operations are rather than having to be
+   designed.
 
    Everything here is a plain function of a `LoopsFile`, so the same code path
    serves the optimistic local answer and the write that goes to Drive. */
@@ -105,6 +106,32 @@ export const withLoop = (
   clipId: string,
   loop: SavedLoop,
 ): LoopsFile => withClip(loops, clipId, [...loopsFor(loops, clipId), loop])
+
+/* BR-20 (#30): the same entry, reading differently — new points, a new rate, a
+   new name, under the id it already had. In place, because the panel lists these
+   in the order they were saved and nothing reorders them, so an entry that
+   jumped to the end every time it was corrected would be a second thing
+   happening.
+
+   Written as a replacement rather than a removal followed by an append for the
+   same reason `withoutLoop` is not a rewrite of the whole list: it stays one
+   small operation, so replaying it onto whatever Drive holds is still the merge.
+
+   Being a no-op for an id the file no longer has is the load-bearing half of
+   that. The other device may have removed this loop while it was being
+   corrected, and by the time the replacement replays there is nothing to
+   replace — so nothing is added. An append would resurrect a deleted loop, which
+   is the one thing Q-05's merge has always refused to do. */
+export const withLoopReplaced = (
+  loops: LoopsFile,
+  clipId: string,
+  loop: SavedLoop,
+): LoopsFile =>
+  withClip(
+    loops,
+    clipId,
+    loopsFor(loops, clipId).map((held) => (held.id === loop.id ? loop : held)),
+  )
 
 /* A no-op for an id that is not there, and that is a real case rather than
    defensiveness: the other device may have removed it first, and the merge

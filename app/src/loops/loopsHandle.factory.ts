@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 
 import type { LoopsChange } from './driveLoops'
 import type { SavedLoop } from './loop'
-import { withLoop, withoutLoop } from './loopsChange'
+import { withLoop, withLoopReplaced, withoutLoop } from './loopsChange'
 import type { LoopsFile } from './loopsFile'
 import { NO_LOOPS } from './loopsFile'
 import type { LoopsHandle } from './useLoops'
@@ -18,7 +18,11 @@ export const A_REFUSAL = 'Drive would not take it.'
    function was called, which is a different and much weaker claim.
 
    The two options are the two things a fake cannot be asked to do by accident:
-   refuse a write, and take its time over one. */
+   refuse a write, and take its time over one.
+
+   All three changes go through one `write` here for the same reason they do in
+   `useLoops`: a fake where an update took a different route to a save would let
+   the panel pass tests the real store would fail. */
 export const useFakeLoops = ({
   seed = NO_LOOPS,
   refuses = false,
@@ -62,11 +66,17 @@ export const useFakeLoops = ({
     [write],
   )
 
+  const update = useCallback(
+    (clipId: string, loop: SavedLoop) =>
+      write((current) => withLoopReplaced(current, clipId, loop)),
+    [write],
+  )
+
   const remove = useCallback(
     (clipId: string, id: string) =>
       write((current) => withoutLoop(current, clipId, id)),
     [write],
   )
 
-  return { loops, writing, notice, save, remove }
+  return { loops, writing, notice, save, update, remove }
 }

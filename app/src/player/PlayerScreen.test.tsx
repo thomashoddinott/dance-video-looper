@@ -1663,6 +1663,14 @@ const nameField = () => panel().getByRole('textbox', { name: 'Loop name' })
 
 const saveControl = () => panel().getByRole('button', { name: 'Save' })
 
+/* #30. The same control, saying which of the two writes it would make. They are
+   asked for by their names rather than by position, so a test that expects an
+   Update and gets a Save fails on the control not being there at all. */
+const updateControl = () => panel().getByRole('button', { name: 'Update' })
+
+const saveAsNewControl = () =>
+  panel().getByRole('button', { name: 'Save as new' })
+
 describe('the saved loops panel', () => {
   it('names itself, so the region is more than a box', () => {
     aReadyClip({ seconds: 12 })
@@ -1767,24 +1775,17 @@ describe('saving a loop', () => {
     expect(nameField()).toHaveValue('')
   })
 
-  it('offers the next number once one is taken', async () => {
+  /* #30. The field is cleared as it always was, but what it offers afterwards is
+     the loop just saved rather than the next number going — because that loop is
+     now the one a save writes to, and offering `Loop 2` over it would rename it
+     on the next press. The next free number is what it offers when nothing is
+     open, which the restored-loops case below pins. */
+  it('offers the loop just saved, which is the one a save now writes to', async () => {
     aReadyClip({ seconds: 12 })
 
     await userEvent.click(saveControl())
 
-    expect(nameField()).toHaveAttribute('placeholder', 'Loop 2')
-  })
-
-  it('keeps each loop rather than replacing the last', async () => {
-    aReadyClip({ seconds: 12 })
-
-    await userEvent.click(saveControl())
-    await userEvent.click(saveControl())
-
-    expect(savedEntries()).toEqual([
-      'Loop 10:00 - 0:12 · 1x',
-      'Loop 20:00 - 0:12 · 1x',
-    ])
+    expect(nameField()).toHaveAttribute('placeholder', 'Loop 1')
   })
 
   /* BR-10 again: the offered name is what an empty field means, and a field
@@ -1826,6 +1827,34 @@ describe('the line beneath the name field', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Much slower' }))
 
     expect(panel().getByText(/^saves 0:00 - 0:12 · 0.9x$/)).toBeInTheDocument()
+  })
+
+  /* #30. Once there is an entry to write over, the line has to say which one —
+     the field above may already be showing a different name, and the loop about
+     to be overwritten is the fact the dancer needs in order not to lose it. By
+     its **stored** name for exactly that reason. */
+  it('names the loop an update would write over', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.type(nameField(), 'chasse')
+    await userEvent.click(saveControl())
+    fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
+
+    expect(
+      panel().getByText(/^updates chasse to 0:00 - 0:11 · 1x$/),
+    ).toBeInTheDocument()
+  })
+
+  it('goes on naming it by the name it is stored under while it is renamed', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.type(nameField(), 'chasse')
+    await userEvent.click(saveControl())
+    await userEvent.type(nameField(), 'the hard bit')
+
+    expect(
+      panel().getByText(/^updates chasse to 0:00 - 0:12 · 1x$/),
+    ).toBeInTheDocument()
   })
 })
 
@@ -1967,12 +1996,15 @@ const removeControl = (name: string) =>
    reaching for them with a thumb — so removing has to be its own target, not a
    corner of the one that recalls. */
 describe('removing a saved loop', () => {
+  /* Three presses of Save would now be one loop corrected twice (#30), so the
+     list is built the way a dancer builds one: the first is a save, and each
+     one after it is deliberately a new one. */
   const threeSaved = async () => {
     aReadyClip({ seconds: 12 })
 
     await userEvent.click(saveControl())
-    await userEvent.click(saveControl())
-    await userEvent.click(saveControl())
+    await userEvent.click(saveAsNewControl())
+    await userEvent.click(saveAsNewControl())
   }
 
   it('takes it out of the list', async () => {
@@ -1986,11 +2018,14 @@ describe('removing a saved loop', () => {
     ])
   })
 
+  /* Loop 3 goes first because it is the one the player is set to, and the offer
+     is its name for as long as it is (#30). Once it is gone there is nothing to
+     write over, and the offer goes back to being the lowest number free. */
   it('frees the number for the next loop saved', async () => {
     await threeSaved()
 
+    await userEvent.click(removeControl('Loop 3'))
     await userEvent.click(removeControl('Loop 1'))
-    await userEvent.click(removeControl('Loop 2'))
 
     expect(nameField()).toHaveAttribute('placeholder', 'Loop 1')
   })
@@ -2036,10 +2071,14 @@ const markedEntries = () =>
     .map((recall) => recall.textContent?.trim())
 
 /* UC-01 step 20. With half a dozen loops on one clip, the list says which of them
-   the player is actually set to — otherwise the dancer is reading times off the
-   slider and matching them by eye. Marked by value, so it is a claim about where
-   they are rather than a memory of where they last tapped. */
-describe('the loop currently loaded', () => {
+   the player is set to — otherwise the dancer is reading times off the slider and
+   matching them by eye.
+
+   **Marked by id since #30**, which reverses US-01-11's approval gate. The mark's
+   job is to name the entry the next save lands on, and value equality let go of
+   that at exactly the moment it mattered: drag A back half a second and the app
+   had forgotten which loop was being corrected. */
+describe('the loop the player is set to', () => {
   it('is marked as soon as it is saved', async () => {
     aReadyClip({ seconds: 12 })
 
@@ -2048,52 +2087,287 @@ describe('the loop currently loaded', () => {
     expect(markedEntries()).toEqual(['Loop 10:00 - 0:12 · 1x'])
   })
 
-  it('stops being marked once the loop is reframed', async () => {
+  it('stays marked while the loop is reframed, because that is what an update writes to', async () => {
     aReadyClip({ seconds: 12 })
 
     await userEvent.click(saveControl())
     fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
 
-    expect(markedEntries()).toEqual([])
+    expect(markedEntries()).toEqual(['Loop 10:00 - 0:12 · 1x'])
   })
 
-  /* BR-09 again: the speed is part of the loop, so a section at a different
-     tempo is a different loop even where both boundaries agree. */
-  it('stops being marked once the tempo changes', async () => {
+  it('stays marked while the tempo changes', async () => {
     aReadyClip({ seconds: 12 })
 
     await userEvent.click(saveControl())
     await userEvent.click(screen.getByRole('button', { name: 'Much slower' }))
 
-    expect(markedEntries()).toEqual([])
+    expect(markedEntries()).toEqual(['Loop 10:00 - 0:12 · 1x'])
   })
 
-  it('is marked again when it is recalled', async () => {
-    const clip = aReadyClip({ seconds: 12 })
+  it('moves to the loop that is opened', async () => {
+    aReadyClip({ seconds: 12 })
 
     await userEvent.click(saveControl())
-    clip.currentTime = 3
-    press('Space')
-    clip.currentTime = 7
-    press('Space')
-    await userEvent.click(saveControl())
+    await userEvent.click(saveAsNewControl())
     await userEvent.click(savedLoop('Loop 1'))
 
     expect(markedEntries()).toEqual(['Loop 10:00 - 0:12 · 1x'])
   })
 
-  it('marks only the one the player is set to', async () => {
+  it('marks one entry and not its neighbours', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+    await userEvent.click(saveAsNewControl())
+
+    expect(markedEntries()).toEqual(['Loop 20:00 - 0:12 · 1x'])
+  })
+
+  /* Looked up rather than held, so the mark cannot outlive the entry — and the
+     panel goes back to adding, which is what the Save label says. */
+  it('leaves nothing marked once that loop is removed', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+    await userEvent.click(removeControl('Loop 1'))
+    await userEvent.click(saveControl())
+
+    expect(markedEntries()).toEqual(['Loop 10:00 - 0:12 · 1x'])
+    expect(savedEntries()).toHaveLength(1)
+  })
+})
+
+/* #30, and the whole of it: the loop you opened is the loop you correct. A
+   dancer fixing a section that starts half a second late was getting a second
+   entry for it instead — and with no rename and no reorder in the panel, a few
+   of those is how the list stops being usable. */
+describe('correcting the loop the player is set to', () => {
+  const aSavedLoopReframed = async () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
     press('Space')
     clip.currentTime = 7
     press('Space')
-    await userEvent.click(saveControl())
-    fireEvent.keyDown(boundary('Loop end'), { key: 'End' })
+    await userEvent.type(nameField(), 'chasse')
     await userEvent.click(saveControl())
 
-    expect(markedEntries()).toEqual(['Loop 20:03 - 0:12 · 1x'])
+    fireEvent.keyDown(boundary('Loop start'), { key: 'ArrowLeft' })
+
+    return clip
+  }
+
+  it('offers to update rather than to save', async () => {
+    await aSavedLoopReframed()
+
+    expect(updateControl()).toBeInTheDocument()
+    expect(panel().queryByRole('button', { name: 'Save' })).toBeNull()
+  })
+
+  it('writes the new boundaries over the entry that was there', async () => {
+    await aSavedLoopReframed()
+
+    await userEvent.click(updateControl())
+
+    expect(savedEntries()).toEqual(['chasse0:02 - 0:07 · 1x'])
+  })
+
+  it('writes the new tempo over it too, because the tempo is part of the loop', async () => {
+    await aSavedLoopReframed()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Much slower' }))
+    await userEvent.click(updateControl())
+
+    expect(savedEntries()).toEqual(['chasse0:02 - 0:07 · 0.9x'])
+  })
+
+  /* The rename US-01-11 listed as an open question and never had: the field is
+     already the name of the loop being written, so typing in it renames. */
+  it('renames it when a different name is typed', async () => {
+    await aSavedLoopReframed()
+
+    await userEvent.type(nameField(), 'the hard bit')
+    await userEvent.click(updateControl())
+
+    expect(savedEntries()).toEqual(['the hard bit0:02 - 0:07 · 1x'])
+  })
+
+  it('keeps the name it had when the field is left empty', async () => {
+    await aSavedLoopReframed()
+
+    await userEvent.click(updateControl())
+
+    expect(savedEntries()).toEqual(['chasse0:02 - 0:07 · 1x'])
+  })
+
+  /* In the file, which is what the replacement is about: the entry is written
+     over rather than removed and re-added. What the panel *shows* has been start
+     order since #28, so a correction that moves A moves the row with it — by
+     that rule rather than as a side effect of this one. */
+  it('leaves it where it was rather than sending it to the end', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+    await userEvent.click(saveAsNewControl())
+    await userEvent.click(savedLoop('Loop 1'))
+    fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
+    await userEvent.click(updateControl())
+
+    expect(savedEntries()).toEqual([
+      'Loop 10:00 - 0:11 · 1x',
+      'Loop 20:00 - 0:12 · 1x',
+    ])
+  })
+
+  it('updates the loop opened from the list, not the one last saved', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+    await userEvent.click(saveAsNewControl())
+    await userEvent.click(savedLoop('Loop 1'))
+    fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
+    await userEvent.click(updateControl())
+
+    expect(savedEntries()).toHaveLength(2)
+  })
+
+  /* A save does not have to be followed by a recall to be editable. Without
+     this, the first save of a new loop is still followed by Loop 2, Loop 3,
+     Loop 4 as the dancer corrects it — which is the whole complaint. */
+  it('corrects the loop just saved without it having to be opened again', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+    fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
+    await userEvent.click(updateControl())
+
+    expect(savedEntries()).toEqual(['Loop 10:00 - 0:11 · 1x'])
+  })
+
+  it('goes back to saving once the loop being corrected is removed', async () => {
+    await aSavedLoopReframed()
+
+    await userEvent.click(removeControl('chasse'))
+
+    expect(saveControl()).toBeInTheDocument()
+    expect(panel().queryByRole('button', { name: 'Update' })).toBeNull()
+  })
+
+  /* BR-04's guard is single across every route in, and an update is a fourth
+     route rather than an exception to it. */
+  it('is refused on a half-set loop, exactly as a save is', async () => {
+    const clip = await aSavedLoopReframed()
+
+    clip.currentTime = 5
+    press('Space')
+
+    expect(updateControl()).toBeDisabled()
+  })
+})
+
+/* The way out. Opening a loop and then wanting a *second* one out of the same
+   stretch of clip is a real move — it is just the rarer one, so it gets the
+   smaller control rather than the default. */
+describe('saving a new loop while one is open', () => {
+  it('adds one rather than writing over the open one', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+    fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
+    await userEvent.click(saveAsNewControl())
+
+    expect(savedEntries()).toEqual([
+      'Loop 10:00 - 0:12 · 1x',
+      'Loop 20:00 - 0:11 · 1x',
+    ])
+  })
+
+  it('takes the next number going, rather than the open loop’s name', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+    await userEvent.click(saveAsNewControl())
+
+    expect(savedEntries()).toEqual([
+      'Loop 10:00 - 0:12 · 1x',
+      'Loop 20:00 - 0:12 · 1x',
+    ])
+  })
+
+  it('leaves the new one open, so the next press corrects it', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+    await userEvent.click(saveAsNewControl())
+    fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
+    await userEvent.click(updateControl())
+
+    expect(savedEntries()).toEqual([
+      'Loop 10:00 - 0:12 · 1x',
+      'Loop 20:00 - 0:11 · 1x',
+    ])
+  })
+
+  it('is not offered before there is a loop to write over', () => {
+    aReadyClip({ seconds: 12 })
+
+    expect(panel().queryByRole('button', { name: 'Save as new' })).toBeNull()
+  })
+
+  it('is refused on a half-set loop, exactly as a save is', async () => {
+    const clip = aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+    clip.currentTime = 5
+    press('Space')
+
+    expect(saveAsNewControl()).toBeDisabled()
+  })
+})
+
+/* An entry that no longer matches the player is the thing value equality used to
+   say by dropping the mark. Said by the entry itself now, which is the more
+   useful claim: not "you are elsewhere" but "this is what you would write over,
+   and it has moved". */
+describe('an open loop with changes not written yet', () => {
+  const editedEntry = () =>
+    panel().getAllByRole('listitem')[0]?.textContent ?? ''
+
+  it('says nothing while the entry and the player agree', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+
+    expect(editedEntry()).not.toMatch(/unsaved/i)
+  })
+
+  it('says so once a boundary moves', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+    fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
+
+    expect(editedEntry()).toMatch(/unsaved/i)
+  })
+
+  it('says so once a different name is typed', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+    await userEvent.type(nameField(), 'the hard bit')
+
+    expect(editedEntry()).toMatch(/unsaved/i)
+  })
+
+  it('stops saying so once the update lands', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+    fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
+    await userEvent.click(updateControl())
+
+    expect(editedEntry()).not.toMatch(/unsaved/i)
   })
 })
 
@@ -2161,6 +2435,44 @@ describe('saving with the s key', () => {
     press('KeyS')
 
     expect(panel().queryAllByRole('listitem')).toEqual([])
+  })
+})
+
+/* #30. The key follows the button rather than keeping a rule of its own — `s`
+   means whichever write the control is offering, and shift is the way to the
+   other one, exactly as the smaller control beside it is. */
+describe('correcting and adding with the s key', () => {
+  it('writes over the open loop, as the button would', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+    fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
+    press('KeyS')
+
+    expect(savedEntries()).toEqual(['Loop 10:00 - 0:11 · 1x'])
+  })
+
+  it('adds one instead when shift is held', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+    fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
+    fireEvent.keyDown(window, { code: 'KeyS', shiftKey: true })
+
+    expect(savedEntries()).toEqual([
+      'Loop 10:00 - 0:12 · 1x',
+      'Loop 20:00 - 0:11 · 1x',
+    ])
+  })
+
+  it('is refused on a half-set loop with shift held, exactly as without it', () => {
+    const clip = aReadyClip({ seconds: 12 })
+
+    clip.currentTime = 3
+    press('Space')
+    fireEvent.keyDown(window, { code: 'KeyS', shiftKey: true })
+
+    expect(savedEntries()).toEqual([])
   })
 })
 
@@ -2240,6 +2552,31 @@ describe('the s segment of the hint line', () => {
 
     expect(hintLine()).toHaveTextContent(/s\s+saves the loop/i)
   })
+
+  /* #30. The line says which write the key would make, for the same reason the
+     button does — and names shift only once there is a loop for it to be an
+     alternative to. */
+  it('says the key updates while a loop is open', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+
+    expect(hintLine()).toHaveTextContent(/s\s+updates it/i)
+  })
+
+  it('names shift-s as the way to a new one while a loop is open', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+
+    expect(hintLine()).toHaveTextContent(/s\s+saves a new one/i)
+  })
+
+  it('leaves shift-s unmentioned while there is nothing to write over', () => {
+    aReadyClip({ seconds: 12 })
+
+    expect(hintLine()).not.toHaveTextContent(/saves a new one/i)
+  })
 })
 
 /* US-01-15. The panel's list is no longer something the screen keeps — it is
@@ -2270,8 +2607,10 @@ describe('a loop on its way to Drive', () => {
     expect(saveControl()).toBeDisabled()
 
     letGo()
+    /* Update by the time it is enabled again: the loop that has just landed is
+       the one the next press writes to (#30). */
     await waitFor(() => {
-      expect(saveControl()).toBeEnabled()
+      expect(updateControl()).toBeEnabled()
     })
   })
 
@@ -3016,6 +3355,54 @@ describe('scrubbing while the loop runs', () => {
     act(() => vi.advanceTimersByTime(A_FEW_FRAMES))
 
     expect(clip.currentTime).toBe(5)
+  })
+})
+
+/* Where #28 and #30 meet, settled when they were merged. A chain and an open
+   loop are two different answers to "what is the player set to" — one is *which
+   loops to play*, the other is *which entry a save writes over* — and four rows
+   ticked have no single answer to the second. */
+describe('ticking a run while a loop is open', () => {
+  it('releases the open loop, so a save adds rather than overwrites', async () => {
+    aClipWithTwoSections()
+
+    await userEvent.click(savedLoop('the opening'))
+    await userEvent.click(chainBox('the opening'))
+    await userEvent.click(chainBox('the answer'))
+    await userEvent.click(saveControl())
+
+    /* Listed in start order since #28, so the run sits beside the section it
+       opens with rather than at the end. */
+    expect(savedEntries()).toEqual([
+      'the opening0:04 - 0:11 · 0.8x',
+      'Loop 10:04 - 0:18 · 0.8x',
+      'the answer0:11 - 0:18 · 1x',
+    ])
+  })
+
+  it('leaves no entry claiming to be the one a save writes to', async () => {
+    aClipWithTwoSections()
+
+    await userEvent.click(savedLoop('the opening'))
+    await userEvent.click(chainBox('the answer'))
+
+    expect(markedEntries()).toEqual([])
+  })
+
+  /* The other direction is #28's own rule, read from this side: opening a loop
+     takes the ticks off, and it is that loop a save then writes over. */
+  it('takes the open loop back up when one is tapped again', async () => {
+    aClipWithTwoSections()
+
+    await userEvent.click(chainBox('the opening'))
+    await userEvent.click(chainBox('the answer'))
+    await userEvent.click(savedLoop('the answer'))
+    await userEvent.click(updateControl())
+
+    expect(savedEntries()).toEqual([
+      'the opening0:04 - 0:11 · 0.8x',
+      'the answer0:11 - 0:18 · 1x',
+    ])
   })
 })
 

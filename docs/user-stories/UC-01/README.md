@@ -1,6 +1,6 @@
 # UC-01 — user stories
 
-Eighteen stories for [UC-01: Loop a section of a clip](../../use-cases/UC-01_Loop_a_section_of_a_clip.md).
+Nineteen stories for [UC-01: Loop a section of a clip](../../use-cases/UC-01_Loop_a_section_of_a_clip.md).
 All **DRAFT**. Generation 1, so the numbers below are the only ones in play.
 
 **Thirteen are cut from the mockup** — two pages, each a skeleton plus the components
@@ -9,11 +9,15 @@ the method allows as *non-component stories*: cross-cutting concerns that span t
 others and are independently testable. Google Drive is the textbook case, since it
 is what every one of the thirteen is quietly assuming.
 
-Two were added later than the original sixteen. **US-01-17** on 2026-09-04, when the
+Three were added later than the original sixteen. **US-01-17** on 2026-09-04, when the
 spike behind UC-01 Q-07 returned GO — a storage story by the same test: no surface,
 and it changes what every clip *is* on its way to Drive. **US-01-18** on 2026-09-06,
 once the library grew past the size US-01-03 had judged search against — a Clips
 screen component, and a **mockup gate pass**, since it is built before it is drawn.
+**US-01-19** on 2026-09-22, from practising against the real thing: the panel only
+ever appended, so correcting a loop left the wrong one on the list beside it. It is
+a **revision of US-01-11** rather than a new component, and it reverses a decision
+that story's approval gate settled — which is why it is a story rather than a note.
 
 ## Clips screen — `mockup/src/Library.jsx`
 
@@ -36,6 +40,7 @@ screen component, and a **mockup gate pass**, since it is built before it is dra
 | [US-01-09](US-01-09_Speed_stepper.md) | Speed stepper | `Player.jsx:119–149` | #25 |
 | [US-01-10](US-01-10_Keyboard_shortcuts.md) | Keyboard shortcuts and the hint line | `Player.jsx:334–389` | #26 |
 | [US-01-11](US-01-11_Saved_loops_panel.md) | Saved loops panel | `Player.jsx:574–644` | #27 |
+| [US-01-19](US-01-19_Overwrite_the_open_loop.md) | Overwrite the open loop — revises US-01-11 | `Player.jsx` — the panel | #30 |
 | [US-01-12](US-01-12_Zen_mode.md) | Zen mode | `Player.jsx:481–523` | #28 |
 
 ## Storage — no mockup surface

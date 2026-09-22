@@ -22,6 +22,13 @@ function formatSpeed(speed) {
   return String(Math.round(speed * 100) / 100)
 }
 
+/* Written once, because the panel says it twice: under the field as what a write
+   would keep, and under each entry as what one already did. The line above the
+   list is a preview of the line below it, so two copies would be free to drift. */
+function summarise(loop, speed) {
+  return `${formatTime(loop.a)} - ${formatTime(loop.b)} · ${formatSpeed(speed)}x`
+}
+
 /* Ticking saved loops chains them into one: earliest start to latest end. Drill
    segment 1, drill segment 2, then run 1+2 — that habit is what this is for, and
    it beats saving a third loop that duplicates the other two.
@@ -468,6 +475,13 @@ function Player({ clip, onBack }) {
   const [chain, setChain] = useState([])
   const [name, setName] = useState('')
   const [nextId, setNextId] = useState(1)
+  /* Which saved loop the controls are currently *on*. Set by opening one from
+     the list, and also by saving — so the loop you just wrote is the loop you
+     are now editing, and a second press of Save corrects it rather than laying
+     down Loop 4, Loop 5, Loop 6 beside it. Making a new one is a deliberate
+     act now ("Save as new"), which is the right way round: the common move
+     after loading a loop is to fix it. */
+  const [editingId, setEditingId] = useState(null)
   const [nextPoint, setNextPoint] = useState('a')
   const [zen, setZen] = useState(false)
 
@@ -476,6 +490,7 @@ function Player({ clip, onBack }) {
   const loopingRef = useRef(looping)
   const nextPointRef = useRef(nextPoint)
   const saveLoopRef = useRef(null)
+  const saveAsNewRef = useRef(null)
 
   useEffect(() => {
     loopRef.current = loop
@@ -538,7 +553,8 @@ function Player({ clip, onBack }) {
   /* Space sets the loop points and is deliberately NOT play/pause. Setting A and
      B is what you do while watching, so it earns the most reachable key; play
      has three other ways to reach it. Pressing cycles A, B, A...
-     S saves the loop under whatever name the field below is showing. */
+     S saves the loop under whatever name the field below is showing — writing
+     over the open loop if there is one, and shift-S forcing a new one. */
   useEffect(() => {
     const typing = (target) =>
       target instanceof HTMLElement &&
@@ -553,7 +569,8 @@ function Player({ clip, onBack }) {
 
       if (event.code === 'KeyS') {
         event.preventDefault()
-        saveLoopRef.current()
+        if (event.shiftKey) saveAsNewRef.current()
+        else saveLoopRef.current()
         return
       }
 
@@ -682,25 +699,67 @@ function Player({ clip, onBack }) {
      here rather than at the key handler, so the button obeys the same rule. */
   const halfSet = nextPoint === 'b'
 
+  /* Looked up rather than held, so deleting the loop you were editing simply
+     stops there being one and the button goes back to Save. */
+  const editing = saved.find((item) => item.id === editingId) ?? null
+
+  /* An emptied field falls back rather than saving a nameless loop — to the open
+     loop's own name where there is one, because clearing the box is not a
+     request to rename `chasse` to `Loop 4`. */
+  const willName = name.trim() || editing?.name || `Loop ${saved.length + 1}`
+
+  /* Whether Update would actually write anything. Only used to mark the row —
+     the button stays live either way, because a disabled Save is a worse
+     answer to "did that save?" than a save that changed nothing. */
+  const dirty =
+    !!editing &&
+    (editing.a !== loop.a ||
+      editing.b !== loop.b ||
+      editing.speed !== speed ||
+      editing.name !== willName)
+
   const saveLoop = () => {
     if (halfSet) return
-    setSaved([
-      ...saved,
-      {
-        id: nextId,
-        name: name.trim() || `Loop ${saved.length + 1}`,
-        a: loop.a,
-        b: loop.b,
-        speed,
-      },
-    ])
+    if (!editing) return saveAsNew()
+
+    setSaved(
+      saved.map((item) =>
+        item.id === editing.id
+          ? { ...item, name: willName, a: loop.a, b: loop.b, speed }
+          : item,
+      ),
+    )
+    setName('')
+  }
+
+  /* The way out. Loading a loop and then wanting a *second* one from the same
+     stretch of clip is a real move — it is just the rarer one, so it gets the
+     smaller button instead of the default.
+
+     No `editing` in the name, so it takes the next number rather than the open
+     loop's: two rows called `chasse` are indistinguishable in a list with no
+     reorder. */
+  const saveAsNew = () => {
+    if (halfSet) return
+
+    const added = {
+      id: nextId,
+      name: name.trim() || `Loop ${saved.length + 1}`,
+      a: loop.a,
+      b: loop.b,
+      speed,
+    }
+
+    setSaved([...saved, added])
     setNextId(nextId + 1)
     setName('')
+    setEditingId(added.id)
   }
 
   // the key handler subscribes once, so it reaches save through a ref
   useEffect(() => {
     saveLoopRef.current = saveLoop
+    saveAsNewRef.current = saveAsNew
   })
 
   const loadLoop = (item) => {
@@ -709,6 +768,12 @@ function Player({ clip, onBack }) {
     setSpeed(item.speed)
     setLooping(true)
     setNextPoint('a')
+    setEditingId(item.id)
+    /* Cleared rather than pre-filled with the name: a value would have to be
+       deleted before a new one could be typed over it, and the placeholder says
+       the same thing without being in the way. It also means whatever was
+       half-typed before you tapped the row cannot quietly rename it. */
+    setName('')
     scrub(item.a)
   }
 
@@ -736,14 +801,13 @@ function Player({ clip, onBack }) {
       ? chain.filter((one) => one !== id)
       : [...chain, id]
     setChain(next)
+    /* And nothing is open any more. A run is not a loop: four ticked rows have
+       no single answer to which entry a save writes over, and leaving the last
+       one open would let the next press replace it with a span covering all
+       four. */
+    setEditingId(null)
     playRun(saved.filter((item) => next.includes(item.id)))
   }
-
-  /* Which row the player is actually set to. A run of two matches no row, which
-     is the truth — the span it plays is no saved loop, and the ticks already say
-     which ones made it. */
-  const isCurrent = (item) =>
-    item.a === loop.a && item.b === loop.b && item.speed === speed
 
   return (
     <div className="min-h-screen bg-shell text-ink">
@@ -865,8 +929,21 @@ function Player({ clip, onBack }) {
             </span>
             <span className="px-2">&middot;</span>
             <span className={halfSet ? 'opacity-40' : undefined}>
-              <Key>s</Key> {halfSet ? 'saves once B is set' : 'saves the loop'}
+              <Key>s</Key>{' '}
+              {halfSet
+                ? 'saves once B is set'
+                : editing
+                  ? 'updates it'
+                  : 'saves the loop'}
             </span>
+            {editing && !halfSet && (
+              <>
+                <span className="px-2">&middot;</span>
+                <span>
+                  <Key>&#8679;s</Key> saves a new one
+                </span>
+              </>
+            )}
             <span className="px-2">&middot;</span>
             <Key>f</Key> toggles zen mode
           </p>
@@ -896,27 +973,52 @@ function Player({ clip, onBack }) {
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder={`Loop ${saved.length + 1}`}
+                placeholder={editing ? editing.name : `Loop ${saved.length + 1}`}
                 aria-label="Loop name"
                 className="min-w-0 flex-1 rounded-lg bg-ink/10 px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink/40"
               />
+              {/* The one button, and it means whichever of the two things you
+                  are actually doing. Two side by side would put "make another
+                  one" under the thumb at exactly the moment it is wrong. */}
               <button
                 type="button"
                 onClick={saveLoop}
                 disabled={halfSet}
-                className={`rounded-lg px-4 py-2.5 text-sm font-semibold active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${CONTROL}`}
+                className={`rounded-lg px-4 py-2.5 text-sm font-semibold active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${
+                  editing && dirty
+                    ? 'bg-gradient-to-br from-accent to-accent-2 text-on-accent shadow'
+                    : CONTROL
+                }`}
               >
-                Save
+                {editing ? 'Update' : 'Save'}
               </button>
             </div>
-            <p className="mt-1.5 text-xs tabular-nums text-ink/40">
-              {halfSet ? (
-                <span className="tracking-wide">set B to finish the loop</span>
-              ) : (
-                <>
-                  saves {formatTime(loop.a)} - {formatTime(loop.b)} &middot;{' '}
-                  {formatSpeed(speed)}x
-                </>
+
+            {/* Says which loop is about to be written over, by the name it is
+                still stored under — the field above may already be showing a
+                new one, and "updates Loop 3" is the fact you need to not lose
+                Loop 3 by accident. */}
+            <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 text-xs tabular-nums text-ink/40">
+              <span className={halfSet ? 'tracking-wide' : undefined}>
+                {halfSet
+                  ? 'set B to finish the loop'
+                  : editing
+                    ? `updates ${editing.name} to ${summarise(loop, speed)}`
+                    : `saves ${summarise(loop, speed)}`}
+              </span>
+              {/* Stays put and greys while the loop is half-set rather than
+                  leaving with the line beside it — a control that vanishes on a
+                  press of space is a worse answer to "why can I not save" than
+                  one that is visibly refusing. */}
+              {editing && (
+                <button
+                  type="button"
+                  onClick={saveAsNew}
+                  disabled={halfSet}
+                  className="font-medium text-accent hover:underline disabled:pointer-events-none disabled:opacity-40"
+                >
+                  Save as new
+                </button>
               )}
             </p>
 
@@ -930,8 +1032,14 @@ function Player({ clip, onBack }) {
               {inTimeOrder(saved).map((item) => (
                 <li
                   key={item.id}
+                  /* Held by id now, not by whether the numbers happen to match.
+                     The value match let go the instant you nudged A — which is
+                     the moment the highlight is doing its only real job:
+                     showing which row the next Save lands on. */
                   className={`flex items-center gap-1 rounded-lg pr-1 ${
-                    isCurrent(item) ? 'bg-accent/25 ring-1 ring-accent/60' : 'bg-control/50'
+                    item.id === editing?.id
+                      ? 'bg-accent/25 ring-1 ring-accent/60'
+                      : 'bg-control/50'
                   }`}
                 >
                   {/* Nothing to chain a lone loop to, so the column only appears
@@ -954,10 +1062,20 @@ function Player({ clip, onBack }) {
                       {item.name}
                     </span>
                     <span className="block text-xs tabular-nums text-ink/50">
-                      {formatTime(item.a)} - {formatTime(item.b)} &middot;{' '}
-                      {formatSpeed(item.speed)}x
+                      {summarise(item, item.speed)}
                     </span>
                   </button>
+                  {/* Still the stored numbers beside it, because they are what
+                      you stand to lose — the pending ones are already on the
+                      line under the field. Outside the row's own button rather
+                      than inside it: the button is named by what the loop *is*,
+                      and a word coming and going in there renames the control
+                      under anyone listening to the page. */}
+                  {dirty && item.id === editing.id && (
+                    <span className="shrink-0 px-1 text-[11px] font-medium text-accent">
+                      unsaved
+                    </span>
+                  )}
                   <button
                     type="button"
                     aria-label={`Delete ${item.name}`}

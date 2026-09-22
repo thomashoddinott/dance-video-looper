@@ -7,6 +7,7 @@ import {
   loopsFor,
   openedAt,
   withLoop,
+  withLoopReplaced,
   withOpens,
   withoutLoop,
 } from './loopsChange'
@@ -26,10 +27,11 @@ const holding = (
   touched: Record<string, string> = {},
 ) => ({ ...NO_LOOPS, clips, touched })
 
-/* These two are the whole of what a device ever does to `loops.json`, and that
-   is the point: because the only changes are "append this one" and "drop this
-   id", replaying one onto whatever Drive currently holds is a complete merge.
-   No tombstones, and no deleted loop coming back to life (UC-01 Q-05). */
+/* These three are the whole of what a device ever does to `loops.json`, and that
+   is the point: because the only changes are "append this one", "drop this id"
+   and "this id now reads like so", replaying one onto whatever Drive currently
+   holds is a complete merge. No tombstones, and no deleted loop coming back to
+   life (UC-01 Q-05). */
 describe('adding a loop', () => {
   it('starts the list for a clip that had none', () => {
     const loop = getLoop()
@@ -57,6 +59,80 @@ describe('adding a loop', () => {
     expect(
       withLoop(holding({ [ANOTHER_CLIP]: [theirs] }), A_CLIP, mine).clips,
     ).toEqual({ [ANOTHER_CLIP]: [theirs], [A_CLIP]: [mine] })
+  })
+})
+
+/* #30. The third change, and the one that keeps the list the size the dancer
+   thinks it is: correcting a loop that starts half a second late has to write
+   over the loop rather than beside it. */
+describe('replacing a loop', () => {
+  it('takes the new values under the same id', () => {
+    const before = getLoop({ id: 'the-hard-bit', a: 3, b: 7, speed: 1 })
+    const after = { ...before, a: 2.5, b: 7.5, speed: 0.75 }
+
+    expect(
+      withLoopReplaced(holding({ [A_CLIP]: [before] }), A_CLIP, after),
+    ).toEqual(holding({ [A_CLIP]: [after] }))
+  })
+
+  it('renames it, because the name is saved with the rest', () => {
+    const before = getLoop({ id: 'the-hard-bit', name: 'Loop 1' })
+
+    expect(
+      withLoopReplaced(holding({ [A_CLIP]: [before] }), A_CLIP, {
+        ...before,
+        name: 'the hard bit',
+      }).clips[A_CLIP],
+    ).toEqual([{ ...before, name: 'the hard bit' }])
+  })
+
+  /* The panel lists them in the order they were saved and nothing reorders it,
+     so an entry that jumped to the end on every correction would be a second
+     thing happening that nobody asked for. */
+  it('leaves it where it was in the list', () => {
+    const first = getLoop({ id: 'first' })
+    const middle = getLoop({ id: 'middle', a: 3 })
+    const last = getLoop({ id: 'last' })
+
+    expect(
+      withLoopReplaced(
+        holding({ [A_CLIP]: [first, middle, last] }),
+        A_CLIP,
+        { ...middle, a: 9 },
+      ).clips[A_CLIP],
+    ).toEqual([first, { ...middle, a: 9 }, last])
+  })
+
+  it('leaves every other clip exactly as it was', () => {
+    const mine = getLoop({ id: 'mine' })
+    const theirs = getLoop({ id: 'theirs' })
+
+    expect(
+      withLoopReplaced(
+        holding({ [A_CLIP]: [mine], [ANOTHER_CLIP]: [theirs] }),
+        A_CLIP,
+        { ...mine, a: 9 },
+      ).clips,
+    ).toEqual({ [A_CLIP]: [{ ...mine, a: 9 }], [ANOTHER_CLIP]: [theirs] })
+  })
+
+  /* The half of Q-05 this change had to answer before it could exist. A
+     replacement replays onto whatever Drive holds *now*, and by then the other
+     device may have removed the loop being corrected — so it adds nothing and
+     the removal stands. Appending instead would resurrect a deleted loop, which
+     is the one thing the merge has always refused to do. */
+  it('is a no-op for an id the file no longer has', () => {
+    const held = holding({ [A_CLIP]: [getLoop({ id: 'still-here' })] })
+
+    expect(
+      withLoopReplaced(held, A_CLIP, getLoop({ id: 'removed-elsewhere' })),
+    ).toEqual(held)
+  })
+
+  it('is a no-op for a clip that is not there', () => {
+    expect(withLoopReplaced(NO_LOOPS, 'no-such-clip', getLoop())).toEqual(
+      NO_LOOPS,
+    )
   })
 })
 

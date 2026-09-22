@@ -57,26 +57,75 @@ export const nextLoopName = (saved: readonly SavedLoop[]) => {
   return `Loop ${free}`
 }
 
-/* UC-01 step 20: which of the loops on this clip the player is actually set to.
+/* UC-01 step 20 and BR-20: which of the loops on this clip the player is set to,
+   and the entry a save therefore writes over.
 
-   Answered by value — A, B and the speed all matching — rather than by
-   remembering which entry was last tapped. Settled at US-01-11's approval gate,
-   and the reason is that value equality goes stale in the only honest direction:
-   reframe the loop and the mark leaves, because the dancer is no longer on that
-   loop. A remembered id would leave an entry still claiming to be where they are
-   after they had dragged both handles somewhere else.
+   **By id, which reverses what US-01-11's approval gate settled** (#30). That gate
+   chose value equality — A, B and the speed all matching — on the reasoning that
+   it goes stale in the only honest direction: reframe the loop and the mark
+   leaves, because the dancer is no longer on that loop.
 
-   The speed is part of the comparison for BR-09's reason: it was saved *with* the
-   loop, so the same section at a different tempo is a different loop.
+   That reading was right about what the mark *said* and wrong about what it is
+   for. The mark's job is to name the entry the next save lands on, and value
+   equality lets go of that at the exact moment it matters: the dancer opens a
+   loop that starts half a second late, drags A back, and the app has by then
+   forgotten which loop they were correcting — so the save has nothing to write
+   to and appends a near-duplicate instead. The list fills with the same section
+   saved four times over, and there is no rename and no reorder to dig out of it.
 
-   The cost accepted at the gate: two loops saved with identical points and speed
-   both mark. They are the same loop under two names, so neither answer is wrong. */
-export const isCurrent = ({
+   Held as an id rather than a whole loop, and looked up here, so the answer
+   cannot outlive the entry. A loop removed — here, or on the other device before
+   the next read — simply stops being the one a save writes to, and the panel
+   falls back to adding.
+
+   What is given up: the mark no longer promises the sliders match the entry. The
+   entry says that for itself instead (`unwritten`), which is the more useful
+   claim anyway — it is the difference between "you are here" and "this is what
+   you would overwrite, and it has moved". */
+export const beingEdited = (
+  saved: readonly SavedLoop[],
+  id: string | null,
+): SavedLoop | null => saved.find((entry) => entry.id === id) ?? null
+
+/* BR-10 across both kinds of write. An empty field has always meant "keep the
+   name being offered"; there are now two things to offer, and which one depends
+   on whether there is an entry to write over.
+
+   Its own name, not the next free number, when there is. Clearing the field is
+   not a request to rename `chasse` to `Loop 4` — and the field *is* cleared
+   after every write, so an update made straight after a save would otherwise
+   rename the loop it was correcting. */
+export const nameToKeep = ({
+  typed,
+  editing,
+  saved,
+}: {
+  readonly typed: string
+  readonly editing: SavedLoop | null
+  readonly saved: readonly SavedLoop[]
+}) => typed.trim() || editing?.name || nextLoopName(saved)
+
+/* Whether the open entry and the player have parted company — the loop on the
+   sliders is no longer the loop in Drive.
+
+   The whole of what the mark used to claim, said by the entry that is actually
+   affected rather than by the absence of a highlight. The name is in the
+   comparison because it is saved with the rest (BR-09 for the speed, BR-10 for
+   the name): a rename with the boundaries untouched is still a write worth
+   making, and an Update that looked idle would be indistinguishable from one
+   that had already happened. */
+export const unwritten = ({
   entry,
   loop,
   speed,
+  name,
 }: {
   readonly entry: SavedLoop
   readonly loop: Loop
   readonly speed: number
-}) => entry.a === loop.a && entry.b === loop.b && entry.speed === speed
+  readonly name: string
+}) =>
+  entry.a !== loop.a ||
+  entry.b !== loop.b ||
+  entry.speed !== speed ||
+  entry.name !== name
