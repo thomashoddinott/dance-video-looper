@@ -1,3 +1,5 @@
+import { Link } from 'react-router'
+
 import { useDriveSession } from './driveSession'
 import type { SessionStatus } from './session'
 
@@ -51,6 +53,19 @@ export function DriveStatus() {
         >
           Connect Google Drive
         </button>
+      )}
+
+      {/* #33. Offered wherever Connect is, because both answer "no Drive" —
+          one for the dancer, one for anyone who followed a link to look at
+          the player. A link rather than a button: it goes somewhere, and
+          `/demo` is an address a CV can point at directly. */}
+      {!connected && (
+        <Link
+          to="/demo"
+          className="rounded-lg bg-control px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-control-hi"
+        >
+          Demo mode
+        </Link>
       )}
     </div>
   )

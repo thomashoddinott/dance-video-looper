@@ -758,6 +758,58 @@ describe('the Drive session on the Clips screen', () => {
    read at a different moment, so this is about the two being put together. */
 /* UC-01 Q-08, end to end. The library lives at `App`, so this is the only place
    the whole act is visible: the tile asks, Drive is told, the grid changes. */
+/* #33. Someone who has followed a link from a CV has no Google account on this
+   app and never will, and the player is the thing worth showing them. */
+describe('the way into the demo', () => {
+  const demoMode = () => screen.queryByRole('link', { name: 'Demo mode' })
+
+  it('sits beside Connect Google Drive for a visitor who has not signed in', () => {
+    renderAppAt('/')
+
+    expect(
+      inDocumentOrder({
+        connect: screen.getByRole('button', { name: /connect google drive/i }),
+        demo: demoMode() ?? document.body,
+      }),
+    ).toEqual(['connect', 'demo'])
+  })
+
+  it('is not there once the dancer has signed in', async () => {
+    renderAppAt('/')
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /connect google drive/i }),
+    )
+    await screen.findByText(/drive is connected/i)
+
+    expect(demoMode()).not.toBeInTheDocument()
+  })
+
+  it('is not there for a dancer who connected on an earlier visit', () => {
+    renderAppAt('/', sourceGranting(), null, { tokenStore: aConnectedStore() })
+
+    expect(demoMode()).not.toBeInTheDocument()
+  })
+
+  /* Wherever Connect is offered, since both are the answer to "no Drive". */
+  it('is offered again after the dancer declined', async () => {
+    renderAppAt('/', sourceRefusing())
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /connect google drive/i }),
+    )
+    await screen.findByRole('status')
+
+    expect(demoMode()).toBeInTheDocument()
+  })
+
+  it('leads to the demo', () => {
+    renderAppAt('/')
+
+    expect(demoMode()).toHaveAttribute('href', '/demo')
+  })
+})
+
 describe('deleting a clip', () => {
   /* Named and last-modified exactly as `aVideoFile` defaults, so this is the
      clip `clipIdFor` derives from that file — which is what makes re-adding it

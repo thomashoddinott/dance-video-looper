@@ -246,9 +246,10 @@ const pressedChips = () =>
     .map((chip) => chip.textContent)
 
 /* The grid as it is drawn, named by clip. A tile's route is the only thing on it
-   guaranteed unique to the clip — two clips may share a name, a date or a length. */
+   guaranteed unique to the clip — two clips may share a name, a date or a length.
+   Read inside the grid, since the footer carries a link of its own (#33). */
 const gridOrder = () =>
-  screen
+  within(screen.getByRole('list', { name: 'Clips' }))
     .getAllByRole('link')
     .map((link) => link.getAttribute('href')?.replace('/clip/', ''))
 
