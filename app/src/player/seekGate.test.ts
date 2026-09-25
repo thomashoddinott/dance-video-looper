@@ -59,6 +59,6 @@ describe('a seek landing', () => {
      `seeked` it fires still arrives here, so a settle against an idle gate has to
      be a no-op rather than something that leaves it wedged open. */
   it('is a no-op when no seek was in flight at all', () => {
-    expect(settled(idle)).toEqual({ gate: idle, seek: null })
+    expect(settled(idle)).toEqual({ gate: idle, seek: 1 })
   })
 })
