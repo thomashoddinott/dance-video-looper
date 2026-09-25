@@ -26,6 +26,7 @@ export function ClipsScreen({
   onDelete,
   probe,
   notice: driveNotice = null,
+  demo = false,
 }: {
   readonly library: Library
   /* Held by the caller rather than here, and that is load-bearing for #16
@@ -48,6 +49,10 @@ export function ClipsScreen({
      upload that failed. The screen's own notices below are the ones it can see
      for itself: a duplicate, and a file that would not decode. */
   readonly notice?: string | null
+  /* #33: the grid a visitor sees at `/demo`. One bundled clip and nothing to
+     manage — the demo keeps no clip and deletes none, so Add clip and the ✕
+     would be controls that could only fail — and no Drive to talk about. */
+  readonly demo?: boolean
 }) {
   const { clips } = library
   /* Local, unlike the ordering above it: a search is a question about the grid
@@ -153,26 +158,30 @@ export function ClipsScreen({
       <main className="mx-auto max-w-4xl px-4 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-lg font-semibold tracking-tight">Clips</h1>
-          <button
-            type="button"
-            onClick={() => chooser.current?.click()}
-            className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent hover:bg-accent-2"
-          >
-            Add clip
-          </button>
-          {/* `accept` is a contract with the platform rather than decoration:
-              it is what makes a phone offer the camera roll instead of every
-              document on it. The input itself stays hidden — the styled button
-              above is the control the dancer sees. */}
-          <input
-            ref={chooser}
-            type="file"
-            accept="video/*"
-            onChange={(event) => {
-              void onFileChosen(event)
-            }}
-            className="hidden"
-          />
+          {!demo && (
+            <>
+              <button
+                type="button"
+                onClick={() => chooser.current?.click()}
+                className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent hover:bg-accent-2"
+              >
+                Add clip
+              </button>
+              {/* `accept` is a contract with the platform rather than decoration:
+                  it is what makes a phone offer the camera roll instead of every
+                  document on it. The input itself stays hidden — the styled button
+                  above is the control the dancer sees. */}
+              <input
+                ref={chooser}
+                type="file"
+                accept="video/*"
+                onChange={(event) => {
+                  void onFileChosen(event)
+                }}
+                className="hidden"
+              />
+            </>
+          )}
         </div>
 
         {/* `alert`, deliberately, and not a second `status`: the Drive footer
@@ -270,17 +279,21 @@ export function ClipsScreen({
               clip={clip}
               thumbnail={thumbnails[clip.id]}
               uploading={uploadOf(library, clip.id)}
-              onDelete={onDelete}
+              onDelete={demo ? undefined : onDelete}
             />
           ))}
         </ul>
 
-        <p className="mt-6 text-xs text-ink/40">
-          Clips live in Google Drive. The app only sees files it uploaded itself,
-          so every clip has to come in through Add clip.
-        </p>
+        {!demo && (
+          <>
+            <p className="mt-6 text-xs text-ink/40">
+              Clips live in Google Drive. The app only sees files it uploaded
+              itself, so every clip has to come in through Add clip.
+            </p>
 
-        <DriveStatus />
+            <DriveStatus />
+          </>
+        )}
       </main>
     </div>
   )

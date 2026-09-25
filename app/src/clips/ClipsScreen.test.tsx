@@ -638,3 +638,60 @@ describe('deleting a clip', () => {
     expect(screen.getAllByRole('group', { name: /^Delete/ })).toHaveLength(1)
   })
 })
+
+/* #33. A visitor gets one clip to practise on and nothing to manage: the
+   demo's api keeps no clip and deletes none, so offering either would be a
+   control that could only fail. And there is no Drive in the demo to explain. */
+describe('the grid in the demo', () => {
+  const renderTheDemo = () =>
+    render(
+      <DriveSessionProvider
+        tokenSource={anUnconfiguredDrive}
+        tokenStore={anEmptyTokenStore}
+      >
+        <MemoryRouter>
+          <ClipsScreen
+            library={loaded(LOADING, [getClip({ name: 'Passitos' })])}
+            ordering={orderings[0].id}
+            onOrderingChange={() => {}}
+            onAdd={noClipIsAdded}
+            onDelete={noClipIsDeleted}
+            probe={noFileIsProbed}
+            demo
+          />
+        </MemoryRouter>
+      </DriveSessionProvider>,
+    )
+
+  it('still shows the clip, ready to open', () => {
+    renderTheDemo()
+
+    expect(
+      within(tileFor('Passitos')).getByRole('link', { name: /Passitos/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('offers no way to add a clip', () => {
+    const { container } = renderTheDemo()
+
+    expect(
+      screen.queryByRole('button', { name: 'Add clip' }),
+    ).not.toBeInTheDocument()
+    expect(container.querySelector('input[type="file"]')).toBeNull()
+  })
+
+  it('offers no way to delete the clip', () => {
+    renderTheDemo()
+
+    expect(
+      screen.queryByRole('button', { name: /^Delete/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('says nothing about Drive', () => {
+    renderTheDemo()
+
+    expect(screen.queryByText(/Google Drive/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Drive/)).not.toBeInTheDocument()
+  })
+})
