@@ -2,6 +2,8 @@
 
 # Dance Video Looper
 
+[![CI](https://github.com/thomashoddinott/dance-video-looper/actions/workflows/ci.yml/badge.svg)](https://github.com/thomashoddinott/dance-video-looper/actions/workflows/ci.yml)
+
 > The idea is [LoopTube](https://looptube.io)'s — this is a hobby rebuild of it for
 > personal use, pointed at clips in my own Drive rather than YouTube.
 

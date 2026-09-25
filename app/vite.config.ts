@@ -34,7 +34,8 @@ export default defineConfig({
      domain root, so every asset URL needs the repo name in front of it. Set here
      rather than only for `build` so dev serves from the same path and exercises the
      same `import.meta.env.BASE_URL` the router reads (`src/main.tsx`) — a base-path
-     bug that only appears once deployed is the kind this project has no CI to catch.
+     bug that only appears once deployed is the kind CI can't catch, since it builds
+     the site but never serves it.
      The dev URL becomes `http://localhost:5173/dance-video-looper/`; sign-in is
      unaffected, because an OAuth origin is scheme, host and port, never the path. */
   base: '/dance-video-looper/',

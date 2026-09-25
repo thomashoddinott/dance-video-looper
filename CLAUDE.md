@@ -21,8 +21,7 @@ app/               the product — React + Vite, TDD, the thing being built
 mockup/            throwaway UI mockup — vibe-coded, loads a local file
 docs/use-cases/    UC-XX — what a screen is for, derived from the mockup by walkthrough
 docs/user-stories/ US-XX-YY — one story per visible component, cut from the mockup
-scripts/verify.mjs the verification gate — see below. `scripts/gate/` is its pure
-                   core, unit-tested by `npm test` at the repo root
+.github/workflows/ CI — see below
 ```
 
 ## Process
@@ -79,40 +78,21 @@ Then the PR lands, the ticket closes, and the worktree is tidied away.
 **Worktrees:** use Claude Code worktrees (`.claude/worktrees`), not plain
 `git worktree`. They're the default workspace for all ticket-based development.
 
-## The verification gate — there is no CI, on purpose
+## CI
 
-**This project is not getting CI.** No GitHub Actions, no runner, no workflow file.
-It's a personal static site with no backend; a hosted pipeline is machinery out of
-proportion to it. Don't helpfully add one — including for the deploy, which is a
-local command (see **Deploying**) and not a pipeline.
+GitHub Actions on GitHub-hosted runners, in `.github/workflows/ci.yml`. Every PR into
+`main`, and every push to `main`, runs lint, typecheck, the test suite and the build
+for `app/`, each as its own step. `mockup/` is throwaway and is not checked.
 
-What CI was for is kept. **Every check that applies runs locally, in the session, and
-every one is green before a merge:**
-
-```
-node scripts/verify.mjs              # run this
-node scripts/verify.mjs --install    # same, installing deps first
-```
-
-It works out what to run from what's present — every workspace with a `package.json`,
-every script it declares that terminates. Nothing is hardcoded, so adding a workspace
-or a script needs no edit to it.
-
-Reading the output:
-
-- **`SKIP` is not "fine", it's a fact with a reason** — `mockup test SKIP — no "test"
-  script declared` means that code is unverified, and the gate says so rather than
-  staying quiet. A check no workspace declares is never listed at all, so the report
-  can't fill up with capabilities the project doesn't have.
-- **`GATE: PASS` means every check that ran was green.** Any failure fails the whole
-  gate and exits non-zero.
-
-Read this instead of `gh pr checks` — nothing runs when a PR is opened, so an empty
-check list is not a pass. A PR that has not been through the gate is unverified.
+**A PR is verified when `gh pr checks` is green**, and `main` will not take a merge
+until the `Test` check has passed on a branch that is up to date with it. When `main`
+has moved underneath a PR, `gh pr update-branch <number>` brings it level and the
+check runs again. Nothing discovers checks on its own: a new check is a new step in
+the workflow.
 
 ## Deploying
 
-Also local, and also not CI. From `app/`:
+Local, and not part of the pipeline. From `app/`:
 
 ```
 npm run build
@@ -124,9 +104,6 @@ never carries built output — `dist/` is gitignored.
 
 - **`--dotfiles` is not optional.** `gh-pages` skips dotfiles by default, and
   `public/.nojekyll` is what stops Pages running the build through Jekyll.
-- **Don't add a `deploy` script to any `package.json`.** The gate runs every script a
-  workspace declares that terminates, so a `deploy` script means `node
-  scripts/verify.mjs` publishes the site as a side effect of verifying it.
 - The base path is `/dance-video-looper/`, set in `app/vite.config.ts` for dev as well
   as build so the dev server exercises it too. `404.html` is a copy of `index.html`,
   emitted at build, so a reload on a route deeper than the root reaches the router
@@ -141,9 +118,9 @@ never carries built output — `dist/` is gitignored.
   `SavedLoops.tsx` are *the same path* on macOS, so `import { SavedLoops } from
   './SavedLoops'` silently resolved to the pure module and React was handed an
   `undefined` component — the error names neither file. The pair here is
-  `savedLoops.ts` + `SavedLoopsPanel.tsx`. It would build fine on the Linux runner
-  this project deliberately does not have, which is the trap: local-only, and
-  invisible until render.
+  `savedLoops.ts` + `SavedLoopsPanel.tsx`. CI can't catch it: on its Linux runner the
+  two are different paths, so the import resolves correctly and the check goes green.
+  That is the trap — it breaks only on a Mac, and only at render.
 
 ## Constraints
 
