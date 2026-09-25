@@ -128,11 +128,14 @@ function Downloaded({ fraction }: { readonly fraction: number | undefined }) {
 /* Back to the grid, not back in history: the criterion says the Clips screen
    returns, and a history step returns wherever you came from. Its own component
    because the header below is no longer the only place it appears — a clip still
-   being opened needs the way out before it has anything else to show. */
+   being opened needs the way out before it has anything else to show.
+
+   Up a route rather than to `/`, so the way back from a clip in the demo is
+   the demo's grid and not a real library the visitor has no account for. */
 function BackToClips() {
   return (
     <Link
-      to="/"
+      to=".."
       aria-label="Back to clips"
       className="-ml-2 flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-ink/60 hover:text-ink"
     >
@@ -200,8 +203,8 @@ export function PlayerScreen({
 
   /* The path is user-editable, so it can name a clip that is not here. Replace
      rather than push, or Back lands on the dead URL and bounces straight out
-     again. */
-  if (!clip) return <Navigate to="/" replace />
+     again. Up a route, for `BackToClips`' reason. */
+  if (!clip) return <Navigate to=".." replace />
 
   /* Mounted only once there is a clip, and keyed on it. Everything below is
      seeded from the clip, and a direct open — a reload, a bookmark, the link

@@ -37,7 +37,9 @@ export function ClipTile({
 
   return (
     <li className="group/tile relative">
-      <Link to={`/clip/${clip.id}`} className="group block w-full text-left">
+      {/* Relative, so the grid opens a clip under wherever it is mounted —
+          `/demo` as well as `/` (#33). */}
+      <Link to={`clip/${clip.id}`} className="group block w-full text-left">
         <div className="relative overflow-hidden rounded-xl bg-black transition group-hover:opacity-90">
           <Poster clip={clip} thumbnail={thumbnail} />
           {clip.seconds !== undefined && (

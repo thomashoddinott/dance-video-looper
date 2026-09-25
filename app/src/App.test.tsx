@@ -7,7 +7,7 @@ import {
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 
 import { App } from './App'
@@ -557,6 +557,73 @@ describe('opening a clip', () => {
     expect(
       await screen.findByRole('heading', { name: 'Clips' }),
     ).toBeInTheDocument()
+  })
+})
+
+/* #33 mounts the whole app a second time at `/demo`, so nothing inside it may
+   know where it was mounted: a link that names `/` would walk a visitor out of
+   the demo and into a real library they have no account for. */
+describe('the app mounted under a path of its own', () => {
+  const WAVE_PRACTICE = getClip({
+    id: 'wave-practice',
+    driveId: 'drive-wave',
+    name: 'Wave practice',
+  })
+
+  const Where = () => <p data-testid="where">{useLocation().pathname}</p>
+
+  const renderUnder = (path: string) =>
+    render(
+      <DriveSessionProvider
+        tokenSource={sourceGranting()}
+        tokenStore={aConnectedStore()}
+      >
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route
+              path="/demo/*"
+              element={
+                <App
+                  driveApi={driveHolding([WAVE_PRACTICE])}
+                  clipCache={holdsNothing}
+                  loopsCache={aLoopsCache()}
+                  openedStore={localOpenedStore(inMemoryStorage())}
+                  thumbnailCache={noThumbnails}
+                />
+              }
+            />
+          </Routes>
+          <Where />
+        </MemoryRouter>
+      </DriveSessionProvider>,
+    )
+
+  const where = () => screen.getByTestId('where').textContent
+
+  it('opens a clip under that path', async () => {
+    renderUnder('/demo')
+    await screen.findByText('Wave practice')
+
+    await userEvent.click(screen.getByRole('link', { name: /Wave practice/ }))
+
+    expect(where()).toBe('/demo/clip/wave-practice')
+  })
+
+  it('goes back to the clips under that path', async () => {
+    renderUnder('/demo/clip/wave-practice')
+    await screen.findByText('Wave practice')
+
+    await userEvent.click(screen.getByRole('link', { name: 'Back to clips' }))
+
+    expect(where()).toBe('/demo')
+  })
+
+  it('returns to the clips under that path when the clip is not there', async () => {
+    renderUnder('/demo/clip/nothing-by-this-name')
+
+    await screen.findByRole('heading', { name: 'Clips' })
+
+    expect(where()).toBe('/demo')
   })
 })
 
