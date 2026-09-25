@@ -7,7 +7,9 @@ on:
     branches: [main]
 
 # A new push to a PR makes the run already going for it moot, so that one is
-# cancelled. A run on main is never cancelled: every commit that lands gets a verdict.
+# cancelled. A run on main is never cancelled: every commit that lands gets a verdict,
+# and a deploy is never cut off halfway. Runs on main queue behind one another
+# instead, so two quick merges deploy in the order they landed.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -44,5 +46,41 @@ jobs:
       - name: Test
         run: npm test
 
+      # Without a client ID the site still builds, and then cannot sign in — the
+      # footer says Drive is not configured. Better that a deploy fails here.
+      - name: Check the client ID is set
+        if: github.ref == 'refs/heads/main'
+        run: test -n "$VITE_GOOGLE_CLIENT_ID" || { echo "::error::Repository variable VITE_GOOGLE_CLIENT_ID is not set"; exit 1; }
+        env:
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
+
+      # Not a secret — the client ID ships in the bundle — but it stays out of the
+      # source, as `app/.env.example` explains.
       - name: Build
         run: npm run build
+        env:
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
+
+      # The deploy job ships this build rather than making its own, so what goes live
+      # is exactly what the steps above passed against.
+      - name: Upload site
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: app/dist
+
+  deploy:
+    name: Deploy
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -82,7 +82,8 @@ Then the PR lands, the ticket closes, and the worktree is tidied away.
 
 GitHub Actions on GitHub-hosted runners, in `.github/workflows/ci.yml`. Every PR into
 `main`, and every push to `main`, runs lint, typecheck, the test suite and the build
-for `app/`, each as its own step. `mockup/` is throwaway and is not checked.
+for `app/`, each as its own step. A push to `main` then deploys — see **Deploying**.
+`mockup/` is throwaway and is not checked.
 
 **A PR is verified when `gh pr checks` is green**, and `main` will not take a merge
 until the `Test` check has passed on a branch that is up to date with it. When `main`
@@ -92,18 +93,14 @@ the workflow.
 
 ## Deploying
 
-Local, and not part of the pipeline. From `app/`:
+The pipeline deploys, and nothing else does. When a push to `main` passes `Test`, the
+`Deploy` job publishes the build `Test` just checked to Pages — the same artifact, not
+a rebuild. PRs never deploy, and there is no local deploy command. `main` never
+carries built output — `dist/` is gitignored.
 
-```
-npm run build
-npx gh-pages -d dist --dotfiles
-```
-
-That pushes the built site to the `gh-pages` branch, which Pages serves from. `main`
-never carries built output — `dist/` is gitignored.
-
-- **`--dotfiles` is not optional.** `gh-pages` skips dotfiles by default, and
-  `public/.nojekyll` is what stops Pages running the build through Jekyll.
+- The build reads the OAuth client ID from the repository variable
+  `VITE_GOOGLE_CLIENT_ID` (`gh variable set`), not from `app/.env.local`. The run on
+  `main` fails if it is unset, rather than publishing a site that cannot sign in.
 - The base path is `/dance-video-looper/`, set in `app/vite.config.ts` for dev as well
   as build so the dev server exercises it too. `404.html` is a copy of `index.html`,
   emitted at build, so a reload on a route deeper than the root reaches the router
@@ -144,11 +141,12 @@ never carries built output — `dist/` is gitignored.
   `app/public/` or `mockup/public/` to have something to play against. Don't
   commit one, and don't re-add a tracked sample.
 
-  **A clip in `public/` is development-only and must never be deployed.** Gitignore
-  does not cover that: Vite copies `public/` wholesale into `dist/`, so a file
-  correctly kept out of every commit still lands on a public URL the moment the build
-  is published. Clear `public/` before deploying. Publishing someone else's video is
-  the one mistake here that cannot be taken back.
+  **A clip in `public/` must never reach the live site.** Vite copies `public/`
+  wholesale into `dist/`, so a build on this machine carries whatever clip is sitting
+  there. Only the pipeline deploys, and it builds from a clean checkout where no clip
+  exists — so a clip can only get out by being committed, and that is why this rule
+  holds. Don't add a local deploy route back. Publishing someone else's video is the
+  one mistake here that cannot be taken back.
 - `PLAN.md` — scratch, lives and dies inside a worktree.
 - `.claude/` — the Claude Code working directory. Curated separately and tracked
   nowhere in this repo.
