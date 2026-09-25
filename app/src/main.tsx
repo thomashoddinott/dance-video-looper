@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 
-import { App } from './App'
+import { Root } from './Root'
 import { DriveSessionProvider } from './drive/DriveSessionProvider'
 import { browserTokenSource } from './drive/gisTokenSource'
 import { localTokenStore } from './drive/tokenStore'
@@ -31,7 +31,7 @@ createRoot(container).render(
   <StrictMode>
     <DriveSessionProvider tokenSource={tokenSource} tokenStore={tokenStore}>
       <BrowserRouter basename={import.meta.env.BASE_URL}>
-        <App />
+        <Root />
       </BrowserRouter>
     </DriveSessionProvider>
   </StrictMode>,

@@ -1,6 +1,7 @@
 import type { ChangeEvent } from 'react'
 import { useRef, useState } from 'react'
 
+import { DemoStatus } from '../demo/DemoStatus'
 import { DriveStatus } from '../drive/DriveStatus'
 import type { Clip } from './clip'
 import type { ClipProbe } from './clipProbe'
@@ -183,6 +184,8 @@ export function ClipsScreen({
             </>
           )}
         </div>
+
+        {demo && <DemoStatus />}
 
         {/* `alert`, deliberately, and not a second `status`: the Drive footer
             already owns an unnamed `role="status"` on this screen, so a second

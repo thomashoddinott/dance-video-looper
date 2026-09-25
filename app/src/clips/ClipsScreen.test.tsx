@@ -688,10 +688,21 @@ describe('the grid in the demo', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('says nothing about Drive', () => {
+  /* Connect Google Drive stays — it is how a visitor leaves — but the
+     library's explanation and the connection sentence describe a Drive the
+     demo does not have. */
+  it('says nothing about where clips are kept, or whether Drive is connected', () => {
     renderTheDemo()
 
-    expect(screen.queryByText(/Google Drive/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/Drive/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/clips live in google drive/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/connected to drive/i)).not.toBeInTheDocument()
+  })
+
+  it('says it is a demo', () => {
+    renderTheDemo()
+
+    expect(screen.getByRole('status', { name: 'Demo' })).toHaveTextContent(
+      /demo mode/i,
+    )
   })
 })

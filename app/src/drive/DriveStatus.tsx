@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
 
 import { useDriveSession } from './driveSession'
-import type { SessionStatus } from './session'
+import { isConnected, type SessionStatus } from './session'
 
 /* A refusal and a withdrawal both end with no Drive, and saying so in one
    sentence would have been easier — but the dancer can act on the difference.
@@ -27,8 +27,6 @@ const NOTICES: Record<SessionStatus, string> = {
     'Drive is not set up — this build has no Google Client ID. See app/.env.example.',
 }
 
-const CONNECTED: readonly SessionStatus[] = ['active', 'expired']
-
 /* The popup Google opens on renewal is unavoidable without a backend. With a
    standing grant it skips the consent screen but still shows the account
    chooser and waits to be clicked, so the dancer is interrupted and has no idea
@@ -37,7 +35,7 @@ const RENEWED = 'Your Drive session was renewed.'
 
 export function DriveStatus() {
   const { status, renewed, signIn } = useDriveSession()
-  const connected = CONNECTED.includes(status)
+  const connected = isConnected(status)
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">

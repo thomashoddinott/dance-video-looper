@@ -172,6 +172,7 @@ export function PlayerScreen({
   clipCache = browserClipCache,
   onBytes,
   stillLoading = false,
+  demo = false,
 }: {
   readonly clips: readonly Clip[]
   /* Fired once the path has resolved to a clip the library holds (#16), which
@@ -195,6 +196,8 @@ export function PlayerScreen({
      every direct open straight back to a grid that is also still loading —
      making a stored clip unreachable by its own URL. */
   readonly stillLoading?: boolean
+  /* #33: the player at `/demo`, which says so in its header. */
+  readonly demo?: boolean
 }) {
   const { clipId } = useParams()
   const clip = clips.find((candidate) => candidate.id === clipId)
@@ -220,6 +223,7 @@ export function PlayerScreen({
       clipCache={clipCache}
       onBytes={onBytes}
       onOpened={onOpened}
+      demo={demo}
     />
   )
 }
@@ -231,6 +235,7 @@ function OpenedClip({
   clipCache,
   onBytes,
   onOpened,
+  demo,
 }: {
   readonly clip: Clip
   readonly loops: LoopsHandle
@@ -238,6 +243,7 @@ function OpenedClip({
   readonly clipCache: ClipCache
   readonly onBytes?: ((clipId: string, bytes: Blob) => void) | undefined
   readonly onOpened: (clipId: string) => void
+  readonly demo: boolean
 }) {
   /* #16. Here rather than in the parent because this component is keyed on the
      clip and mounted only once the path has resolved to one the library holds —
@@ -888,6 +894,14 @@ function OpenedClip({
       >
         <BackToClips />
         <span className="truncate text-sm font-semibold">{clip.name}</span>
+        {/* In the header, so the isolated view hides it along with everything
+            else — a banner above the screen would sit on top of a clip that
+            is meant to fill it. */}
+        {demo && (
+          <span className="ml-auto shrink-0 rounded-full bg-control px-2 py-0.5 text-xs font-semibold text-ink/60">
+            Demo
+          </span>
+        )}
       </header>
 
       {/* The card shrinks to whatever the clip actually is: a portrait clip gets

@@ -28,6 +28,13 @@ export type Session =
 
 export type SessionStatus = 'signed-out' | 'active' | 'expired' | Unavailable
 
+/* `expired` counts. Consent still stands and the next thing needing Drive
+   renews it, so a lapsed token is bookkeeping rather than the dancer's
+   situation — which is why the footer reads it as connected, and why the
+   demo (#33) treats it as signed in. */
+export const isConnected = (status: SessionStatus) =>
+  status === 'active' || status === 'expired'
+
 export const signedOut: Session = { kind: 'signed-out' }
 
 export const unavailable = (because: Unavailable): Session => ({
