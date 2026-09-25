@@ -27,7 +27,9 @@ export function ClipTile({
      which is every clip listed from Drive, and every clip whose upload has
      finished. */
   readonly uploading?: number | undefined
-  readonly onDelete: (clip: Clip) => void
+  /* Absent for a clip that cannot be deleted from here — the demo's (#33),
+     which the visitor does not own and the demo's api would refuse. */
+  readonly onDelete?: ((clip: Clip) => void) | undefined
 }) {
   /* The question lives on the tile that asked it, because that is all it is:
      one tile's ephemeral state, meaningless anywhere else and gone the moment
@@ -37,7 +39,9 @@ export function ClipTile({
 
   return (
     <li className="group/tile relative">
-      <Link to={`/clip/${clip.id}`} className="group block w-full text-left">
+      {/* Relative, so the grid opens a clip under wherever it is mounted —
+          `/demo` as well as `/` (#33). */}
+      <Link to={`clip/${clip.id}`} className="group block w-full text-left">
         <div className="relative overflow-hidden rounded-xl bg-black transition group-hover:opacity-90">
           <Poster clip={clip} thumbnail={thumbnail} />
           {clip.seconds !== undefined && (
@@ -86,7 +90,7 @@ export function ClipTile({
           Absent while the bytes are still going up. There is no Drive file to
           trash yet, cancelling an upload is a feature that does not exist, and
           `abandoned` already covers the only way that clip can leave. */}
-      {uploading === undefined && (
+      {uploading === undefined && onDelete !== undefined && (
         <button
           type="button"
           aria-label={`Delete ${clip.name}`}
@@ -115,7 +119,7 @@ export function ClipTile({
             type="button"
             onClick={() => {
               setAsking(false)
-              onDelete(clip)
+              onDelete?.(clip)
             }}
             className="w-full max-w-24 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent-2"
           >

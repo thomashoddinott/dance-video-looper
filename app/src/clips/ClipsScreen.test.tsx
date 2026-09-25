@@ -246,9 +246,10 @@ const pressedChips = () =>
     .map((chip) => chip.textContent)
 
 /* The grid as it is drawn, named by clip. A tile's route is the only thing on it
-   guaranteed unique to the clip — two clips may share a name, a date or a length. */
+   guaranteed unique to the clip — two clips may share a name, a date or a length.
+   Read inside the grid, since the footer carries a link of its own (#33). */
 const gridOrder = () =>
-  screen
+  within(screen.getByRole('list', { name: 'Clips' }))
     .getAllByRole('link')
     .map((link) => link.getAttribute('href')?.replace('/clip/', ''))
 
@@ -635,5 +636,73 @@ describe('deleting a clip', () => {
     )
 
     expect(screen.getAllByRole('group', { name: /^Delete/ })).toHaveLength(1)
+  })
+})
+
+/* #33. A visitor gets one clip to practise on and nothing to manage: the
+   demo's api keeps no clip and deletes none, so offering either would be a
+   control that could only fail. And there is no Drive in the demo to explain. */
+describe('the grid in the demo', () => {
+  const renderTheDemo = () =>
+    render(
+      <DriveSessionProvider
+        tokenSource={anUnconfiguredDrive}
+        tokenStore={anEmptyTokenStore}
+      >
+        <MemoryRouter>
+          <ClipsScreen
+            library={loaded(LOADING, [getClip({ name: 'Passitos' })])}
+            ordering={orderings[0].id}
+            onOrderingChange={() => {}}
+            onAdd={noClipIsAdded}
+            onDelete={noClipIsDeleted}
+            probe={noFileIsProbed}
+            demo
+          />
+        </MemoryRouter>
+      </DriveSessionProvider>,
+    )
+
+  it('still shows the clip, ready to open', () => {
+    renderTheDemo()
+
+    expect(
+      within(tileFor('Passitos')).getByRole('link', { name: /Passitos/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('offers no way to add a clip', () => {
+    const { container } = renderTheDemo()
+
+    expect(
+      screen.queryByRole('button', { name: 'Add clip' }),
+    ).not.toBeInTheDocument()
+    expect(container.querySelector('input[type="file"]')).toBeNull()
+  })
+
+  it('offers no way to delete the clip', () => {
+    renderTheDemo()
+
+    expect(
+      screen.queryByRole('button', { name: /^Delete/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  /* Connect Google Drive stays — it is how a visitor leaves — but the
+     library's explanation and the connection sentence describe a Drive the
+     demo does not have. */
+  it('says nothing about where clips are kept, or whether Drive is connected', () => {
+    renderTheDemo()
+
+    expect(screen.queryByText(/clips live in google drive/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/connected to drive/i)).not.toBeInTheDocument()
+  })
+
+  it('says it is a demo', () => {
+    renderTheDemo()
+
+    expect(screen.getByRole('status', { name: 'Demo' })).toHaveTextContent(
+      /demo mode/i,
+    )
   })
 })

@@ -32,6 +32,20 @@ import { PlayerScreen } from './player/PlayerScreen'
    It is Drive's library now: there is no seeded array anywhere, so an empty
    grid means the dancer has uploaded nothing (or has not connected), which is
    UC-01 alternate flow 2a rather than a gap. */
+export type AppProps = {
+  readonly probe?: ClipProbe
+  readonly driveApi?: DriveApi
+  readonly clipCache?: ClipCache
+  readonly loopsCache?: LoopsCache
+  readonly openedStore?: OpenedStore
+  readonly thumbnailCache?: ThumbnailCache
+  readonly capture?: ThumbnailCapture
+  /* #33: the same app, mounted at `/demo` over the demo's seams. The screens
+     need telling only so they can say so, and so the gallery can drop the
+     controls a visitor has no use for. */
+  readonly demo?: boolean
+}
+
 export function App({
   probe = browserClipProbe,
   driveApi = browserDriveApi,
@@ -40,15 +54,8 @@ export function App({
   openedStore = browserOpenedStore,
   thumbnailCache = browserThumbnailCache,
   capture = browserThumbnailCapture,
-}: {
-  readonly probe?: ClipProbe
-  readonly driveApi?: DriveApi
-  readonly clipCache?: ClipCache
-  readonly loopsCache?: LoopsCache
-  readonly openedStore?: OpenedStore
-  readonly thumbnailCache?: ThumbnailCache
-  readonly capture?: ThumbnailCapture
-} = {}) {
+  demo = false,
+}: AppProps = {}) {
   /* The cache goes in as well as down to the player: a deleted clip's bytes are
      budget held against something that is not coming back, and this is the only
      place that holds both the library and the cache. */
@@ -158,6 +165,7 @@ export function App({
             onDelete={onDelete}
             probe={probe}
             notice={notice}
+            demo={demo}
           />
         }
       />
@@ -172,6 +180,7 @@ export function App({
             onBytes={onClipBytes}
             onOpened={markOpened}
             stillLoading={library.state === 'loading'}
+            demo={demo}
           />
         }
       />

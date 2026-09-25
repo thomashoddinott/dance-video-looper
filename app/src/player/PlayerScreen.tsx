@@ -128,11 +128,14 @@ function Downloaded({ fraction }: { readonly fraction: number | undefined }) {
 /* Back to the grid, not back in history: the criterion says the Clips screen
    returns, and a history step returns wherever you came from. Its own component
    because the header below is no longer the only place it appears — a clip still
-   being opened needs the way out before it has anything else to show. */
+   being opened needs the way out before it has anything else to show.
+
+   Up a route rather than to `/`, so the way back from a clip in the demo is
+   the demo's grid and not a real library the visitor has no account for. */
 function BackToClips() {
   return (
     <Link
-      to="/"
+      to=".."
       aria-label="Back to clips"
       className="-ml-2 flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-ink/60 hover:text-ink"
     >
@@ -169,6 +172,7 @@ export function PlayerScreen({
   clipCache = browserClipCache,
   onBytes,
   stillLoading = false,
+  demo = false,
 }: {
   readonly clips: readonly Clip[]
   /* Fired once the path has resolved to a clip the library holds (#16), which
@@ -192,6 +196,8 @@ export function PlayerScreen({
      every direct open straight back to a grid that is also still loading —
      making a stored clip unreachable by its own URL. */
   readonly stillLoading?: boolean
+  /* #33: the player at `/demo`, which says so in its header. */
+  readonly demo?: boolean
 }) {
   const { clipId } = useParams()
   const clip = clips.find((candidate) => candidate.id === clipId)
@@ -200,8 +206,8 @@ export function PlayerScreen({
 
   /* The path is user-editable, so it can name a clip that is not here. Replace
      rather than push, or Back lands on the dead URL and bounces straight out
-     again. */
-  if (!clip) return <Navigate to="/" replace />
+     again. Up a route, for `BackToClips`' reason. */
+  if (!clip) return <Navigate to=".." replace />
 
   /* Mounted only once there is a clip, and keyed on it. Everything below is
      seeded from the clip, and a direct open — a reload, a bookmark, the link
@@ -217,6 +223,7 @@ export function PlayerScreen({
       clipCache={clipCache}
       onBytes={onBytes}
       onOpened={onOpened}
+      demo={demo}
     />
   )
 }
@@ -228,6 +235,7 @@ function OpenedClip({
   clipCache,
   onBytes,
   onOpened,
+  demo,
 }: {
   readonly clip: Clip
   readonly loops: LoopsHandle
@@ -235,6 +243,7 @@ function OpenedClip({
   readonly clipCache: ClipCache
   readonly onBytes?: ((clipId: string, bytes: Blob) => void) | undefined
   readonly onOpened: (clipId: string) => void
+  readonly demo: boolean
 }) {
   /* #16. Here rather than in the parent because this component is keyed on the
      clip and mounted only once the path has resolved to one the library holds —
@@ -885,6 +894,14 @@ function OpenedClip({
       >
         <BackToClips />
         <span className="truncate text-sm font-semibold">{clip.name}</span>
+        {/* In the header, so the isolated view hides it along with everything
+            else — a banner above the screen would sit on top of a clip that
+            is meant to fill it. */}
+        {demo && (
+          <span className="ml-auto shrink-0 rounded-full bg-control px-2 py-0.5 text-xs font-semibold text-ink/60">
+            Demo
+          </span>
+        )}
       </header>
 
       {/* The card shrinks to whatever the clip actually is: a portrait clip gets

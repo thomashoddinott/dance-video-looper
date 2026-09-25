@@ -1,5 +1,7 @@
+import { Link } from 'react-router'
+
 import { useDriveSession } from './driveSession'
-import type { SessionStatus } from './session'
+import { isConnected, type SessionStatus } from './session'
 
 /* A refusal and a withdrawal both end with no Drive, and saying so in one
    sentence would have been easier — but the dancer can act on the difference.
@@ -25,8 +27,6 @@ const NOTICES: Record<SessionStatus, string> = {
     'Drive is not set up — this build has no Google Client ID. See app/.env.example.',
 }
 
-const CONNECTED: readonly SessionStatus[] = ['active', 'expired']
-
 /* The popup Google opens on renewal is unavoidable without a backend. With a
    standing grant it skips the consent screen but still shows the account
    chooser and waits to be clicked, so the dancer is interrupted and has no idea
@@ -35,7 +35,7 @@ const RENEWED = 'Your Drive session was renewed.'
 
 export function DriveStatus() {
   const { status, renewed, signIn } = useDriveSession()
-  const connected = CONNECTED.includes(status)
+  const connected = isConnected(status)
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -51,6 +51,19 @@ export function DriveStatus() {
         >
           Connect Google Drive
         </button>
+      )}
+
+      {/* #33. Offered wherever Connect is, because both answer "no Drive" —
+          one for the dancer, one for anyone who followed a link to look at
+          the player. A link rather than a button: it goes somewhere, and
+          `/demo` is an address a CV can point at directly. */}
+      {!connected && (
+        <Link
+          to="/demo"
+          className="rounded-lg bg-control px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-control-hi"
+        >
+          Demo mode
+        </Link>
       )}
     </div>
   )
