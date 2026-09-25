@@ -141,6 +141,14 @@ carries built output — `dist/` is gitignored.
   `app/public/` or `mockup/public/` to have something to play against. Don't
   commit one, and don't re-add a tracked sample.
 
+  **One exception, by name: `app/src/demo/demo-clip.mp4`** (#33), the clip demo
+  mode plays. It is Thomas dancing, his own footage, published on purpose.
+  `.gitignore` lets that exact path through and nothing else. It is imported, so
+  Vite bundles it into `dist/assets/`; it is not in `public/`. Replacing it is the
+  same deliberate act: strip the audio unless it is his own, and **strip the
+  metadata** (`ffmpeg -map_metadata -1`). A phone video carries GPS coordinates.
+  Once pushed it cannot be taken back, because GitHub keeps every PR's head.
+
   **A clip in `public/` must never reach the live site.** Vite copies `public/`
   wholesale into `dist/`, so a build on this machine carries whatever clip is sitting
   there. Only the pipeline deploys, and it builds from a clean checkout where no clip
