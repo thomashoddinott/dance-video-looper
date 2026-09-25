@@ -104,7 +104,7 @@ function ClipTile({ clip, onOpen, onDelete, uploading }) {
         <p className="text-xs text-ink/50">{formatAdded(clip.added)}</p>
       </button>
 
-      {uploading === undefined && (
+      {uploading === undefined && onDelete && (
         <button
           type="button"
           aria-label={`Delete ${clip.name}`}
@@ -180,7 +180,7 @@ const DRIVE_STATES = [
   },
 ]
 
-function DriveStatus() {
+function DriveStatus({ onDemo }) {
   const [state, setState] = useState(0)
   const { notice, connected } = DRIVE_STATES[state]
 
@@ -195,6 +195,19 @@ function DriveStatus() {
           className="rounded-lg bg-control px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-control-hi"
         >
           Connect Google Drive
+        </button>
+      )}
+
+      {/* Retrofitted from the product (#33): offered wherever Connect is. In
+          the product it is a link to `/demo`, the same app over one bundled
+          clip; the mockup has no second mount, so it flips the grid instead. */}
+      {!connected && (
+        <button
+          type="button"
+          onClick={onDemo}
+          className="rounded-lg bg-control px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-control-hi"
+        >
+          Demo mode
         </button>
       )}
 
@@ -227,7 +240,44 @@ const UPLOAD_PLAYS_OUT_OVER = 2500
    The search stays local, and the contrast is the point: it is a question about
    the grid in front of you rather than a setting, so coming back with the whole
    library showing is the honest default. */
+/* Retrofitted from the product (#33), which sits under the heading rather than
+   in the footer: the first thing a visitor should know is that this is a
+   sample. Both buttons leave the demo — in the product Connect is the real
+   sign-in, and signing in hands over to the dancer's own library. */
+function DemoStatus({ onLeave }) {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <p className="text-xs text-ink/60">
+        Demo mode — a sample clip to try the player on. Loops you save stay in
+        this browser.
+      </p>
+
+      <button
+        type="button"
+        onClick={onLeave}
+        className="rounded-lg bg-control px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-control-hi"
+      >
+        Connect Google Drive
+      </button>
+
+      <button
+        type="button"
+        onClick={onLeave}
+        className="rounded-lg bg-control px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-control-hi"
+      >
+        Exit demo
+      </button>
+    </div>
+  )
+}
+
 function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
+  /* #33. The product's demo is one bundled clip with nothing to manage — no
+     Add clip, no ✕, no Drive footer. The first entry is the mockup's only real
+     clip, so it stands in for the bundled one. The player's own "Demo" label
+     is in the product only. */
+  const [demo, setDemo] = useState(false)
+  const shown = demo ? clips.slice(0, 1) : clips
   const [query, setQuery] = useState('')
   const [notice, setNotice] = useState(null)
   const [uploading, setUploading] = useState({})
@@ -262,8 +312,8 @@ function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
   /* Filter, then order. Search narrows the set and the chosen chip orders what is
      left, so the two controls compose rather than compete. */
   const found = wanted
-    ? clips.filter((clip) => clip.name.toLowerCase().includes(wanted))
-    : clips
+    ? shown.filter((clip) => clip.name.toLowerCase().includes(wanted))
+    : shown
   const ordered = [...found].sort(active.compare)
 
   /* Reads the real duration off the chosen file before adding it, so the new
@@ -351,21 +401,27 @@ function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
       <main className="mx-auto max-w-4xl px-4 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-lg font-semibold tracking-tight">Clips</h1>
-          <button
-            type="button"
-            onClick={() => fileRef.current.click()}
-            className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent hover:bg-accent-2"
-          >
-            Add clip
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="video/*"
-            onChange={onFileChosen}
-            className="hidden"
-          />
+          {!demo && (
+            <>
+              <button
+                type="button"
+                onClick={() => fileRef.current.click()}
+                className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent hover:bg-accent-2"
+              >
+                Add clip
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="video/*"
+                onChange={onFileChosen}
+                className="hidden"
+              />
+            </>
+          )}
         </div>
+
+        {demo && <DemoStatus onLeave={() => setDemo(false)} />}
 
         {notice && (
           <p className="mt-2 text-xs text-ink/60">{notice}</p>
@@ -413,7 +469,7 @@ function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
             And only once there is a library to have not matched: while it is
             still loading there are no clips whatever was typed, so blaming the
             search would be the same lie one state along. */}
-        {wanted && clips.length > 0 && ordered.length === 0 && (
+        {wanted && shown.length > 0 && ordered.length === 0 && (
           <p className="mt-4 text-xs text-ink/60">
             No clips match “{query.trim()}”.
           </p>
@@ -425,18 +481,22 @@ function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
               key={clip.id}
               clip={clip}
               onOpen={onOpen}
-              onDelete={onDelete}
+              onDelete={demo ? undefined : onDelete}
               uploading={uploading[clip.id]}
             />
           ))}
         </ul>
 
-        <p className="mt-6 text-xs text-ink/40">
-          Clips live in Google Drive. The app only sees files it uploaded itself,
-          so every clip has to come in through Add clip.
-        </p>
+        {!demo && (
+          <>
+            <p className="mt-6 text-xs text-ink/40">
+              Clips live in Google Drive. The app only sees files it uploaded
+              itself, so every clip has to come in through Add clip.
+            </p>
 
-        <DriveStatus />
+            <DriveStatus onDemo={() => setDemo(true)} />
+          </>
+        )}
       </main>
     </div>
   )
