@@ -122,78 +122,74 @@ carrying the acceptance criteria it gets reviewed against.
     npm --prefix app run dev
 
 The clips grid is filled from Google Drive, so on a clean clone it starts empty.
-To connect your own, see
-[Appendix: connect your own Google Drive](#appendix-connect-your-own-google-drive).
+Drive setup is in
+[Appendix: Google Drive setup](#appendix-google-drive-setup).
 
 No clip is committed, so to play something locally drop your own mp4 into
 `app/public/`. Showing a bundled sample when Drive is not connected is still to do.
 
 ---
 
-## Appendix: connect your own Google Drive
+## Appendix: Google Drive setup
 
-This is a personal app: one instance per person, each with its own Google Cloud
-project, its own Client ID and its own Drive. There is no shared service to sign up
-to. Setting it up gives you no access to my project, Drive or clips, and nobody has
-to add you to theirs — you create your own project and add your own account to it.
+Each instance of the app is separate, with its own Google Cloud project, Client ID
+and Drive. There is no shared service and no account to request. Setting up an
+instance grants no access to any other instance's project, Drive or clips.
 
-Worth knowing before you start:
+Before starting:
 
 - **The Client ID is not a secret.** It identifies the app, authorises nothing, and
   ships in the JS bundle of any static site.
-- **The app only sees files it uploaded itself.** It asks for the `drive.file` scope
-  and nothing broader, because the broader Drive scopes are restricted and need a
-  Google security assessment. So every clip goes in through the app's Add clip. A
-  file dropped into the Drive folder by hand is invisible, not merely read-only.
-  Switch to a new Client ID and the old clips and `loops.json` go invisible too, so
-  re-uploading is expected, not a bug.
-- **You bring your own clips.** Your library starts empty. The one clip in this repo
-  plays in demo mode and never reaches your Drive.
+- **The app sees only the files it uploaded.** It requests the `drive.file` scope
+  only; the broader Drive scopes are restricted and require a Google security
+  assessment. Clips must be added through Add clip in the app. A file placed in the
+  Drive folder by hand is invisible to the app. Changing the Client ID makes
+  previously uploaded clips and `loops.json` invisible; they must be re-uploaded.
+- **A new instance starts with an empty library.** The one clip in this repo plays
+  in demo mode only and is not added to Drive.
 
-(How I did it: I pasted a prompt like this one into Claude in Chrome and let it walk
-me through.)
+The steps below are written as a prompt for Claude in Chrome.
 
 ```text
-Walk me through setting up Google sign-in for my own copy of Dance Video Looper, a
-static web app that keeps its clips in the user's own Google Drive. Drive the browser
-one step at a time. Hand over to me whenever I need to sign in, pick an account, or
-supply one of my own values. If a button or field isn't where these steps say, the
-Console has been rearranged: find the equivalent and tell me what you did. Don't
-guess.
+Set up Google sign-in for a copy of Dance Video Looper, a static web app that stores
+its clips in the user's Google Drive. Drive the browser one step at a time. Hand
+over to the user for sign-in, account selection, and each value listed below. If a
+button or field is not where a step says, find the equivalent and report what was
+done. Do not guess.
 
-My own values (ask me for any you don't have):
-- PROJECT_NAME: my choice, e.g. dance-video-looper
-- MY_EMAIL: the Google account I will sign in to the app with
-- GITHUB_USER: my GitHub username, only if I'm deploying my fork to GitHub Pages
+Values supplied by the user:
+- PROJECT_NAME: any name, e.g. dance-video-looper
+- USER_EMAIL: the Google account that will sign in to the app
+- GITHUB_USER: GitHub username; needed only when deploying a fork to GitHub Pages
 
 Google Cloud Console (https://console.cloud.google.com)
 
-1. Project picker in the top bar > New project. Project name: PROJECT_NAME. Create,
-   then make sure it is the selected project.
+1. Project picker in the top bar > New project. Project name: PROJECT_NAME.
+   Create, then select the project.
 2. APIs & Services > Library. Search "Google Drive API", open it, Enable.
 3. APIs & Services > OAuth consent screen > Get started.
-   - App name: my choice. It is what Google's sign-in popup shows.
-   - User support email: MY_EMAIL
+   - App name: any; shown in Google's sign-in popup
+   - User support email: USER_EMAIL
    - Audience: External
-   - Contact information: MY_EMAIL
+   - Contact information: USER_EMAIL
    - Agree to the Google API Services User Data Policy, Continue, Create.
-4. Audience. Leave Publishing status on Testing. Test users > Add users > MY_EMAIL >
-   Save. This is my own account on the project I just made. Without it, Google
-   refuses sign-in.
-5. Data Access > Add or remove scopes. Tick .../auth/drive.file and nothing else.
-   Update, then Save.
+4. Audience. Leave Publishing status on Testing. Test users > Add users >
+   USER_EMAIL > Save. This adds the user's own account to the project from step 1.
+   Without it, Google refuses sign-in.
+5. Data Access > Add or remove scopes. Select .../auth/drive.file only. Update,
+   then Save.
 6. Clients > Create client.
    - Application type: Web application
-   - Name: my choice
+   - Name: any
    - Authorized JavaScript origins > Add URI: http://localhost:5173
-   - If I'm deploying, Add URI again: https://GITHUB_USER.github.io
-     Origins only: no path, no trailing slash.
-   - Leave Authorized redirect URIs empty. The app signs in with Google's popup
-     token flow, which uses origins only.
-   - Create. Show me the Client ID; it ends in .apps.googleusercontent.com. The
-     client secret is never used, so leave it.
+   - When deploying, Add URI: https://GITHUB_USER.github.io
+     Origin only: no path, no trailing slash.
+   - Authorized redirect URIs: leave empty. The app uses Google's popup token
+     flow, which uses origins only.
+   - Create. Report the Client ID, which ends in .apps.googleusercontent.com.
+     The client secret is not used.
 
-GitHub, only if I'm deploying my fork (https://github.com/GITHUB_USER/dance-video-looper)
+GitHub, only when deploying a fork (https://github.com/GITHUB_USER/dance-video-looper)
 
 7. Actions tab > "I understand my workflows, go ahead and enable them".
 8. Settings > Pages > Build and deployment > Source: GitHub Actions.
@@ -202,29 +198,31 @@ GitHub, only if I'm deploying my fork (https://github.com/GITHUB_USER/dance-vide
    Add variable.
 ```
 
-Then, on your machine. `app/.env.local` is the only file you edit:
+Local setup. `app/.env.local` is the only file to edit:
 
-    cp app/.env.example app/.env.local    # set VITE_GOOGLE_CLIENT_ID to your Client ID
+    cp app/.env.example app/.env.local    # set VITE_GOOGLE_CLIENT_ID to the Client ID
     npm --prefix app install
     npm --prefix app run dev              # http://localhost:5173/dance-video-looper/
 
-The dev server refuses to start if port 5173 is taken, rather than drift to a port
-that isn't a registered origin.
+The dev server fails to start if port 5173 is taken, because no other port is a
+registered origin.
 
-To deploy, push to `main`. The pipeline tests, builds with your variable, and
-publishes to `https://GITHUB_USER.github.io/dance-video-looper/`. If you renamed
-the fork, first change `base` in `app/vite.config.ts` to `/<your-repo-name>/`.
+Deploy by pushing to `main`. The pipeline tests, builds with the repository
+variable, and publishes to `https://GITHUB_USER.github.io/dance-video-looper/`. For a
+fork with a different name, first set `base` in `app/vite.config.ts` to
+`/<repo-name>/`.
 
-**Check it worked.** Click Connect Google Drive and sign in as `MY_EMAIL`. Google
-warns that the app is unverified — it's yours and in Testing, so continue. The footer
-should read "Drive is connected." Then Add clip: the clip appears as a tile, and a
-`Dance Video Looper` folder appears in your Drive.
+**Verify.** Connect Google Drive, signed in as `USER_EMAIL`. Google warns that the
+app is unverified, which is expected in Testing; continue. The footer reads "Drive is
+connected." Add a clip: it appears as a tile, and a `Dance Video Looper` folder
+appears in Drive.
 
-**If it didn't:**
+**Troubleshooting**
 
-- *"Drive is not set up"* — the build has no Client ID. Check `app/.env.local`
-  (or the repository variable) and restart the dev server.
-- *The app says you declined access, and you didn't* — Google rejected the client.
-  Usually the origin you're on is missing from step 6, or the Client ID is mistyped.
-- *Google says access is blocked* — the account you signed in with isn't a test
-  user (step 4).
+- *"Drive is not set up"*: the build has no Client ID. Check `app/.env.local` or the
+  repository variable, then restart the dev server.
+- *"Drive is unavailable — you declined access" when access was not declined*:
+  Google rejected the client. Usually the current origin is missing from step 6, or
+  the Client ID is wrong.
+- *Google reports that access is blocked*: the signed-in account is not a test user
+  (step 4).
