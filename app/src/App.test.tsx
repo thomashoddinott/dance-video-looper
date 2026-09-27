@@ -810,6 +810,41 @@ describe('the way into the demo', () => {
   })
 })
 
+/* A portfolio piece: anyone looking at the dashboard can get to the code
+   behind it, whoever they are signed in as. The player is for practising, so
+   it stays out of the way there. */
+describe('the link to the source code', () => {
+  const REPO = 'https://github.com/thomashoddinott/dance-video-looper'
+
+  const sourceLink = () =>
+    screen.queryByRole('link', { name: /source code/i })
+
+  it('is on the dashboard for a visitor who has not signed in', () => {
+    renderAppAt('/')
+
+    expect(sourceLink()).toHaveAttribute('href', REPO)
+  })
+
+  it('is still there once the dancer has signed in', () => {
+    renderAppAt('/', sourceGranting(), null, { tokenStore: aConnectedStore() })
+
+    expect(sourceLink()).toHaveAttribute('href', REPO)
+  })
+
+  it('is not in the player', async () => {
+    renderAppAt('/clip/wave-practice', sourceGranting(), null, {
+      tokenStore: aConnectedStore(),
+      driveApi: driveHolding([
+        getClip({ id: 'wave-practice', driveId: 'drive-wave', name: 'Wave practice' }),
+      ]),
+    })
+
+    await screen.findByText('Wave practice')
+
+    expect(sourceLink()).not.toBeInTheDocument()
+  })
+})
+
 describe('deleting a clip', () => {
   /* Named and last-modified exactly as `aVideoFile` defaults, so this is the
      clip `clipIdFor` derives from that file — which is what makes re-adding it

@@ -705,4 +705,12 @@ describe('the grid in the demo', () => {
       /demo mode/i,
     )
   })
+
+  it('still links to the source code', () => {
+    renderTheDemo()
+
+    expect(
+      screen.getByRole('link', { name: /source code/i }),
+    ).toHaveAttribute('href', 'https://github.com/thomashoddinott/dance-video-looper')
+  })
 })

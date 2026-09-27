@@ -12,6 +12,7 @@ import { uploadOf } from './library'
 import type { OrderingId } from './ordering'
 import { orderings } from './ordering'
 import { matching } from './search'
+import { SourceLink } from './SourceLink'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -159,30 +160,33 @@ export function ClipsScreen({
       <main className="mx-auto max-w-4xl px-4 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-lg font-semibold tracking-tight">Clips</h1>
-          {!demo && (
-            <>
-              <button
-                type="button"
-                onClick={() => chooser.current?.click()}
-                className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent hover:bg-accent-2"
-              >
-                Add clip
-              </button>
-              {/* `accept` is a contract with the platform rather than decoration:
-                  it is what makes a phone offer the camera roll instead of every
-                  document on it. The input itself stays hidden — the styled button
-                  above is the control the dancer sees. */}
-              <input
-                ref={chooser}
-                type="file"
-                accept="video/*"
-                onChange={(event) => {
-                  void onFileChosen(event)
-                }}
-                className="hidden"
-              />
-            </>
-          )}
+          <div className="flex items-center gap-4">
+            <SourceLink />
+            {!demo && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => chooser.current?.click()}
+                  className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent hover:bg-accent-2"
+                >
+                  Add clip
+                </button>
+                {/* `accept` is a contract with the platform rather than decoration:
+                    it is what makes a phone offer the camera roll instead of every
+                    document on it. The input itself stays hidden — the styled button
+                    above is the control the dancer sees. */}
+                <input
+                  ref={chooser}
+                  type="file"
+                  accept="video/*"
+                  onChange={(event) => {
+                    void onFileChosen(event)
+                  }}
+                  className="hidden"
+                />
+              </>
+            )}
+          </div>
         </div>
 
         {demo && <DemoStatus />}
