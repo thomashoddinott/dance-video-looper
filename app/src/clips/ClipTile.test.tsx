@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Clip } from './clip'
 import { getClip } from './clip.factory'
 import { ClipTile } from './ClipTile'
+import type { DanceStyle } from './danceStyle'
 
 const renderTile = (
   uploading?: number,
@@ -247,5 +248,153 @@ describe('the frame a tile shows', () => {
 
     expect(theStill()).toBeNull()
     expect(thePoster()).toBeNull()
+  })
+})
+
+/* #43. The style is shown and changed in one place, the tile, because that is
+   where a clip lands the moment it is added — so saying what it is belongs to
+   the add without being a step in it. */
+describe('the style a tile wears', () => {
+  const renderStyledTile = ({
+    style,
+    uploading,
+    onRestyle = () => {},
+  }: {
+    readonly style?: DanceStyle
+    readonly uploading?: number
+    readonly onRestyle?: (clip: Clip, style: DanceStyle | undefined) => void
+  } = {}) =>
+    render(
+      <MemoryRouter>
+        <ClipTile
+          clip={getClip({ id: 'shuffle-drill', name: 'Shuffle drill', style })}
+          uploading={uploading}
+          onDelete={() => {}}
+          onRestyle={onRestyle}
+        />
+      </MemoryRouter>,
+    )
+
+  const theLabel = () =>
+    screen.queryByRole('button', { name: /^Style of Shuffle drill/ })
+
+  const theChooser = () =>
+    screen.queryByRole('group', { name: 'Choose a style for Shuffle drill' })
+
+  const pick = async (name: string) => {
+    await userEvent.click(theLabel() as HTMLElement)
+    await userEvent.click(
+      within(theChooser() as HTMLElement).getByRole('button', { name }),
+    )
+  }
+
+  it('names the style of a clip that has one', () => {
+    renderStyledTile({ style: 'salsa' })
+
+    expect(theLabel()).toHaveTextContent('Salsa')
+    expect(theLabel()).toHaveAccessibleName('Style of Shuffle drill: Salsa')
+  })
+
+  /* Every clip arrives this way, so the label doubles as the invitation. */
+  it('invites a style on a clip that has none', () => {
+    renderStyledTile()
+
+    expect(theLabel()).toHaveTextContent('+ Style')
+    expect(theLabel()).toHaveAccessibleName('Style of Shuffle drill: none')
+  })
+
+  it('offers both styles, and none, once the label is tapped', async () => {
+    renderStyledTile()
+
+    await userEvent.click(theLabel() as HTMLElement)
+
+    expect(
+      within(theChooser() as HTMLElement)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Salsa', 'Bachata', 'None', 'Cancel'])
+  })
+
+  it('marks the style the clip already has', async () => {
+    renderStyledTile({ style: 'bachata' })
+
+    await userEvent.click(theLabel() as HTMLElement)
+
+    expect(
+      within(theChooser() as HTMLElement).getByRole('button', { pressed: true }),
+    ).toHaveTextContent('Bachata')
+  })
+
+  it('sets the style picked, on the clip whose tile asked', async () => {
+    const onRestyle = vi.fn()
+    renderStyledTile({ onRestyle })
+
+    await pick('Bachata')
+
+    expect(onRestyle).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'shuffle-drill' }),
+      'bachata',
+    )
+    expect(theChooser()).not.toBeInTheDocument()
+  })
+
+  it('takes the style off when None is picked', async () => {
+    const onRestyle = vi.fn()
+    renderStyledTile({ style: 'salsa', onRestyle })
+
+    await pick('None')
+
+    expect(onRestyle).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'shuffle-drill' }),
+      undefined,
+    )
+  })
+
+  it('changes nothing when the question is cancelled', async () => {
+    const onRestyle = vi.fn()
+    renderStyledTile({ style: 'salsa', onRestyle })
+
+    await pick('Cancel')
+
+    expect(theChooser()).not.toBeInTheDocument()
+    expect(onRestyle).not.toHaveBeenCalled()
+  })
+
+  /* The chooser and the delete question cover the same thumbnail, so one
+     opening closes the other rather than stacking on top of it. */
+  it('asks one question at a time, whichever was asked last', async () => {
+    renderStyledTile()
+
+    await userEvent.click(theDeleteControl() as HTMLElement)
+    await userEvent.click(theLabel() as HTMLElement)
+
+    expect(theQuestion()).not.toBeInTheDocument()
+    expect(theChooser()).toBeInTheDocument()
+
+    await userEvent.click(theDeleteControl() as HTMLElement)
+
+    expect(theChooser()).not.toBeInTheDocument()
+    expect(theQuestion()).toBeInTheDocument()
+  })
+
+  /* No Drive file to carry a style yet — `restyle` would refuse it. */
+  it('says nothing about style while the clip is still going up', () => {
+    renderStyledTile({ uploading: 0.38 })
+
+    expect(theLabel()).not.toBeInTheDocument()
+  })
+
+  it('offers no style where the clip’s style cannot be changed', () => {
+    renderTile()
+
+    expect(theLabel()).not.toBeInTheDocument()
+  })
+
+  it('does not take the tile’s place as the way into the player', async () => {
+    renderStyledTile()
+
+    await userEvent.click(theLabel() as HTMLElement)
+
+    expect(screen.getAllByRole('link')).toHaveLength(1)
   })
 })

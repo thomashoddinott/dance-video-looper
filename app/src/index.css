@@ -2,7 +2,12 @@
 
 /* Chalk — warm paper, deep teal. Every colour in the UI resolves from these
    eight tokens, so a re-theme is an eight-line change, not a sweep.
-   Copied verbatim from the mockup: these tokens are the design system. */
+   Copied verbatim from the mockup: these tokens are the design system.
+
+   Plus one per dance style (#43), which is content rather than chrome: it
+   says what a clip is, so it stays put under a re-theme. Chilli red and club
+   neon, far enough apart in hue from each other and from the teal that none
+   of the three is read as another. Both carry `on-accent` text. */
 
 @theme {
   --color-shell: #eceae4;
@@ -13,4 +18,7 @@
   --color-accent-2: #14504f;
   --color-ink: #1c1a15;
   --color-on-accent: #f4fbf9;
+
+  --color-salsa: #a3142c;
+  --color-bachata: #b026ff;
 }

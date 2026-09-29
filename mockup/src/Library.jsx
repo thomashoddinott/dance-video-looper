@@ -25,6 +25,21 @@ const SORTS = [
   },
 ]
 
+/* #43. Two styles and no third: a clip that is neither is a clip with no
+   style, drawn only while no style is picked, not an "Other" bucket to
+   maintain.
+
+   Each wears its own colour (`index.css`) wherever it appears, so the tile
+   label, the chooser and the filter chip are recognisably one thing. Spelled
+   out whole rather than built from the id, because Tailwind only generates a
+   class it can find written down. */
+const STYLES = [
+  { id: 'salsa', label: 'Salsa', fill: 'bg-salsa text-on-accent', text: 'text-salsa' },
+  { id: 'bachata', label: 'Bachata', fill: 'bg-bachata text-on-accent', text: 'text-bachata' },
+]
+
+const styleOf = (style) => STYLES.find(({ id }) => id === style)
+
 function formatDuration(seconds) {
   const whole = Math.round(seconds)
   const mins = Math.floor(whole / 60)
@@ -66,8 +81,12 @@ function Thumbnail({ clip }) {
    same constraint bites harder. It is always in the document and only *fades*
    on hover, because a phone has no hover and the phone is half of why the
    product syncs through Drive at all. */
-function ClipTile({ clip, onOpen, onDelete, uploading }) {
+function ClipTile({ clip, onOpen, onDelete, onStyle, uploading }) {
   const [asking, setAsking] = useState(false)
+  /* #43. One question on the tile at a time: the style chooser and the delete
+     prompt cover the same thumbnail, so opening either closes the other. */
+  const [choosing, setChoosing] = useState(false)
+  const style = styleOf(clip.style)
 
   return (
     <li className="group/tile relative">
@@ -109,11 +128,71 @@ function ClipTile({ clip, onOpen, onDelete, uploading }) {
           type="button"
           aria-label={`Delete ${clip.name}`}
           aria-expanded={asking}
-          onClick={() => setAsking((open) => !open)}
+          onClick={() => {
+            setChoosing(false)
+            setAsking((open) => !open)
+          }}
           className="absolute top-1.5 right-1.5 rounded-full bg-black/70 px-2 py-0.5 text-lg leading-none text-white/70 opacity-100 transition hover:text-white sm:opacity-0 sm:group-hover/tile:opacity-100 sm:focus-visible:opacity-100 sm:aria-expanded:opacity-100"
         >
           &times;
         </button>
+      )}
+
+      {/* #43. The style, in the corner opposite the ✕ and in the style's own
+          colour, so with no style picked the grid still says which clip is
+          which at a glance. It is also the way to change it, and it never
+          fades: the phone has no hover and is where most clips arrive
+          untagged. A sibling of the open button for the reason the ✕ is. */}
+      {uploading === undefined && onStyle && (
+        <button
+          type="button"
+          aria-label={`Style of ${clip.name}: ${style?.label ?? 'none'}`}
+          aria-expanded={choosing}
+          onClick={() => {
+            setAsking(false)
+            setChoosing((open) => !open)
+          }}
+          className={`absolute top-1.5 left-1.5 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+            style ? style.fill : 'bg-black/40 text-white/70 hover:text-white'
+          }`}
+        >
+          {style?.label ?? '+ Style'}
+        </button>
+      )}
+
+      {/* Every style is drawn in its colour whether or not it is the current
+          one, so the chooser previews the label it will leave on the tile. The
+          current one is ringed rather than recoloured. */}
+      {choosing && (
+        <div className="absolute inset-x-0 top-0 flex aspect-[9/16] flex-col items-center justify-center gap-2 rounded-xl bg-shell/95 px-2 text-center">
+          <p className="text-xs font-semibold">Style</p>
+          {[
+            ...STYLES,
+            { id: undefined, label: 'None', fill: 'bg-control text-ink/70 hover:bg-control-hi' },
+          ].map(({ id, label, fill }) => (
+            <button
+              key={label}
+              type="button"
+              aria-pressed={clip.style === id}
+              onClick={() => {
+                setChoosing(false)
+                onStyle(clip, id)
+              }}
+              className={`w-full max-w-24 rounded-lg px-3 py-1.5 text-xs font-semibold ${fill} ${
+                clip.style === id ? 'ring-2 ring-ink ring-offset-2 ring-offset-shell' : ''
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setChoosing(false)}
+            className="text-[11px] text-ink/50 underline underline-offset-2 hover:text-ink"
+          >
+            Cancel
+          </button>
+        </div>
       )}
 
       {/* The ✕ stays mounted underneath, so a keyboard that reached it has
@@ -291,7 +370,17 @@ function DemoStatus({ onLeave }) {
   )
 }
 
-function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
+function Library({
+  clips,
+  sort,
+  onSort,
+  filter,
+  onFilter,
+  onOpen,
+  onAdd,
+  onDelete,
+  onStyle,
+}) {
   /* #33. The product's demo is one bundled clip with nothing to manage — no
      Add clip, no ✕, no Drive footer. The first entry is the mockup's only real
      clip, so it stands in for the bundled one. The player's own "Demo" label
@@ -329,11 +418,16 @@ function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
 
   const active = SORTS.find((option) => option.id === sort)
   const wanted = query.trim().toLowerCase()
-  /* Filter, then order. Search narrows the set and the chosen chip orders what is
-     left, so the two controls compose rather than compete. */
+  /* #43. The demo is one clip with no style control, so a filter carried in
+     from the dancer's own library must not be able to hide it. */
+  const styled = demo ? null : styleOf(filter)?.label
+  const inStyle = styled ? shown.filter((clip) => clip.style === filter) : shown
+  /* Filter, then order. The style and the search both narrow the set and the
+     chosen chip orders what is left, so the controls compose rather than
+     compete. */
   const found = wanted
-    ? shown.filter((clip) => clip.name.toLowerCase().includes(wanted))
-    : shown
+    ? inStyle.filter((clip) => clip.name.toLowerCase().includes(wanted))
+    : inStyle
   const ordered = [...found].sort(active.compare)
 
   /* Reads the real duration off the chosen file before adding it, so the new
@@ -410,8 +504,10 @@ function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
       })
       onSort('added')
       /* The search goes for the same reason the sort flips, and a sharper one: a
-         search the new clip does not match hides it outright. */
+         search the new clip does not match hides it outright. So does the
+         style (#43): a new clip has none yet, so any style picked hides it. */
       setQuery('')
+      onFilter('all')
       playOutAnUpload(id)
     }
   }
@@ -468,7 +564,7 @@ function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
           className="mt-3 w-full rounded-lg bg-control px-3 py-2 text-sm text-ink placeholder:text-ink/40"
         />
 
-        <div className="mt-3 flex flex-wrap gap-1.5">
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {SORTS.map((option) => (
             <button
               key={option.id}
@@ -483,6 +579,41 @@ function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
               {option.label}
             </button>
           ))}
+
+          {/* #43, drawn ahead of the build. Its own group, pushed right, so it
+              shares the row the ordering chips already take rather than
+              spending one of its own — and reads as a second question, not a
+              fifth ordering. `ml-auto` keeps it right-aligned when a phone
+              wraps it onto a line of its own.
+
+              No All chip: nothing picked is the whole library, and picking the
+              chosen style again goes back to it. That is also what tells the
+              two groups apart in the hand — an ordering is always chosen, a
+              style need not be.
+
+              Lettered in the style's colour until picked, then filled with it:
+              the same colour as the labels it is about to leave on screen. A
+              filled chip is also one a hover cannot pass for, which the
+              ordering chips' grey-on-grey could. */}
+          {!demo && (
+            <div role="group" aria-label="Filter by style" className="ml-auto flex gap-1.5">
+              {STYLES.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={option.id === filter}
+                  onClick={() => onFilter(option.id === filter ? 'all' : option.id)}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    option.id === filter
+                      ? option.fill
+                      : `bg-control hover:bg-control-hi ${option.text}`
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* An empty grid is only honest about an empty library. Under a search it
@@ -491,10 +622,15 @@ function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
 
             And only once there is a library to have not matched: while it is
             still loading there are no clips whatever was typed, so blaming the
-            search would be the same lie one state along. */}
-        {wanted && shown.length > 0 && ordered.length === 0 && (
+            search would be the same lie one state along.
+
+            A style that nothing has yet is the same case (#43), and names the
+            style so the dancer can see which control emptied the grid. */}
+        {(wanted || styled) && shown.length > 0 && ordered.length === 0 && (
           <p className="mt-4 text-xs text-ink/60">
-            No clips match “{query.trim()}”.
+            {wanted
+              ? `No ${styled ? `${styled} ` : ''}clips match “${query.trim()}”.`
+              : `No ${styled} clips yet.`}
           </p>
         )}
 
@@ -505,6 +641,7 @@ function Library({ clips, sort, onSort, onOpen, onAdd, onDelete }) {
               clip={clip}
               onOpen={onOpen}
               onDelete={demo ? undefined : onDelete}
+              onStyle={demo ? undefined : onStyle}
               uploading={uploading[clip.id]}
             />
           ))}

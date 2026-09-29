@@ -27,6 +27,8 @@ const noClipIsAdded = () => {}
 const noOrderingIsChosen = () => {}
 const noFileIsProbed: ClipProbe = async () => ({ ok: false })
 const noClipIsDeleted = () => {}
+const noClipIsRestyled = () => {}
+const noStyleIsPicked = () => {}
 
 const renderLibrary = (library: Library) =>
   render(
@@ -39,8 +41,11 @@ const renderLibrary = (library: Library) =>
           library={library}
           ordering={orderings[0].id}
           onOrderingChange={noOrderingIsChosen}
+          danceStyle={undefined}
+          onDanceStyleChange={noStyleIsPicked}
           onAdd={noClipIsAdded}
           onDelete={noClipIsDeleted}
+          onRestyle={noClipIsRestyled}
           probe={noFileIsProbed}
         />
       </MemoryRouter>

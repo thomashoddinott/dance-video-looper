@@ -8,6 +8,7 @@ import { aDriveApi } from '../drive/driveApi.factory'
 import { DriveSessionProvider } from '../drive/DriveSessionProvider'
 import type { TokenSource } from '../drive/gisTokenSource'
 import type { TokenStore } from '../drive/tokenStore'
+import type { Clip } from './clip'
 import { getClip } from './clip.factory'
 import type { ClipCache } from './clipCache'
 import { forgetting, holdsNothing } from './clipCache.factory'
@@ -221,6 +222,116 @@ describe('deleting a clip from the library', () => {
 
     expect(api.trash).not.toHaveBeenCalled()
     expect(result.current.library.clips).toEqual([])
+  })
+})
+
+/* #43. The same ordering `remove` keeps, for the same reason: Drive first, then
+   the tile, so the grid never wears a style the dancer's Drive does not hold —
+   one that would be gone again on the next reload, or on the phone. */
+describe('setting a clip’s dance style', () => {
+  const readyWith = async (api: DriveApi) => {
+    const rendered = renderLibrary(api)
+
+    await waitFor(() => {
+      expect(rendered.result.current.library.state).toBe('ready')
+    })
+
+    return rendered
+  }
+
+  const styleOf = (library: { readonly clips: readonly Clip[] }) =>
+    library.clips.find((clip) => clip.id === A_STORED_CLIP.id)?.style
+
+  it('stores the style in Drive, and the tile wears it', async () => {
+    const api = anApi()
+    const { result } = await readyWith(api)
+
+    await act(async () => {
+      await result.current.restyle(A_STORED_CLIP, 'salsa')
+    })
+
+    expect(api.setStyle).toHaveBeenCalledWith(expect.anything(), 'drive-1', 'salsa')
+    expect(styleOf(result.current.library)).toBe('salsa')
+  })
+
+  it('takes a style off when the clip is given none', async () => {
+    const styled = getClip({ ...A_STORED_CLIP, style: 'bachata' })
+    const api = anApi({ listClips: vi.fn(async () => [styled]) })
+    const { result } = await readyWith(api)
+
+    await act(async () => {
+      await result.current.restyle(styled, undefined)
+    })
+
+    expect(api.setStyle).toHaveBeenCalledWith(expect.anything(), 'drive-1', undefined)
+    expect(styleOf(result.current.library)).toBeUndefined()
+  })
+
+  it('keeps the style it had when Drive refuses, and says which clip', async () => {
+    const styled = getClip({ ...A_STORED_CLIP, name: 'Shuffle drill', style: 'bachata' })
+    const { result } = await readyWith(
+      anApi({
+        listClips: vi.fn(async () => [styled]),
+        setStyle: vi.fn(async () => {
+          throw new DriveError('boom', 500)
+        }),
+      }),
+    )
+
+    await act(async () => {
+      await result.current.restyle(styled, 'salsa')
+    })
+
+    expect(styleOf(result.current.library)).toBe('bachata')
+    expect(result.current.notice).toContain('Shuffle drill')
+  })
+
+  it('reports a withdrawal when the change is what gets the 401', async () => {
+    const { result } = await readyWith(
+      anApi({
+        setStyle: vi.fn(async () => {
+          throw new DriveError('no', 401)
+        }),
+      }),
+    )
+
+    await act(async () => {
+      await result.current.restyle(A_STORED_CLIP, 'salsa')
+    })
+
+    expect(result.current.status).toBe('consent-withdrawn')
+  })
+
+  /* A clip whose upload never landed has no file to put a style on. The tile
+     hides the control while the bytes go up, so this is a guard, not a flow —
+     but `files/undefined` would turn it into a 404 the dancer could not read. */
+  it('asks Drive nothing about a clip Drive never stored, and says so', async () => {
+    const halfSent = getClip({ id: 'half-sent', name: 'Half sent' })
+    const api = anApi({ listClips: vi.fn(async () => [halfSent]) })
+    const { result } = await readyWith(api)
+
+    await act(async () => {
+      await result.current.restyle(halfSent, 'salsa')
+    })
+
+    expect(api.setStyle).not.toHaveBeenCalled()
+    expect(result.current.library.clips[0]?.style).toBeUndefined()
+    expect(result.current.notice).toContain('Half sent')
+  })
+
+  it('says the style was not kept when there is no Drive to keep it in', async () => {
+    const api = anApi()
+    const { result } = renderLibrary(api, refusing, keepingNothing())
+
+    await waitFor(() => {
+      expect(result.current.library.state).toBe('ready')
+    })
+    await act(async () => {
+      await result.current.restyle(A_STORED_CLIP, 'salsa')
+    })
+
+    expect(api.setStyle).not.toHaveBeenCalled()
+    expect(result.current.notice).toMatch(/could not be saved to Drive/)
   })
 })
 

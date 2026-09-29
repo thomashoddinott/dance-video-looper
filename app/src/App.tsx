@@ -7,6 +7,7 @@ import { browserClipCache, browserThumbnailCache } from './clips/clipCache'
 import type { ClipProbe } from './clips/clipProbe'
 import { browserClipProbe } from './clips/clipProbe'
 import { ClipsScreen } from './clips/ClipsScreen'
+import type { DanceStyle } from './clips/danceStyle'
 import { withLoopCounts, withOpened } from './clips/library'
 import type { OpenedStore } from './clips/openedStore'
 import { browserOpenedStore } from './clips/openedStore'
@@ -59,7 +60,7 @@ export function App({
   /* The cache goes in as well as down to the player: a deleted clip's bytes are
      budget held against something that is not coming back, and this is the only
      place that holds both the library and the cache. */
-  const { library, notice, add, remove } = useLibrary(driveApi, {
+  const { library, notice, add, remove, restyle } = useLibrary(driveApi, {
     cache: clipCache,
   })
   /* Beside the library rather than inside the player, because both screens
@@ -93,6 +94,10 @@ export function App({
      the chip you pick before opening a clip and want to still be on when you
      come back. */
   const [ordering, setOrdering] = useState<OrderingId>(orderings[0].id)
+  /* Which style the grid is narrowed to (#43), up here for the same reason:
+     a dancer who narrowed to bachata and opened a clip is still practising
+     bachata when they come back. Undefined is the whole library. */
+  const [danceStyle, setDanceStyle] = useState<DanceStyle | undefined>()
   /* The clips as the grid draws them: counts, and when each was last opened
      (#12). All of it arrives separately — Drive's file listing knows nothing
      about loops, and `loops.json` is fetched on its own — so this is where they
@@ -160,9 +165,14 @@ export function App({
             library={counted}
             ordering={ordering}
             onOrderingChange={setOrdering}
+            danceStyle={danceStyle}
+            onDanceStyleChange={setDanceStyle}
             thumbnails={stills}
             onAdd={onAdd}
             onDelete={onDelete}
+            onRestyle={(clip, style) => {
+              void restyle(clip, style)
+            }}
             probe={probe}
             notice={notice}
             demo={demo}

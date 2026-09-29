@@ -87,6 +87,9 @@ export const demoDriveApi = ({
     upload: () => refuse('keeps no clips'),
     uploadThumbnail: () => refuse('keeps no stills'),
     trash: () => refuse('deletes nothing'),
+    /* The grid offers the demo no style control (#43), so this is only the
+       answer to a call nothing should make. */
+    setStyle: () => refuse('keeps no styles'),
 
     listThumbnails: async () => ({ [clip.id]: STILL_FILE }),
 

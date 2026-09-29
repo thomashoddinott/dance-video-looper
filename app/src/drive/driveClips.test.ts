@@ -100,6 +100,34 @@ describe('reading a clip off a file stored in Drive', () => {
 
     expect(clip.loops).toBe(0)
   })
+
+  /* #43. The style lives on the clip's own file, beside its length, so it
+     arrives with the listing and syncs to every device that reads one. */
+  it('reads the dance style stored on the file', () => {
+    const clip = clipFromDriveFile(
+      aDriveFile({ appProperties: { style: 'bachata' } }),
+    )
+
+    expect(clip.style).toBe('bachata')
+  })
+
+  /* Every clip uploaded before #43, and every one uploaded since until the
+     dancer says what it is. None is an answer, not a gap. */
+  it('reads a file that names no style as a clip with none', () => {
+    const clip = clipFromDriveFile(aDriveFile())
+
+    expect(clip.style).toBeUndefined()
+  })
+
+  /* Only the two styles the app knows are styles. A value it cannot draw or
+     filter by would be a clip that belongs to no chip and still wears a label. */
+  it('reads a style it does not know as no style at all', () => {
+    const clip = clipFromDriveFile(
+      aDriveFile({ appProperties: { style: 'kizomba' } }),
+    )
+
+    expect(clip.style).toBeUndefined()
+  })
 })
 
 /* The folder holds more than clips, and always has — `loops.json` has lived

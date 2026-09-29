@@ -1,4 +1,5 @@
 import type { Clip } from './clip'
+import type { DanceStyle } from './danceStyle'
 
 /* Three states, because an empty grid must not be allowed to mean three
    different things:
@@ -92,6 +93,17 @@ export const stored = (
         uploading: without(library.uploading, id),
       }
     : library
+
+/* #43. Only once Drive has taken it — `restyle` calls this after the patch,
+   never before — so a style on a tile is always a style Drive holds. */
+export const restyled = (
+  library: Library,
+  id: string,
+  style: DanceStyle | undefined,
+): Library => ({
+  ...library,
+  clips: library.clips.map((clip) => (clip.id === id ? { ...clip, style } : clip)),
+})
 
 /* The two ways a clip leaves share their mechanics and nothing else, so the
    mechanics live here once and each reason keeps its own name above it. */

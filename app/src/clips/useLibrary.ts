@@ -7,6 +7,7 @@ import type { Clip } from './clip'
 import type { ClipCache } from './clipCache'
 import { browserClipCache } from './clipCache'
 import type { ClipCompressor } from './clipCompressor'
+import type { DanceStyle } from './danceStyle'
 import { browserClipCompressor } from './mediabunnyHost'
 import type { Library } from './library'
 import {
@@ -17,6 +18,7 @@ import {
   LOADING,
   loaded,
   progressed,
+  restyled,
   stored,
 } from './library'
 
@@ -33,6 +35,10 @@ export type LibraryHandle = {
      things off it — the `driveId` to trash, the `id` the cache is keyed on, and
      the `name` to put in the sentence if it fails. */
   readonly remove: (clip: Clip) => Promise<void>
+  /* #43. Undefined takes the style off. The whole clip for `remove`'s
+     reason: the `driveId` to patch, the `id` to find the tile by, and the
+     `name` for the sentence if Drive says no. */
+  readonly restyle: (clip: Clip, style: DanceStyle | undefined) => Promise<void>
 }
 
 export const useLibrary = (
@@ -198,5 +204,37 @@ export const useLibrary = (
     [api, cache, folderToken, reportIfWithdrawn],
   )
 
-  return { library, notice, status, add, remove }
+  /* #43. `remove`'s ordering, and for its reason: Drive first, then the tile,
+     so the grid never wears a style that would be gone on the next reload or
+     missing on the phone. The wait is one metadata patch, a couple of hundred
+     milliseconds with the chooser already closed. */
+  const restyle = useCallback(
+    async (clip: Clip, style: DanceStyle | undefined) => {
+      setNotice(null)
+
+      try {
+        /* A clip whose upload never landed has no file to carry a style. The
+           tile hides the control until the bytes are stored, so this is a
+           guard — `files/undefined` would be a 404 the dancer could not read. */
+        if (clip.driveId === undefined) throw new Error('no Drive file to style')
+
+        const reached = await folderToken()
+
+        if (reached === null) throw new Error('no Drive to style in')
+
+        await api.setStyle(reached.token, clip.driveId, style)
+
+        setLibrary((held) => restyled(held, clip.id, style))
+      } catch (error) {
+        reportIfWithdrawn(error)
+
+        setNotice(
+          `The style of ${clip.name} could not be saved to Drive, so it is unchanged.`,
+        )
+      }
+    },
+    [api, folderToken, reportIfWithdrawn],
+  )
+
+  return { library, notice, status, add, remove, restyle }
 }
