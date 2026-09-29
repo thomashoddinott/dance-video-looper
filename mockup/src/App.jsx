@@ -14,7 +14,12 @@ import Player from './Player.jsx'
    counter to both `added` and `loops` on purpose: the clip added most recently
    was last opened a week ago, and two have never been opened at all. That is
    the whole argument for the chip, and it is only visible in data that
-   disagrees with the other three. */
+   disagrees with the other three.
+
+   `style` is salsa, bachata or absent (#43). The seed has both styles and one
+   clip with neither, which is what a phone upload looks like before anyone
+   has said what it is — so every filter has something to show and something
+   to hide. */
 const SEED_CLIPS = [
   {
     id: 1,
@@ -23,6 +28,7 @@ const SEED_CLIPS = [
     seconds: 26,
     loops: 5,
     opened: '2026-08-30T11:20:00.000Z',
+    style: 'bachata',
     src: '/sample.mp4',
   },
   {
@@ -32,8 +38,9 @@ const SEED_CLIPS = [
     seconds: 18,
     loops: 2,
     opened: '2026-09-06T18:04:11.000Z',
+    style: 'salsa',
   },
-  { id: 3, name: 'Clip 3', added: '2026-08-24', seconds: 41, loops: 0 },
+  { id: 3, name: 'Clip 3', added: '2026-08-24', seconds: 41, loops: 0, style: 'bachata' },
   {
     id: 4,
     name: 'Clip 4',
@@ -41,6 +48,7 @@ const SEED_CLIPS = [
     seconds: 12,
     loops: 3,
     opened: '2026-09-05T20:00:00.000Z',
+    style: 'salsa',
   },
   {
     id: 5,
@@ -50,7 +58,7 @@ const SEED_CLIPS = [
     loops: 1,
     opened: '2026-08-12T09:15:00.000Z',
   },
-  { id: 6, name: 'Clip 6', added: '2026-08-04', seconds: 24, loops: 0 },
+  { id: 6, name: 'Clip 6', added: '2026-08-04', seconds: 24, loops: 0, style: 'bachata' },
 ]
 
 /* Two screens, switched by state rather than a router — the mockup has no URLs
@@ -63,8 +71,16 @@ function App() {
      and **Last opened** is a chip you pick *before* opening a clip and want to
      still be on when you come back (#16). */
   const [sort, setSort] = useState('added')
+  /* Up here for the same reason as `sort` (#43): a dancer who narrowed the
+     grid to bachata, opened a clip and came back is still practising bachata. */
+  const [filter, setFilter] = useState('all')
 
   const addClip = (added) => setClips([added, ...clips])
+
+  /* `undefined` clears it. In the product this is the clip's own Drive file
+     being patched, so it syncs to the phone without touching its loops. */
+  const styleClip = (styled, style) =>
+    setClips(clips.map((clip) => (clip.id === styled.id ? { ...clip, style } : clip)))
 
   /* The mockup has no Drive, so a delete is just the tile going. In the product
      this trashes the Drive file first and only then drops the tile (UC-01
@@ -82,8 +98,11 @@ function App() {
       clips={clips}
       sort={sort}
       onSort={setSort}
+      filter={filter}
+      onFilter={setFilter}
       onAdd={addClip}
       onDelete={deleteClip}
+      onStyle={styleClip}
       /* Stamped on the way in, which is the whole of the feature (#16): open a
          clip, go back, and it is top of the grid under **Last opened**. In the
          product the stamp goes to this device's own storage and rides the next
