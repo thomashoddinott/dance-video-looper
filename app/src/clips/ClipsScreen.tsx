@@ -7,6 +7,7 @@ import type { Clip } from './clip'
 import type { ClipProbe } from './clipProbe'
 import { ClipTile } from './ClipTile'
 import type { DanceStyle } from './danceStyle'
+import { DANCE_STYLES, ofStyle } from './danceStyle'
 import { clipIdFor, nameFromFilename } from './fileClip'
 import type { Library } from './library'
 import { uploadOf } from './library'
@@ -14,6 +15,7 @@ import type { OrderingId } from './ordering'
 import { orderings } from './ordering'
 import { matching } from './search'
 import { SourceLink } from './SourceLink'
+import { STYLE_LOOK } from './styleLook'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -24,6 +26,8 @@ export function ClipsScreen({
   library,
   ordering: chosen,
   onOrderingChange: setChosen,
+  danceStyle: picked,
+  onDanceStyleChange: pick,
   thumbnails = {},
   onAdd,
   onDelete,
@@ -40,6 +44,12 @@ export function ClipsScreen({
      trip through the player. */
   readonly ordering: OrderingId
   readonly onOrderingChange: (id: OrderingId) => void
+  /* #43. Which style the grid is narrowed to, or undefined for none — the
+     whole library. Held by the caller for the ordering's reason: a dancer who
+     narrowed to bachata and opened a clip is still practising bachata when
+     they come back. */
+  readonly danceStyle: DanceStyle | undefined
+  readonly onDanceStyleChange: (style: DanceStyle | undefined) => void
   /* A url per clip that has a still (#77). Absent entries are clips with
      none, which paint the placeholder they always did. */
   readonly thumbnails?: Readonly<Record<string, string>>
@@ -138,26 +148,31 @@ export function ClipsScreen({
 
        The search goes for the same reason, and a sharper one: a search the new
        clip does not match hides it outright, so the dancer would have added a
-       clip and been told there are none. */
+       clip and been told there are none. So does a picked style (#43): a new
+       clip has none yet, so any style picked would hide it. */
     setChosen(RECENT)
     setQuery('')
+    pick(undefined)
   }
 
   const ordering = orderings.find(({ id }) => id === chosen) ?? orderings[0]
-  /* Filter, then order — never the other way about. Search narrows the set and the
-     chosen chip decides the order of what is left, so the two controls compose
-     instead of competing for the same result. */
-  const ordered = [...matching(clips, query)].sort(ordering.compare)
+  /* Narrow, then order — never the other way about. The style and the search
+     both narrow the set and the chosen chip decides the order of what is left,
+     so the controls compose instead of competing for the same result. */
+  const ordered = [...matching(ofStyle(clips, picked), query)].sort(ordering.compare)
   /* Trimmed, to agree with `matching` about what an empty box is: a query of
      nothing but spaces is no search at all, so it must not be able to produce a
      "nothing matches" line over a grid that is showing everything. */
   const searching = query.trim() !== ''
+  const pickedLabel = DANCE_STYLES.find(({ id }) => id === picked)?.label
   /* And only once there was a library for the search to have excluded something
      from. `loading` and `failed` both carry no clips for a reason of their own,
      and a `ready` library with none is the footer note's business — in all three
      the grid is empty whatever was typed, so blaming the search would be the
-     same lie the bare empty grid was not allowed to tell, one state along. */
-  const excludedEverything = searching && clips.length > 0 && ordered.length === 0
+     same lie the bare empty grid was not allowed to tell, one state along. A
+     picked style is the same case one control over (#43). */
+  const excludedEverything =
+    (searching || picked !== undefined) && clips.length > 0 && ordered.length === 0
 
   return (
     <div className="min-h-screen bg-shell text-ink">
@@ -238,32 +253,66 @@ export function ClipsScreen({
           className="mt-3 w-full rounded-lg bg-control px-3 py-2 text-sm text-ink placeholder:text-ink/40"
         />
 
-        <div
-          role="toolbar"
-          aria-label="Order clips"
-          className="mt-3 flex flex-wrap gap-1.5"
-        >
-          {orderings.map((ordering) => (
-            <button
-              key={ordering.id}
-              type="button"
-              aria-pressed={ordering.id === chosen}
-              onClick={() => setChosen(ordering.id)}
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                ordering.id === chosen
-                  ? 'bg-control-hi text-ink'
-                  : 'bg-control text-ink/60 hover:bg-control-hi'
-              }`}
-            >
-              {ordering.label}
-            </button>
-          ))}
+        {/* #43. The ordering and the style share a row, the style pushed to
+            the right as a group of its own — beside the toolbar rather than in
+            it, because picking a style is a second question and not a fifth
+            ordering. `ml-auto` keeps it right-aligned when a phone wraps it
+            onto a line of its own. */}
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <div role="toolbar" aria-label="Order clips" className="flex flex-wrap gap-1.5">
+            {orderings.map((ordering) => (
+              <button
+                key={ordering.id}
+                type="button"
+                aria-pressed={ordering.id === chosen}
+                onClick={() => setChosen(ordering.id)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  ordering.id === chosen
+                    ? 'bg-control-hi text-ink'
+                    : 'bg-control text-ink/60 hover:bg-control-hi'
+                }`}
+              >
+                {ordering.label}
+              </button>
+            ))}
+          </div>
+
+          {/* No All chip: nothing picked is the whole library, and picking the
+              picked style again goes back to it — which is also what tells the
+              two groups apart in the hand. An ordering is always chosen; a style
+              need not be.
+
+              Lettered in the style's colour until picked, then filled with it,
+              the colour of the labels it is about to leave on screen. Absent in
+              the demo, whose one clip has no style to narrow by. */}
+          {!demo && (
+            <div role="group" aria-label="Filter by style" className="ml-auto flex gap-1.5">
+              {DANCE_STYLES.map((style) => (
+                <button
+                  key={style.id}
+                  type="button"
+                  aria-pressed={style.id === picked}
+                  onClick={() => pick(style.id === picked ? undefined : style.id)}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    style.id === picked
+                      ? STYLE_LOOK[style.id].fill
+                      : `bg-control hover:bg-control-hi ${STYLE_LOOK[style.id].text}`
+                  }`}
+                >
+                  {style.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* An empty grid is only honest about a library that is empty. Under a
             search it would be saying "you have no clips" when the truth is "none
             of yours are called that" — the same conflation the loading and failed
-            states above already refuse to make.
+            states above already refuse to make. Under a picked style it would be
+            saying it when the truth is "none of yours are salsa" (#43), so the
+            line names the style, and is named for whichever control emptied the
+            grid.
 
             Named, for the reason those two are: `DriveStatus` owns an unnamed
             `status` on this screen and a second one would be indistinguishable
@@ -271,10 +320,12 @@ export function ClipsScreen({
         {excludedEverything && (
           <p
             role="status"
-            aria-label="Search clips"
+            aria-label={searching ? 'Search clips' : 'Filter by style'}
             className="mt-4 text-xs text-ink/60"
           >
-            No clips match “{query.trim()}”.
+            {searching
+              ? `No ${pickedLabel ? `${pickedLabel} ` : ''}clips match “${query.trim()}”.`
+              : `No ${pickedLabel} clips yet.`}
           </p>
         )}
 

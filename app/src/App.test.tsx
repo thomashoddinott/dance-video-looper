@@ -309,19 +309,21 @@ describe('the Clips screen', () => {
   })
 
   /* Search reads before ordering, and both read before the grid they act on: you
-     narrow the library, then say how what is left should be arranged. */
-  it('lays the shell out heading, search, ordering, clips, then the note', () => {
+     narrow the library, then say how what is left should be arranged. The style
+     chips share the ordering's row, at its far end (#43). */
+  it('lays the shell out heading, search, ordering, style, clips, then the note', () => {
     renderAppAt('/')
 
     const order = inDocumentOrder({
       heading: screen.getByRole('heading', { name: 'Clips' }),
       search: screen.getByRole('searchbox', { name: 'Search clips' }),
       ordering: screen.getByRole('toolbar', { name: 'Order clips' }),
+      style: screen.getByRole('group', { name: 'Filter by style' }),
       clips: screen.getByRole('list', { name: 'Clips' }),
       note: screen.getByText(/clips live in google drive/i),
     })
 
-    expect(order).toEqual(['heading', 'search', 'ordering', 'clips', 'note'])
+    expect(order).toEqual(['heading', 'search', 'ordering', 'style', 'clips', 'note'])
   })
 })
 
@@ -375,6 +377,28 @@ describe('adding a clip', () => {
 
     expect(await screen.findByText('Camel walk')).toBeInTheDocument()
     expect(screen.getByRole('searchbox', { name: 'Search clips' })).toHaveValue('')
+  })
+
+  /* #43, the same rule again. A clip arrives with no style, so any style
+     picked would hide the clip the dancer just added. */
+  it('lets go of the picked style, so the new clip is not hidden behind it', async () => {
+    await renderLibraryWith(probeReading(26))
+
+    await userEvent.click(
+      within(screen.getByRole('group', { name: 'Filter by style' })).getByRole(
+        'button',
+        { name: 'Salsa' },
+      ),
+    )
+    await chooseFile(aVideoFile({ named: 'Camel walk.mp4' }))
+
+    expect(await screen.findByText('Camel walk')).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('group', { name: 'Filter by style' })).queryByRole(
+        'button',
+        { pressed: true },
+      ),
+    ).not.toBeInTheDocument()
   })
 
   /* The player finds a clip by id or bounces back to the grid, so "Back to
@@ -967,6 +991,40 @@ describe('deleting a clip', () => {
     await chooseFile(aVideoFile())
 
     expect(await screen.findByText('(2)')).toBeInTheDocument()
+  })
+})
+
+/* #43. Held above the routes, for the ordering's reason: the grid is
+   unmounted while the player is up, and a dancer who narrowed to bachata and
+   opened a clip is still practising bachata when they come back. */
+describe('narrowing the grid to one style', () => {
+  it('is still the style picked after a trip through the player', async () => {
+    renderAppAt('/', sourceGranting(), null, {
+      tokenStore: aConnectedStore(),
+      driveApi: driveHolding([
+        getClip({ id: 'salsa-turn', name: 'Salsa turn', style: 'salsa' }),
+        getClip({ id: 'bachata-wave', name: 'Bachata wave', style: 'bachata' }),
+      ]),
+    })
+    await screen.findByText('Salsa turn')
+
+    await userEvent.click(
+      within(screen.getByRole('group', { name: 'Filter by style' })).getByRole(
+        'button',
+        { name: 'Bachata' },
+      ),
+    )
+    await userEvent.click(screen.getByText('Bachata wave'))
+    await userEvent.click(
+      await screen.findByRole('link', { name: 'Back to clips' }),
+    )
+
+    expect(
+      within(
+        await screen.findByRole('group', { name: 'Filter by style' }),
+      ).getByRole('button', { name: 'Bachata' }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByText('Salsa turn')).not.toBeInTheDocument()
   })
 })
 

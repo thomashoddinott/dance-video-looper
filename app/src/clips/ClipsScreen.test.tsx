@@ -58,12 +58,15 @@ function ScreenUnderTest({
   readonly onRestyle: (clip: Clip, style: DanceStyle | undefined) => void
 }) {
   const [ordering, setOrdering] = useState<OrderingId>(orderings[0].id)
+  const [danceStyle, setDanceStyle] = useState<DanceStyle | undefined>()
 
   return (
     <ClipsScreen
       library={library}
       ordering={ordering}
       onOrderingChange={setOrdering}
+      danceStyle={danceStyle}
+      onDanceStyleChange={setDanceStyle}
       onAdd={noClipIsAdded}
       onDelete={onDelete}
       onRestyle={onRestyle}
@@ -650,6 +653,140 @@ describe('deleting a clip', () => {
   })
 })
 
+/* #43. A group of its own beside the ordering chips rather than more of them:
+   an ordering is always chosen, a style need not be, and nothing picked is the
+   whole library. */
+describe('the style chips', () => {
+  const styleChips = () => screen.getByRole('group', { name: 'Filter by style' })
+
+  const styleChip = (name: string) =>
+    within(styleChips()).getByRole('button', { name })
+
+  const THREE_STYLES = [
+    getClip({ id: 'salsa-turn', name: 'Salsa turn', style: 'salsa' }),
+    getClip({ id: 'bachata-wave', name: 'Bachata wave', style: 'bachata' }),
+    getClip({ id: 'untold', name: 'Untold' }),
+  ]
+
+  const shownIds = () =>
+    within(screen.getByRole('list', { name: 'Clips' }))
+      .queryAllByRole('link')
+      .map((link) => link.getAttribute('href')?.replace('/clip/', ''))
+
+  it('offers Salsa and Bachata, with neither picked', () => {
+    renderScreen(THREE_STYLES)
+
+    expect(
+      within(styleChips())
+        .getAllByRole('button')
+        .map((chip) => [chip.textContent, chip.getAttribute('aria-pressed')]),
+    ).toEqual([
+      ['Salsa', 'false'],
+      ['Bachata', 'false'],
+    ])
+    expect(shownIds()).toHaveLength(3)
+  })
+
+  /* Apart from the ordering toolbar rather than inside it, so a style picked
+     is never reported as the grid's ordering. */
+  it('is a group of its own, not part of the ordering', () => {
+    renderScreen(THREE_STYLES)
+
+    expect(
+      within(screen.getByRole('toolbar', { name: 'Order clips' })).queryByRole(
+        'button',
+        { name: 'Salsa' },
+      ),
+    ).not.toBeInTheDocument()
+  })
+
+  it('draws only the clips of the style picked, and none with no style', async () => {
+    renderScreen(THREE_STYLES)
+
+    await userEvent.click(styleChip('Salsa'))
+
+    expect(styleChip('Salsa')).toHaveAttribute('aria-pressed', 'true')
+    expect(shownIds()).toEqual(['salsa-turn'])
+  })
+
+  it('moves to the other style when that one is picked', async () => {
+    renderScreen(THREE_STYLES)
+
+    await userEvent.click(styleChip('Salsa'))
+    await userEvent.click(styleChip('Bachata'))
+
+    expect(styleChip('Salsa')).toHaveAttribute('aria-pressed', 'false')
+    expect(shownIds()).toEqual(['bachata-wave'])
+  })
+
+  it('brings the whole library back when the picked style is picked again', async () => {
+    renderScreen(THREE_STYLES)
+
+    await userEvent.click(styleChip('Bachata'))
+    await userEvent.click(styleChip('Bachata'))
+
+    expect(styleChip('Bachata')).toHaveAttribute('aria-pressed', 'false')
+    expect(shownIds()).toHaveLength(3)
+  })
+
+  it('narrows alongside the search, each cutting what the other left', async () => {
+    renderScreen([
+      getClip({ id: 'salsa-turn', name: 'Cross body turn', style: 'salsa' }),
+      getClip({ id: 'salsa-shine', name: 'Shine', style: 'salsa' }),
+      getClip({ id: 'bachata-turn', name: 'Bachata turn', style: 'bachata' }),
+    ])
+
+    await userEvent.click(styleChip('Salsa'))
+    await userEvent.type(searchBox(), 'turn')
+
+    expect(shownIds()).toEqual(['salsa-turn'])
+  })
+
+  it('leaves the chosen ordering in charge of what is left', async () => {
+    renderScreen([
+      getClip({ id: 'zig', name: 'Zig', style: 'salsa' }),
+      getClip({ id: 'bachata', name: 'Middle', style: 'bachata' }),
+      getClip({ id: 'arm', name: 'Arm', style: 'salsa' }),
+    ])
+
+    await userEvent.click(styleChip('Salsa'))
+    await userEvent.click(screen.getByRole('button', { name: 'Name' }))
+
+    expect(shownIds()).toEqual(['arm', 'zig'])
+  })
+
+  /* The search's rule, one control along: an empty grid under a picked style
+     would say "you have no clips" when the truth is "none of yours are salsa". */
+  it('says there are no clips of the style, rather than showing a bare grid', async () => {
+    renderScreen([getClip({ name: 'Untold' })])
+
+    await userEvent.click(styleChip('Salsa'))
+
+    expect(
+      screen.getByRole('status', { name: 'Filter by style' }),
+    ).toHaveTextContent('No Salsa clips yet.')
+  })
+
+  it('names the style when a search inside it matches nothing', async () => {
+    renderScreen([getClip({ name: 'Shine', style: 'bachata' })])
+
+    await userEvent.click(styleChip('Bachata'))
+    await userEvent.type(searchBox(), 'shuffle')
+
+    expect(
+      screen.getByRole('status', { name: 'Search clips' }),
+    ).toHaveTextContent('No Bachata clips match “shuffle”.')
+  })
+
+  it('says nothing of the kind while nothing is picked', () => {
+    renderScreen(THREE_STYLES)
+
+    expect(
+      screen.queryByRole('status', { name: 'Filter by style' }),
+    ).not.toBeInTheDocument()
+  })
+})
+
 /* #43. As with a delete, what is worth pinning here rather than on the tile is
    that the answer arrives naming the clip whose tile was asked. */
 describe('setting a clip’s style', () => {
@@ -692,6 +829,8 @@ describe('the grid in the demo', () => {
             library={loaded(LOADING, [getClip({ name: 'Passitos' })])}
             ordering={orderings[0].id}
             onOrderingChange={() => {}}
+            danceStyle={undefined}
+            onDanceStyleChange={() => {}}
             onAdd={noClipIsAdded}
             onDelete={noClipIsDeleted}
             onRestyle={noClipIsRestyled}
@@ -724,6 +863,15 @@ describe('the grid in the demo', () => {
 
     expect(
       screen.queryByRole('button', { name: /^Delete/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  /* #43. One clip with no style to change has nothing to filter. */
+  it('offers no style filter', () => {
+    renderTheDemo()
+
+    expect(
+      screen.queryByRole('group', { name: 'Filter by style' }),
     ).not.toBeInTheDocument()
   })
 
