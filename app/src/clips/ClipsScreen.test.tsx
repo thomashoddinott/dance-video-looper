@@ -8,6 +8,7 @@ import { DriveSessionProvider } from '../drive/DriveSessionProvider'
 import type { TokenSource } from '../drive/gisTokenSource'
 import type { TokenStore } from '../drive/tokenStore'
 import type { Clip } from './clip'
+import type { DanceStyle } from './danceStyle'
 import { getClip } from './clip.factory'
 import type { ClipProbe } from './clipProbe'
 import { ClipsScreen } from './ClipsScreen'
@@ -36,6 +37,7 @@ const anEmptyTokenStore: TokenStore = {
 const noClipIsAdded = () => {}
 const noFileIsProbed: ClipProbe = async () => ({ ok: false })
 const noClipIsDeleted = () => {}
+const noClipIsRestyled = () => {}
 
 /* The ordering belongs to the caller now (#16), because the real one has to
    outlive this screen being unmounted for the player. Here the caller is this
@@ -49,9 +51,11 @@ const noClipIsDeleted = () => {}
 function ScreenUnderTest({
   library,
   onDelete,
+  onRestyle,
 }: {
   readonly library: Library
   readonly onDelete: (clip: Clip) => void
+  readonly onRestyle: (clip: Clip, style: DanceStyle | undefined) => void
 }) {
   const [ordering, setOrdering] = useState<OrderingId>(orderings[0].id)
 
@@ -62,6 +66,7 @@ function ScreenUnderTest({
       onOrderingChange={setOrdering}
       onAdd={noClipIsAdded}
       onDelete={onDelete}
+      onRestyle={onRestyle}
       probe={noFileIsProbed}
     />
   )
@@ -70,6 +75,7 @@ function ScreenUnderTest({
 const renderScreenWith = (
   library: Library,
   onDelete: (clip: Clip) => void = noClipIsDeleted,
+  onRestyle: (clip: Clip, style: DanceStyle | undefined) => void = noClipIsRestyled,
 ) =>
   render(
     <DriveSessionProvider
@@ -77,7 +83,11 @@ const renderScreenWith = (
       tokenStore={anEmptyTokenStore}
     >
       <MemoryRouter>
-        <ScreenUnderTest library={library} onDelete={onDelete} />
+        <ScreenUnderTest
+          library={library}
+          onDelete={onDelete}
+          onRestyle={onRestyle}
+        />
       </MemoryRouter>
     </DriveSessionProvider>,
   )
@@ -85,7 +95,8 @@ const renderScreenWith = (
 const renderScreen = (
   clips: readonly Clip[],
   onDelete: (clip: Clip) => void = noClipIsDeleted,
-) => renderScreenWith(loaded(LOADING, clips), onDelete)
+  onRestyle: (clip: Clip, style: DanceStyle | undefined) => void = noClipIsRestyled,
+) => renderScreenWith(loaded(LOADING, clips), onDelete, onRestyle)
 
 /* A tile's identity is the clip it is about, and `listitem` takes no name from
    its contents, so the lookup is "the tile that mentions this clip". */
@@ -639,6 +650,33 @@ describe('deleting a clip', () => {
   })
 })
 
+/* #43. As with a delete, what is worth pinning here rather than on the tile is
+   that the answer arrives naming the clip whose tile was asked. */
+describe('setting a clip’s style', () => {
+  it('carries the style picked out, naming the clip whose tile asked', async () => {
+    const onRestyle = vi.fn()
+    renderScreen(
+      [
+        getClip({ id: 'shuffle-drill', name: 'Shuffle drill' }),
+        getClip({ id: 'pivot-turn', name: 'Pivot turn' }),
+      ],
+      noClipIsDeleted,
+      onRestyle,
+    )
+
+    const tile = tileFor('Pivot turn')
+    await userEvent.click(
+      within(tile).getByRole('button', { name: /^Style of Pivot turn/ }),
+    )
+    await userEvent.click(within(tile).getByRole('button', { name: 'Salsa' }))
+
+    expect(onRestyle).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'pivot-turn' }),
+      'salsa',
+    )
+  })
+})
+
 /* #33. A visitor gets one clip to practise on and nothing to manage: the
    demo's api keeps no clip and deletes none, so offering either would be a
    control that could only fail. And there is no Drive in the demo to explain. */
@@ -656,6 +694,7 @@ describe('the grid in the demo', () => {
             onOrderingChange={() => {}}
             onAdd={noClipIsAdded}
             onDelete={noClipIsDeleted}
+            onRestyle={noClipIsRestyled}
             probe={noFileIsProbed}
             demo
           />
@@ -685,6 +724,16 @@ describe('the grid in the demo', () => {
 
     expect(
       screen.queryByRole('button', { name: /^Delete/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  /* #43. The demo's api keeps no style, so a label would be a control that
+     could only fail. */
+  it('offers no way to set the clip’s style', () => {
+    renderTheDemo()
+
+    expect(
+      screen.queryByRole('button', { name: /^Style of/ }),
     ).not.toBeInTheDocument()
   })
 

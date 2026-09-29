@@ -970,6 +970,69 @@ describe('deleting a clip', () => {
   })
 })
 
+/* #43. The tile asks, the library stores; this is the one place the two are
+   joined, so it is the one place the join can be left out. */
+describe('setting a clip’s style', () => {
+  const A_CLIP_IN_DRIVE = getClip({
+    id: 'shuffle-drill',
+    name: 'Shuffle drill',
+    driveId: 'drive-shuffle',
+  })
+
+  it('stores the style in Drive, and the tile wears it', async () => {
+    const driveApi = driveHolding([A_CLIP_IN_DRIVE])
+    await renderLibraryWith(probeReading(26), driveApi)
+
+    await userEvent.click(
+      within(tileFor('Shuffle drill')).getByRole('button', {
+        name: 'Style of Shuffle drill: none',
+      }),
+    )
+    await userEvent.click(
+      within(tileFor('Shuffle drill')).getByRole('button', { name: 'Bachata' }),
+    )
+
+    expect(
+      await within(tileFor('Shuffle drill')).findByRole('button', {
+        name: 'Style of Shuffle drill: Bachata',
+      }),
+    ).toBeInTheDocument()
+    expect(driveApi.setStyle).toHaveBeenCalledWith(
+      expect.anything(),
+      'drive-shuffle',
+      'bachata',
+    )
+  })
+
+  it('says which clip kept its style when Drive refuses', async () => {
+    await renderLibraryWith(
+      probeReading(26),
+      aDriveApi({
+        listClips: async () => [A_CLIP_IN_DRIVE],
+        setStyle: vi.fn(async () => {
+          throw new Error('Drive said no')
+        }),
+      }),
+    )
+
+    await userEvent.click(
+      within(tileFor('Shuffle drill')).getByRole('button', {
+        name: 'Style of Shuffle drill: none',
+      }),
+    )
+    await userEvent.click(
+      within(tileFor('Shuffle drill')).getByRole('button', { name: 'Salsa' }),
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Shuffle drill')
+    expect(
+      within(tileFor('Shuffle drill')).getByRole('button', {
+        name: 'Style of Shuffle drill: none',
+      }),
+    ).toBeInTheDocument()
+  })
+})
+
 describe('the loops saved against each clip', () => {
   const SHUFFLE = getClip({ id: 'shuffle-drill', name: 'Shuffle drill' })
   const PIVOT = getClip({ id: 'pivot-turn', name: 'Pivot turn' })

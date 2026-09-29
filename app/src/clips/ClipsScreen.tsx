@@ -6,6 +6,7 @@ import { DriveStatus } from '../drive/DriveStatus'
 import type { Clip } from './clip'
 import type { ClipProbe } from './clipProbe'
 import { ClipTile } from './ClipTile'
+import type { DanceStyle } from './danceStyle'
 import { clipIdFor, nameFromFilename } from './fileClip'
 import type { Library } from './library'
 import { uploadOf } from './library'
@@ -26,6 +27,7 @@ export function ClipsScreen({
   thumbnails = {},
   onAdd,
   onDelete,
+  onRestyle,
   probe,
   notice: driveNotice = null,
   demo = false,
@@ -46,6 +48,8 @@ export function ClipsScreen({
      failure sentence both live. The screen holds no state for it: the question
      belongs to the tile that asked it. */
   readonly onDelete: (clip: Clip) => void
+  /* #43. Straight through to the library, like the delete above. */
+  readonly onRestyle: (clip: Clip, style: DanceStyle | undefined) => void
   readonly probe: ClipProbe
   /* Something that went wrong after the tile was already in the grid — an
      upload that failed. The screen's own notices below are the ones it can see
@@ -287,6 +291,7 @@ export function ClipsScreen({
               thumbnail={thumbnails[clip.id]}
               uploading={uploadOf(library, clip.id)}
               onDelete={demo ? undefined : onDelete}
+              onRestyle={demo ? undefined : onRestyle}
             />
           ))}
         </ul>

@@ -59,7 +59,7 @@ export function App({
   /* The cache goes in as well as down to the player: a deleted clip's bytes are
      budget held against something that is not coming back, and this is the only
      place that holds both the library and the cache. */
-  const { library, notice, add, remove } = useLibrary(driveApi, {
+  const { library, notice, add, remove, restyle } = useLibrary(driveApi, {
     cache: clipCache,
   })
   /* Beside the library rather than inside the player, because both screens
@@ -163,6 +163,9 @@ export function App({
             thumbnails={stills}
             onAdd={onAdd}
             onDelete={onDelete}
+            onRestyle={(clip, style) => {
+              void restyle(clip, style)
+            }}
             probe={probe}
             notice={notice}
             demo={demo}

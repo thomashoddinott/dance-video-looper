@@ -2,8 +2,23 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 
 import type { Clip } from './clip'
+import type { DanceStyle } from './danceStyle'
+import { DANCE_STYLES } from './danceStyle'
 import { formatAdded, formatDuration } from './format'
 import { Poster } from './Poster'
+import { STYLE_LOOK } from './styleLook'
+
+/* The chooser's answers: each style in its own colour whether or not it is
+   the current one, so the chooser previews the label it will leave, and then
+   none. */
+const STYLE_ANSWERS: readonly {
+  readonly id: DanceStyle | undefined
+  readonly label: string
+  readonly look: string
+}[] = [
+  ...DANCE_STYLES.map(({ id, label }) => ({ id, label, look: STYLE_LOOK[id].fill })),
+  { id: undefined, label: 'None', look: 'bg-control text-ink/70 hover:bg-control-hi' },
+]
 
 /* Visible on a phone and hidden until asked for on a laptop. The ticket asked
    for a hover reveal, and hover is exactly the interaction half this app's
@@ -18,6 +33,7 @@ export function ClipTile({
   thumbnail,
   uploading,
   onDelete,
+  onRestyle,
 }: {
   readonly clip: Clip
   /* The still stored for this clip (#77), or absent for one that has none —
@@ -30,12 +46,21 @@ export function ClipTile({
   /* Absent for a clip that cannot be deleted from here — the demo's (#33),
      which the visitor does not own and the demo's api would refuse. */
   readonly onDelete?: ((clip: Clip) => void) | undefined
+  /* #43. Undefined takes the style off. Absent where it cannot be changed —
+     the demo's clip again, which has no Drive file to carry one. */
+  readonly onRestyle?:
+    | ((clip: Clip, style: DanceStyle | undefined) => void)
+    | undefined
 }) {
   /* The question lives on the tile that asked it, because that is all it is:
      one tile's ephemeral state, meaningless anywhere else and gone the moment
      it is answered. Lifting it to the screen would buy only the guarantee that
      no two tiles ask at once, which costs nothing to allow. */
   const [asking, setAsking] = useState(false)
+  /* The second question a tile can ask (#43). It covers the same thumbnail the
+     delete question does, so opening either closes the other. */
+  const [choosing, setChoosing] = useState(false)
+  const style = DANCE_STYLES.find(({ id }) => id === clip.style)
 
   return (
     <li className="group/tile relative">
@@ -96,12 +121,75 @@ export function ClipTile({
           aria-label={`Delete ${clip.name}`}
           aria-expanded={asking}
           onClick={() => {
+            setChoosing(false)
             setAsking((open) => !open)
           }}
           className={`absolute top-1.5 right-1.5 rounded-full bg-black/70 px-2 py-0.5 text-lg leading-none text-white/70 hover:text-white ${REVEAL}`}
         >
           &times;
         </button>
+      )}
+
+      {/* #43. The style, in the corner opposite the ✕ and in the style's own
+          colour, so with no style picked the grid still says which clip is
+          which at a glance. It is also the way to change it, and unlike the ✕
+          it never fades: the phone has no hover and is where most clips arrive
+          with no style yet. A sibling of the link, for the ✕'s reason.
+
+          Absent while the bytes are still going up, because there is no Drive
+          file yet for the style to be stored on. */}
+      {uploading === undefined && onRestyle !== undefined && (
+        <button
+          type="button"
+          aria-label={`Style of ${clip.name}: ${style?.label ?? 'none'}`}
+          aria-expanded={choosing}
+          onClick={() => {
+            setAsking(false)
+            setChoosing((open) => !open)
+          }}
+          className={`absolute top-1.5 left-1.5 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+            style ? STYLE_LOOK[style.id].fill : 'bg-black/40 text-white/70 hover:text-white'
+          }`}
+        >
+          {style?.label ?? '+ Style'}
+        </button>
+      )}
+
+      {/* The current answer is ringed rather than recoloured, since every
+          answer already wears its own colour. */}
+      {choosing && (
+        <div
+          role="group"
+          aria-label={`Choose a style for ${clip.name}`}
+          className="absolute inset-x-0 top-0 flex aspect-[9/16] flex-col items-center justify-center gap-2 rounded-xl bg-shell/95 px-2 text-center"
+        >
+          <p className="text-xs font-semibold">Style</p>
+          {STYLE_ANSWERS.map(({ id, label, look }) => (
+            <button
+              key={label}
+              type="button"
+              aria-pressed={clip.style === id}
+              onClick={() => {
+                setChoosing(false)
+                onRestyle?.(clip, id)
+              }}
+              className={`w-full max-w-24 rounded-lg px-3 py-1.5 text-xs font-semibold ${look} ${
+                clip.style === id ? 'ring-2 ring-ink ring-offset-2 ring-offset-shell' : ''
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              setChoosing(false)
+            }}
+            className="text-[11px] text-ink/50 underline underline-offset-2 hover:text-ink"
+          >
+            Cancel
+          </button>
+        </div>
       )}
 
       {/* Kept mounted through the question rather than swapped out for it, so
