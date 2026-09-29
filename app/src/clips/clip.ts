@@ -1,3 +1,5 @@
+import type { DanceStyle } from './danceStyle'
+
 export type Clip = {
   readonly id: string
   readonly name: string
@@ -27,4 +29,8 @@ export type Clip = {
      every file, and a clip added in this session has never been listed. Both
      mean "nothing to compare", which is not the same as "changed". */
   readonly checksum?: string | undefined
+  /* #43. Salsa, bachata, or undefined for a clip nobody has said the style
+     of yet — every clip uploaded before the field existed, and every clip
+     since until its tile is told. */
+  readonly style?: DanceStyle | undefined
 }

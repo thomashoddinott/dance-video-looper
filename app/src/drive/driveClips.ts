@@ -1,4 +1,5 @@
 import type { Clip } from '../clips/clip'
+import { styleFrom } from '../clips/danceStyle'
 import { nameFromFilename } from '../clips/fileClip'
 
 /* The fields the app asks Drive for, and nothing more. `appProperties` is the
@@ -25,6 +26,10 @@ export type DriveFile = {
    upload time (`driveFileFor`), read back with the listing. */
 export const CLIP_ID = 'clipId'
 export const SECONDS = 'seconds'
+/* The third, and the only one written after upload as well as at it (#43):
+   the dancer says what a clip is once it is already in the grid, so this one
+   arrives by `setStyle` rather than with the bytes. */
+export const STYLE = 'style'
 
 const VIDEO = 'video/'
 
@@ -80,6 +85,7 @@ export const clipFromDriveFile = (file: DriveFile): Clip => ({
   added: dayOf(file.createdTime),
   seconds: secondsFrom(file.appProperties?.[SECONDS]),
   checksum: file.md5Checksum,
+  style: styleFrom(file.appProperties?.[STYLE]),
   loops: 0,
 })
 
