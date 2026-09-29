@@ -1,6 +1,7 @@
 import type { Clip } from '../clips/clip'
+import type { DanceStyle } from '../clips/danceStyle'
 import type { DriveFile, DriveFileMetadata } from './driveClips'
-import { clipFromDriveFile, driveFileFor, isClipFile } from './driveClips'
+import { STYLE, clipFromDriveFile, driveFileFor, isClipFile } from './driveClips'
 import { thumbnailFileFor, thumbnailsFromDriveFiles } from './driveThumbnails'
 
 const API = 'https://www.googleapis.com/drive/v3'
@@ -502,6 +503,13 @@ export type DriveApi = {
      implementation. Answers nothing, because there is no id to hand back that
      the caller was not already holding. */
   readonly trash: (token: string, driveId: string) => Promise<void>
+  /* #43. Undefined takes the style off rather than leaving it. Answers
+     nothing, for `trash`'s reason. */
+  readonly setStyle: (
+    token: string,
+    driveId: string,
+    style: DanceStyle | undefined,
+  ) => Promise<void>
   readonly download: (
     token: string,
     driveId: string,
@@ -590,6 +598,21 @@ export const driveApiOver = (host: DriveHost): DriveApi => ({
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ trashed: true }),
+    })
+  },
+
+  /* The same endpoint `trash` patches, for the same reason: this edits what
+     Drive says about the clip and leaves the bytes where they are.
+
+     Drive merges `appProperties` key by key, so naming only the style leaves
+     `clipId` and `seconds` untouched — the clip keeps its identity, and with
+     it its loops. `null` is Drive's word for "drop this key"; an absent key
+     would leave the old style standing. */
+  setStyle: async (token, driveId, style) => {
+    await driveFetch(host, token, `${API}/files/${driveId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appProperties: { [STYLE]: style ?? null } }),
     })
   },
 

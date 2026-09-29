@@ -90,6 +90,12 @@ describe('the demo library', () => {
   it('deletes nothing', async () => {
     await expect(aDemoApi().trash(A_TOKEN, 'demo-clip')).rejects.toThrow()
   })
+
+  it('keeps no dance style', async () => {
+    await expect(
+      aDemoApi().setStyle(A_TOKEN, 'demo-clip', 'salsa'),
+    ).rejects.toThrow()
+  })
 })
 
 /* A grey tile is the first thing a visitor would see, so the still is made
