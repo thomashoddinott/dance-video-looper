@@ -13,14 +13,26 @@ export type DanceStyle = (typeof DANCE_STYLES)[number]['id']
 const isDanceStyle = (value: string): value is DanceStyle =>
   DANCE_STYLES.some(({ id }) => id === value)
 
-/* The clips of one style, in the order they came in — `matching`'s rule, for
-   its reason: the ordering chips sort whatever is left. No style picked is no
-   filter at all, which is what brings the whole library back. */
+/* #50. Not a style but the absence of one: the clips nobody has said the
+   style of yet, which a dancer tagging by hand works through as a queue. */
+export const UNTAGGED = 'untagged'
+
+/* What the grid can be narrowed to: one style, or the clips with none. */
+export type StyleFilter = DanceStyle | typeof UNTAGGED
+
+/* The clips the filter keeps, in the order they came in — `matching`'s rule,
+   for its reason: the ordering chips sort whatever is left. No filter picked
+   is no filter at all, which is what brings the whole library back. */
 export const ofStyle = (
   clips: readonly Clip[],
-  style: DanceStyle | undefined,
-): readonly Clip[] =>
-  style === undefined ? clips : clips.filter((clip) => clip.style === style)
+  filter: StyleFilter | undefined,
+): readonly Clip[] => {
+  if (filter === undefined) return clips
+
+  const wanted = filter === UNTAGGED ? undefined : filter
+
+  return clips.filter((clip) => clip.style === wanted)
+}
 
 /* What Drive stored, read as a style or as none. Only the styles above count:
    anything else would be a clip that wears a label no chip can pick. */

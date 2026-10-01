@@ -1028,6 +1028,42 @@ describe('narrowing the grid to one style', () => {
   })
 })
 
+/* #50. With Untagged picked, the grid is the queue a dancer tagging by hand
+   works through: a clip tagged from its tile is no longer untagged, so it
+   leaves — which takes the tile, the library and the filter together. */
+describe('working through the untagged clips', () => {
+  it('drops a clip from the grid once it has been given a style', async () => {
+    renderAppAt('/', sourceGranting(), null, {
+      tokenStore: aConnectedStore(),
+      driveApi: driveHolding([
+        getClip({ id: 'untold', name: 'Untold', driveId: 'drive-untold' }),
+        getClip({ id: 'also-untold', name: 'Also untold', driveId: 'drive-also' }),
+        getClip({ id: 'salsa-turn', name: 'Salsa turn', style: 'salsa' }),
+      ]),
+    })
+    await screen.findByText('Untold')
+
+    await userEvent.click(
+      within(screen.getByRole('group', { name: 'Filter by style' })).getByRole(
+        'button',
+        { name: 'Untagged' },
+      ),
+    )
+    await userEvent.click(
+      within(tileFor('Untold')).getByRole('button', { name: 'Style of Untold: none' }),
+    )
+    await userEvent.click(
+      within(tileFor('Untold')).getByRole('button', { name: 'Bachata' }),
+    )
+
+    await waitFor(() => {
+      expect(screen.queryByText('Untold')).not.toBeInTheDocument()
+    })
+    expect(screen.getByText('Also untold')).toBeInTheDocument()
+    expect(screen.queryByText('Salsa turn')).not.toBeInTheDocument()
+  })
+})
+
 /* #43. The tile asks, the library stores; this is the one place the two are
    joined, so it is the one place the join can be left out. */
 describe('setting a clip’s style', () => {

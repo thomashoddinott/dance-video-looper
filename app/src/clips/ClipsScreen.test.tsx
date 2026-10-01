@@ -8,7 +8,7 @@ import { DriveSessionProvider } from '../drive/DriveSessionProvider'
 import type { TokenSource } from '../drive/gisTokenSource'
 import type { TokenStore } from '../drive/tokenStore'
 import type { Clip } from './clip'
-import type { DanceStyle } from './danceStyle'
+import type { DanceStyle, StyleFilter } from './danceStyle'
 import { getClip } from './clip.factory'
 import type { ClipProbe } from './clipProbe'
 import { ClipsScreen } from './ClipsScreen'
@@ -58,15 +58,15 @@ function ScreenUnderTest({
   readonly onRestyle: (clip: Clip, style: DanceStyle | undefined) => void
 }) {
   const [ordering, setOrdering] = useState<OrderingId>(orderings[0].id)
-  const [danceStyle, setDanceStyle] = useState<DanceStyle | undefined>()
+  const [styleFilter, setStyleFilter] = useState<StyleFilter | undefined>()
 
   return (
     <ClipsScreen
       library={library}
       ordering={ordering}
       onOrderingChange={setOrdering}
-      danceStyle={danceStyle}
-      onDanceStyleChange={setDanceStyle}
+      styleFilter={styleFilter}
+      onStyleFilterChange={setStyleFilter}
       onAdd={noClipIsAdded}
       onDelete={onDelete}
       onRestyle={onRestyle}
@@ -673,7 +673,7 @@ describe('the style chips', () => {
       .queryAllByRole('link')
       .map((link) => link.getAttribute('href')?.replace('/clip/', ''))
 
-  it('offers Salsa and Bachata, with neither picked', () => {
+  it('offers Salsa, Bachata and Untagged, with none picked', () => {
     renderScreen(THREE_STYLES)
 
     expect(
@@ -683,6 +683,7 @@ describe('the style chips', () => {
     ).toEqual([
       ['Salsa', 'false'],
       ['Bachata', 'false'],
+      ['Untagged', 'false'],
     ])
     expect(shownIds()).toHaveLength(3)
   })
@@ -785,6 +786,59 @@ describe('the style chips', () => {
       screen.queryByRole('status', { name: 'Filter by style' }),
     ).not.toBeInTheDocument()
   })
+
+  /* #50. The clips nobody has said the style of yet, which is the list a
+     dancer tagging by hand works through. */
+  it('draws only the clips with no style when Untagged is picked', async () => {
+    renderScreen(THREE_STYLES)
+
+    await userEvent.click(styleChip('Untagged'))
+
+    expect(styleChip('Untagged')).toHaveAttribute('aria-pressed', 'true')
+    expect(shownIds()).toEqual(['untold'])
+  })
+
+  it('moves off Untagged when a style is picked, one chip at a time', async () => {
+    renderScreen(THREE_STYLES)
+
+    await userEvent.click(styleChip('Untagged'))
+    await userEvent.click(styleChip('Salsa'))
+
+    expect(styleChip('Untagged')).toHaveAttribute('aria-pressed', 'false')
+    expect(shownIds()).toEqual(['salsa-turn'])
+  })
+
+  it('brings the whole library back when Untagged is picked again', async () => {
+    renderScreen(THREE_STYLES)
+
+    await userEvent.click(styleChip('Untagged'))
+    await userEvent.click(styleChip('Untagged'))
+
+    expect(shownIds()).toHaveLength(3)
+  })
+
+  /* The queue is empty, which is the good outcome, so the line says so
+     rather than reading like a style with nothing in it yet. */
+  it('says every clip has a style when none is untagged', async () => {
+    renderScreen([getClip({ name: 'Shine', style: 'salsa' })])
+
+    await userEvent.click(styleChip('Untagged'))
+
+    expect(
+      screen.getByRole('status', { name: 'Filter by style' }),
+    ).toHaveTextContent('Every clip has a style.')
+  })
+
+  it('says no untagged clips match when a search inside it finds none', async () => {
+    renderScreen([getClip({ name: 'Untold' })])
+
+    await userEvent.click(styleChip('Untagged'))
+    await userEvent.type(searchBox(), 'shuffle')
+
+    expect(
+      screen.getByRole('status', { name: 'Search clips' }),
+    ).toHaveTextContent('No untagged clips match “shuffle”.')
+  })
 })
 
 /* #43. As with a delete, what is worth pinning here rather than on the tile is
@@ -829,8 +883,8 @@ describe('the grid in the demo', () => {
             library={loaded(LOADING, [getClip({ name: 'Passitos' })])}
             ordering={orderings[0].id}
             onOrderingChange={() => {}}
-            danceStyle={undefined}
-            onDanceStyleChange={() => {}}
+            styleFilter={undefined}
+            onStyleFilterChange={() => {}}
             onAdd={noClipIsAdded}
             onDelete={noClipIsDeleted}
             onRestyle={noClipIsRestyled}
