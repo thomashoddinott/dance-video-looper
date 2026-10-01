@@ -58,15 +58,15 @@ function ScreenUnderTest({
   readonly onRestyle: (clip: Clip, style: DanceStyle | undefined) => void
 }) {
   const [ordering, setOrdering] = useState<OrderingId>(orderings[0].id)
-  const [danceStyle, setDanceStyle] = useState<DanceStyle | undefined>()
+  const [styleFilter, setStyleFilter] = useState<DanceStyle | undefined>()
 
   return (
     <ClipsScreen
       library={library}
       ordering={ordering}
       onOrderingChange={setOrdering}
-      danceStyle={danceStyle}
-      onDanceStyleChange={setDanceStyle}
+      styleFilter={styleFilter}
+      onStyleFilterChange={setStyleFilter}
       onAdd={noClipIsAdded}
       onDelete={onDelete}
       onRestyle={onRestyle}
@@ -829,8 +829,8 @@ describe('the grid in the demo', () => {
             library={loaded(LOADING, [getClip({ name: 'Passitos' })])}
             ordering={orderings[0].id}
             onOrderingChange={() => {}}
-            danceStyle={undefined}
-            onDanceStyleChange={() => {}}
+            styleFilter={undefined}
+            onStyleFilterChange={() => {}}
             onAdd={noClipIsAdded}
             onDelete={noClipIsDeleted}
             onRestyle={noClipIsRestyled}

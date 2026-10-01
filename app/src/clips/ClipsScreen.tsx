@@ -26,8 +26,8 @@ export function ClipsScreen({
   library,
   ordering: chosen,
   onOrderingChange: setChosen,
-  danceStyle: picked,
-  onDanceStyleChange: pick,
+  styleFilter: picked,
+  onStyleFilterChange: pick,
   thumbnails = {},
   onAdd,
   onDelete,
@@ -48,8 +48,8 @@ export function ClipsScreen({
      whole library. Held by the caller for the ordering's reason: a dancer who
      narrowed to bachata and opened a clip is still practising bachata when
      they come back. */
-  readonly danceStyle: DanceStyle | undefined
-  readonly onDanceStyleChange: (style: DanceStyle | undefined) => void
+  readonly styleFilter: DanceStyle | undefined
+  readonly onStyleFilterChange: (style: DanceStyle | undefined) => void
   /* A url per clip that has a still (#77). Absent entries are clips with
      none, which paint the placeholder they always did. */
   readonly thumbnails?: Readonly<Record<string, string>>

@@ -41,8 +41,8 @@ const renderLibrary = (library: Library) =>
           library={library}
           ordering={orderings[0].id}
           onOrderingChange={noOrderingIsChosen}
-          danceStyle={undefined}
-          onDanceStyleChange={noStyleIsPicked}
+          styleFilter={undefined}
+          onStyleFilterChange={noStyleIsPicked}
           onAdd={noClipIsAdded}
           onDelete={noClipIsDeleted}
           onRestyle={noClipIsRestyled}
