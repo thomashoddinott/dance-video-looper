@@ -7,7 +7,7 @@ import { browserClipCache, browserThumbnailCache } from './clips/clipCache'
 import type { ClipProbe } from './clips/clipProbe'
 import { browserClipProbe } from './clips/clipProbe'
 import { ClipsScreen } from './clips/ClipsScreen'
-import type { DanceStyle } from './clips/danceStyle'
+import type { StyleFilter } from './clips/danceStyle'
 import { withLoopCounts, withOpened } from './clips/library'
 import type { OpenedStore } from './clips/openedStore'
 import { browserOpenedStore } from './clips/openedStore'
@@ -97,7 +97,7 @@ export function App({
   /* Which style the grid is narrowed to (#43), up here for the same reason:
      a dancer who narrowed to bachata and opened a clip is still practising
      bachata when they come back. Undefined is the whole library. */
-  const [styleFilter, setStyleFilter] = useState<DanceStyle | undefined>()
+  const [styleFilter, setStyleFilter] = useState<StyleFilter | undefined>()
   /* The clips as the grid draws them: counts, and when each was last opened
      (#12). All of it arrives separately — Drive's file listing knows nothing
      about loops, and `loops.json` is fetched on its own — so this is where they

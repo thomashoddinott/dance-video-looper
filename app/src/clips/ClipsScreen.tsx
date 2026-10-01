@@ -6,8 +6,8 @@ import { DriveStatus } from '../drive/DriveStatus'
 import type { Clip } from './clip'
 import type { ClipProbe } from './clipProbe'
 import { ClipTile } from './ClipTile'
-import type { DanceStyle } from './danceStyle'
-import { DANCE_STYLES, ofStyle } from './danceStyle'
+import type { DanceStyle, StyleFilter } from './danceStyle'
+import { DANCE_STYLES, ofStyle, UNTAGGED } from './danceStyle'
 import { clipIdFor, nameFromFilename } from './fileClip'
 import type { Library } from './library'
 import { uploadOf } from './library'
@@ -18,6 +18,40 @@ import { SourceLink } from './SourceLink'
 import { STYLE_LOOK } from './styleLook'
 
 const today = () => new Date().toISOString().slice(0, 10)
+
+/* The chips at the right of the ordering row: one per style, lettered in its
+   colour until picked and filled with it after (#43), then Untagged (#50).
+   Untagged is grey rather than a style's colour, because it is the absence of
+   one, and filled dark once picked so a hover cannot pass for it.
+
+   Each carries its own sentence for an empty grid. "No Salsa clips yet" is a
+   style with nothing in it; nothing untagged is the queue done, which is the
+   good outcome and reads like one. */
+const STYLE_CHIPS: readonly {
+  readonly id: StyleFilter
+  readonly label: string
+  readonly picked: string
+  readonly unpicked: string
+  readonly noun: string
+  readonly none: string
+}[] = [
+  ...DANCE_STYLES.map(({ id, label }) => ({
+    id,
+    label,
+    picked: STYLE_LOOK[id].fill,
+    unpicked: `bg-control hover:bg-control-hi ${STYLE_LOOK[id].text}`,
+    noun: label,
+    none: `No ${label} clips yet.`,
+  })),
+  {
+    id: UNTAGGED,
+    label: 'Untagged',
+    picked: 'bg-ink text-panel',
+    unpicked: 'bg-control text-ink/60 hover:bg-control-hi',
+    noun: 'untagged',
+    none: 'Every clip has a style.',
+  },
+]
 
 /* What the **Recent** chip orders by. */
 const RECENT: OrderingId = 'added'
@@ -48,8 +82,8 @@ export function ClipsScreen({
      whole library. Held by the caller for the ordering's reason: a dancer who
      narrowed to bachata and opened a clip is still practising bachata when
      they come back. */
-  readonly styleFilter: DanceStyle | undefined
-  readonly onStyleFilterChange: (style: DanceStyle | undefined) => void
+  readonly styleFilter: StyleFilter | undefined
+  readonly onStyleFilterChange: (filter: StyleFilter | undefined) => void
   /* A url per clip that has a still (#77). Absent entries are clips with
      none, which paint the placeholder they always did. */
   readonly thumbnails?: Readonly<Record<string, string>>
@@ -164,7 +198,7 @@ export function ClipsScreen({
      nothing but spaces is no search at all, so it must not be able to produce a
      "nothing matches" line over a grid that is showing everything. */
   const searching = query.trim() !== ''
-  const pickedLabel = DANCE_STYLES.find(({ id }) => id === picked)?.label
+  const pickedChip = STYLE_CHIPS.find(({ id }) => id === picked)
   /* And only once there was a library for the search to have excluded something
      from. `loading` and `failed` both carry no clips for a reason of their own,
      and a `ready` library with none is the footer note's business — in all three
@@ -282,24 +316,20 @@ export function ClipsScreen({
               two groups apart in the hand. An ordering is always chosen; a style
               need not be.
 
-              Lettered in the style's colour until picked, then filled with it,
-              the colour of the labels it is about to leave on screen. Absent in
-              the demo, whose one clip has no style to narrow by. */}
+              Absent in the demo, whose one clip has no style to narrow by. */}
           {!demo && (
             <div role="group" aria-label="Filter by style" className="ml-auto flex gap-1.5">
-              {DANCE_STYLES.map((style) => (
+              {STYLE_CHIPS.map((chip) => (
                 <button
-                  key={style.id}
+                  key={chip.id}
                   type="button"
-                  aria-pressed={style.id === picked}
-                  onClick={() => pick(style.id === picked ? undefined : style.id)}
+                  aria-pressed={chip.id === picked}
+                  onClick={() => pick(chip.id === picked ? undefined : chip.id)}
                   className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    style.id === picked
-                      ? STYLE_LOOK[style.id].fill
-                      : `bg-control hover:bg-control-hi ${STYLE_LOOK[style.id].text}`
+                    chip.id === picked ? chip.picked : chip.unpicked
                   }`}
                 >
-                  {style.label}
+                  {chip.label}
                 </button>
               ))}
             </div>
@@ -324,8 +354,8 @@ export function ClipsScreen({
             className="mt-4 text-xs text-ink/60"
           >
             {searching
-              ? `No ${pickedLabel ? `${pickedLabel} ` : ''}clips match “${query.trim()}”.`
-              : `No ${pickedLabel} clips yet.`}
+              ? `No ${pickedChip ? `${pickedChip.noun} ` : ''}clips match “${query.trim()}”.`
+              : pickedChip?.none}
           </p>
         )}
 
