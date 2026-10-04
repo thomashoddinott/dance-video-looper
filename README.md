@@ -8,7 +8,7 @@ Inspired by [LoopTube](https://looptube.io).
 
 ---
 
-## Appendix: Google Drive setup
+## Google Drive setup
 
 Each instance of the app is separate, with its own Google Cloud project, Client ID
 and Drive. There is no shared service and no account to request. Setting up an
