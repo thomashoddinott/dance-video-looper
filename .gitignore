@@ -14,10 +14,13 @@ dist/
 # way a clip reaches the live site, and no other video gets in this way.
 !app/src/demo/demo-clip.mp4
 
-# The Claude Code working directory — skills, agents, commands, hooks, worktrees
-# and local settings. Never tracked here. It is curated separately, and this repo
-# has no version that has ever carried it.
-.claude/
+# The Claude Code working directory. Only its skills and agents are tracked, and
+# they came in from the public snapshot thomashoddinott/claude-code-skills-27092026.
+# Worktrees, local settings, commands and hooks stay out: no earlier version of
+# this tooling has ever been committed here.
+.claude/*
+!.claude/skills/
+!.claude/agents/
 
 # Scratch planning notes: they live inside a worktree and die with it.
 PLAN.md

@@ -22,6 +22,7 @@ mockup/            throwaway UI mockup — vibe-coded, loads a local file
 docs/use-cases/    UC-XX — what a screen is for, derived from the mockup by walkthrough
 docs/user-stories/ US-XX-YY — one story per visible component, cut from the mockup
 .github/workflows/ CI — see below
+.claude/skills/    Claude Code skills and agents (.claude/agents/), from the public snapshot
 ```
 
 ## Process
@@ -156,8 +157,11 @@ carries built output — `dist/` is gitignored.
   holds. Don't add a local deploy route back. Publishing someone else's video is the
   one mistake here that cannot be taken back.
 - `PLAN.md` — scratch, lives and dies inside a worktree.
-- `.claude/` — the Claude Code working directory. Curated separately and tracked
-  nowhere in this repo.
+- `.claude/`, all but `skills/` and `agents/` — worktrees, local settings, commands
+  and hooks. The skills and agents are tracked, and came in from the public snapshot
+  `thomashoddinott/claude-code-skills-27092026`. No earlier version of them has been
+  committed here, and none should be: the earlier set predates the redaction pass
+  that produced the snapshot.
 
 ## Git
 
