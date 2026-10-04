@@ -40,6 +40,34 @@ const STYLES = [
 
 const styleOf = (style) => STYLES.find(({ id }) => id === style)
 
+/* The chips on the right of the ordering row: one per style, then Untagged
+   (#50) — the clips nobody has said the style of yet. Grey rather than a
+   style's colour, because untagged is the absence of one; filled dark once
+   picked, so a hover still cannot pass for it.
+
+   With it picked the grid is a queue: tag a clip and it leaves, until the
+   line below says every clip has a style. */
+const FILTER_CHIPS = [
+  ...STYLES.map((style) => ({
+    id: style.id,
+    label: style.label,
+    matches: (clip) => clip.style === style.id,
+    picked: style.fill,
+    unpicked: `bg-control hover:bg-control-hi ${style.text}`,
+    noun: style.label,
+    none: `No ${style.label} clips yet.`,
+  })),
+  {
+    id: 'untagged',
+    label: 'Untagged',
+    matches: (clip) => clip.style === undefined,
+    picked: 'bg-ink text-panel',
+    unpicked: 'bg-control text-ink/60 hover:bg-control-hi',
+    noun: 'untagged',
+    none: 'Every clip has a style.',
+  },
+]
+
 function formatDuration(seconds) {
   const whole = Math.round(seconds)
   const mins = Math.floor(whole / 60)
@@ -420,8 +448,8 @@ function Library({
   const wanted = query.trim().toLowerCase()
   /* #43. The demo is one clip with no style control, so a filter carried in
      from the dancer's own library must not be able to hide it. */
-  const styled = demo ? null : styleOf(filter)?.label
-  const inStyle = styled ? shown.filter((clip) => clip.style === filter) : shown
+  const styled = demo ? null : FILTER_CHIPS.find(({ id }) => id === filter)
+  const inStyle = styled ? shown.filter(styled.matches) : shown
   /* Filter, then order. The style and the search both narrow the set and the
      chosen chip orders what is left, so the controls compose rather than
      compete. */
@@ -597,16 +625,14 @@ function Library({
               ordering chips' grey-on-grey could. */}
           {!demo && (
             <div role="group" aria-label="Filter by style" className="ml-auto flex gap-1.5">
-              {STYLES.map((option) => (
+              {FILTER_CHIPS.map((option) => (
                 <button
                   key={option.id}
                   type="button"
                   aria-pressed={option.id === filter}
                   onClick={() => onFilter(option.id === filter ? 'all' : option.id)}
                   className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    option.id === filter
-                      ? option.fill
-                      : `bg-control hover:bg-control-hi ${option.text}`
+                    option.id === filter ? option.picked : option.unpicked
                   }`}
                 >
                   {option.label}
@@ -629,8 +655,8 @@ function Library({
         {(wanted || styled) && shown.length > 0 && ordered.length === 0 && (
           <p className="mt-4 text-xs text-ink/60">
             {wanted
-              ? `No ${styled ? `${styled} ` : ''}clips match “${query.trim()}”.`
-              : `No ${styled} clips yet.`}
+              ? `No ${styled ? `${styled.noun} ` : ''}clips match “${query.trim()}”.`
+              : styled.none}
           </p>
         )}
 
