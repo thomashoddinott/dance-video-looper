@@ -1244,6 +1244,74 @@ describe('renaming a clip from its tile', () => {
   })
 })
 
+describe('renaming a clip from the player', () => {
+  const A_CLIP_IN_DRIVE = getClip({
+    id: 'shuffle-drill',
+    name: 'Shuffle drill',
+    driveId: 'drive-shuffle',
+  })
+
+  const openAndRenameTo = async (driveApi: DriveApi, name: string) => {
+    renderAppAt('/clip/shuffle-drill', sourceGranting(), null, {
+      tokenStore: aConnectedStore(),
+      driveApi,
+    })
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Rename Shuffle drill' }),
+    )
+    await userEvent.clear(screen.getByRole('textbox', { name: 'Clip name' }))
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Clip name' }),
+      `${name}{Enter}`,
+    )
+  }
+
+  it('renames the clip in Drive, and the header says the new name', async () => {
+    const driveApi = driveHolding([A_CLIP_IN_DRIVE])
+
+    await openAndRenameTo(driveApi, 'Basic step')
+
+    expect(
+      await within(screen.getByRole('banner')).findByText('Basic step'),
+    ).toBeInTheDocument()
+    expect(driveApi.rename).toHaveBeenCalledWith(
+      expect.anything(),
+      'drive-shuffle',
+      'Basic step',
+    )
+  })
+
+  it('is the new name in the grid on the way back', async () => {
+    await openAndRenameTo(driveHolding([A_CLIP_IN_DRIVE]), 'Basic step')
+    await within(screen.getByRole('banner')).findByText('Basic step')
+
+    await userEvent.click(screen.getByRole('link', { name: 'Back to clips' }))
+
+    expect(
+      await screen.findByRole('link', { name: /Basic step/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps the old name when Drive refuses, and says so in the player', async () => {
+    await openAndRenameTo(
+      aDriveApi({
+        listClips: async () => [A_CLIP_IN_DRIVE],
+        rename: vi.fn(async () => {
+          throw new Error('Drive said no')
+        }),
+      }),
+      'Basic step',
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The new name could not be saved to Drive',
+    )
+    expect(
+      within(screen.getByRole('banner')).getByText('Shuffle drill'),
+    ).toBeInTheDocument()
+  })
+})
+
 describe('the loops saved against each clip', () => {
   const SHUFFLE = getClip({ id: 'shuffle-drill', name: 'Shuffle drill' })
   const PIVOT = getClip({ id: 'pivot-turn', name: 'Pivot turn' })

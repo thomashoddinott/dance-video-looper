@@ -85,12 +85,16 @@ const Player = ({
   clips = [clip],
   driveApi = noDrive,
   stillLoading = false,
+  onRename,
+  demo = false,
   ...loops
 }: {
   readonly clip: Clip
   readonly clips?: readonly Clip[]
   readonly driveApi?: DriveApi
   readonly stillLoading?: boolean
+  readonly onRename?: (clip: Clip, name: string) => Promise<boolean>
+  readonly demo?: boolean
 } & LoopOptions) => {
   const store = useFakeLoops(loops)
 
@@ -102,6 +106,8 @@ const Player = ({
       clipCache={holdsNothing}
       stillLoading={stillLoading}
       loops={store}
+      onRename={onRename}
+      demo={demo}
     />
   )
 }
@@ -3431,5 +3437,187 @@ describe('the position bar under a thumb', () => {
        would stop working wherever the bar happens to be. */
     expect(strip).toHaveClass('pointer-events-auto')
     expect(strip?.parentElement).toHaveClass('pointer-events-none')
+  })
+})
+
+/* #54. The name in the header is the one place the player says which clip this
+   is, so it is also where the clip is renamed — in place, rather than over the
+   clip the dancer is practising to. */
+describe('renaming the clip from the player', () => {
+  const A_STORED_CLIP = getClip({
+    name: 'Shuffle drill',
+    src: '/wave-practice.mp4',
+    driveId: 'drive-1',
+  })
+
+  const renderRenamable = ({
+    clip = A_STORED_CLIP,
+    onRename = vi.fn(async () => true),
+    demo = false,
+  }: {
+    readonly clip?: Clip
+    readonly onRename?: (clip: Clip, name: string) => Promise<boolean>
+    readonly demo?: boolean
+  } = {}) => {
+    const rendered = render(
+      inASession(
+        <MemoryRouter initialEntries={[`/clip/${clip.id}`]}>
+          <Routes>
+            <Route
+              path="/clip/:clipId"
+              element={<Player clip={clip} onRename={onRename} demo={demo} />}
+            />
+          </Routes>
+        </MemoryRouter>,
+      ),
+    )
+
+    return { ...rendered, onRename }
+  }
+
+  const header = () => within(screen.getByRole('banner'))
+
+  const thePencil = () =>
+    screen.queryByRole('button', { name: 'Rename Shuffle drill' })
+
+  const theForm = () =>
+    screen.queryByRole('form', { name: 'Rename Shuffle drill' })
+
+  const theField = () =>
+    screen.getByRole<HTMLInputElement>('textbox', { name: 'Clip name' })
+
+  const retype = async (name: string) => {
+    await userEvent.click(thePencil() as HTMLElement)
+    await userEvent.clear(theField())
+    await userEvent.type(theField(), name)
+  }
+
+  it('carries a pencil beside the clip’s name, in the header', () => {
+    renderRenamable()
+
+    expect(header().getByRole('button', { name: 'Rename Shuffle drill' })).toBeInTheDocument()
+  })
+
+  it('turns the name into a field holding it, ready to type over', async () => {
+    renderRenamable()
+
+    await userEvent.click(thePencil() as HTMLElement)
+
+    expect(header().getByRole('textbox', { name: 'Clip name' })).toHaveValue(
+      'Shuffle drill',
+    )
+    expect(theField()).toHaveFocus()
+    expect(theField().selectionEnd).toBe('Shuffle drill'.length)
+    expect(thePencil()).not.toBeInTheDocument()
+  })
+
+  it('renames the clip when the name is saved', async () => {
+    const { onRename } = renderRenamable()
+
+    await retype('Basic step')
+    await userEvent.click(
+      within(theForm() as HTMLElement).getByRole('button', { name: 'Save' }),
+    )
+
+    expect(onRename).toHaveBeenCalledWith(
+      expect.objectContaining({ id: A_STORED_CLIP.id }),
+      'Basic step',
+    )
+    expect(theForm()).not.toBeInTheDocument()
+  })
+
+  it('renames it on Enter, trimmed', async () => {
+    const { onRename } = renderRenamable()
+
+    await retype('  Basic step {Enter}')
+
+    expect(onRename).toHaveBeenCalledWith(expect.anything(), 'Basic step')
+  })
+
+  it('will not save a name that is empty or only spaces', async () => {
+    const { onRename } = renderRenamable()
+
+    await retype('  {Enter}')
+
+    expect(
+      within(theForm() as HTMLElement).getByRole('button', { name: 'Save' }),
+    ).toBeDisabled()
+    expect(onRename).not.toHaveBeenCalled()
+  })
+
+  it('changes nothing when cancelled, and the name is back', async () => {
+    const { onRename } = renderRenamable()
+
+    await retype('Basic step')
+    await userEvent.click(
+      within(theForm() as HTMLElement).getByRole('button', { name: 'Cancel' }),
+    )
+
+    expect(onRename).not.toHaveBeenCalled()
+    expect(header().getByText('Shuffle drill')).toBeInTheDocument()
+  })
+
+  it('changes nothing on Escape', async () => {
+    const { onRename } = renderRenamable()
+
+    await retype('Basic step{Escape}')
+
+    expect(onRename).not.toHaveBeenCalled()
+    expect(theForm()).not.toBeInTheDocument()
+  })
+
+  /* BR-05 again, for the second text field on this screen: `f` typed into a
+     name isolates nothing. */
+  it('fires no shortcut while a name is typed', async () => {
+    const { container } = renderRenamable()
+    fireEvent.loadedMetadata(playable(clipSurface(container), { seconds: 12 }))
+
+    await retype('fix')
+
+    expect(theField()).toHaveValue('fix')
+    expect(
+      screen.queryByRole('button', { name: 'Leave the isolated view' }),
+    ).toBeNull()
+  })
+
+  /* The grid's alert is out of sight from here, so the player says so itself. */
+  it('says so when Drive would not take the name', async () => {
+    renderRenamable({ onRename: vi.fn(async () => false) })
+
+    await retype('Basic step{Enter}')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The new name could not be saved to Drive',
+    )
+  })
+
+  it('says nothing once a name is taken', async () => {
+    renderRenamable()
+
+    await retype('Basic step{Enter}')
+
+    await waitFor(() => {
+      expect(theForm()).not.toBeInTheDocument()
+    })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  /* No Drive file yet to rename: the bytes are still going up. */
+  it('offers no rename before the clip is stored', () => {
+    renderRenamable({ clip: getClip({ ...A_STORED_CLIP, driveId: undefined }) })
+
+    expect(thePencil()).not.toBeInTheDocument()
+  })
+
+  it('offers no rename in the demo', () => {
+    renderRenamable({ demo: true })
+
+    expect(thePencil()).not.toBeInTheDocument()
+  })
+
+  it('offers no rename where the name cannot be changed', () => {
+    renderPlayer(A_STORED_CLIP)
+
+    expect(thePencil()).not.toBeInTheDocument()
   })
 })

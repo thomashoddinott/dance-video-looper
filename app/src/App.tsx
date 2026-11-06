@@ -194,6 +194,7 @@ export function App({
             onOpened={markOpened}
             stillLoading={library.state === 'loading'}
             demo={demo}
+            onRename={rename}
           />
         }
       />

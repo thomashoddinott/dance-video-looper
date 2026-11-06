@@ -5,6 +5,7 @@ import type { Clip } from './clip'
 import type { DanceStyle } from './danceStyle'
 import { DANCE_STYLES } from './danceStyle'
 import { formatAdded, formatDuration } from './format'
+import { PencilIcon } from './PencilIcon'
 import { Poster } from './Poster'
 import { STYLE_LOOK } from './styleLook'
 import { useNameField } from './useNameField'
@@ -274,24 +275,6 @@ export function ClipTile({
         </div>
       )}
     </li>
-  )
-}
-
-function PencilIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className="h-3.5 w-3.5"
-    >
-      <path d="M4 20h4L19 9l-4-4L4 16v4z" />
-      <path d="M13.5 6.5l4 4" />
-    </svg>
   )
 }
 

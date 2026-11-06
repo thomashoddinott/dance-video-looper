@@ -10,6 +10,7 @@ import type { SavedLoop } from '../loops/loop'
 import { loopsFor } from '../loops/loopsChange'
 import type { LoopsHandle } from '../loops/useLoops'
 import { chainedSpan } from './chain'
+import { ClipName } from './ClipName'
 import { useClipSource } from './clipSource'
 import { clamp, type Handle, NUDGE } from './loopRange'
 import { LoopSlider } from './LoopSlider'
@@ -173,6 +174,7 @@ export function PlayerScreen({
   onBytes,
   stillLoading = false,
   demo = false,
+  onRename,
 }: {
   readonly clips: readonly Clip[]
   /* Fired once the path has resolved to a clip the library holds (#16), which
@@ -198,6 +200,9 @@ export function PlayerScreen({
   readonly stillLoading?: boolean
   /* #33: the player at `/demo`, which says so in its header. */
   readonly demo?: boolean
+  /* #54. Resolves to whether Drive took the name. Dropped in the demo, whose
+     clip is not the visitor's to rename. */
+  readonly onRename?: ((clip: Clip, name: string) => Promise<boolean>) | undefined
 }) {
   const { clipId } = useParams()
   const clip = clips.find((candidate) => candidate.id === clipId)
@@ -224,6 +229,7 @@ export function PlayerScreen({
       onBytes={onBytes}
       onOpened={onOpened}
       demo={demo}
+      onRename={demo ? undefined : onRename}
     />
   )
 }
@@ -236,6 +242,7 @@ function OpenedClip({
   onBytes,
   onOpened,
   demo,
+  onRename,
 }: {
   readonly clip: Clip
   readonly loops: LoopsHandle
@@ -244,6 +251,7 @@ function OpenedClip({
   readonly onBytes?: ((clipId: string, bytes: Blob) => void) | undefined
   readonly onOpened: (clipId: string) => void
   readonly demo: boolean
+  readonly onRename: ((clip: Clip, name: string) => Promise<boolean>) | undefined
 }) {
   /* #16. Here rather than in the parent because this component is keyed on the
      clip and mounted only once the path has resolved to one the library holds —
@@ -890,10 +898,17 @@ function OpenedClip({
           what "every control is hidden" is a claim about. */}
       <header
         hidden={isolated}
-        className={isolated ? undefined : 'flex items-center gap-2 px-4 py-3'}
+        className={
+          isolated ? undefined : 'flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-3'
+        }
       >
         <BackToClips />
-        <span className="truncate text-sm font-semibold">{clip.name}</span>
+        {/* No rename before the bytes are stored: there is no Drive file yet
+            for the name to be kept on. */}
+        <ClipName
+          clip={clip}
+          onRename={clip.driveId === undefined ? undefined : onRename}
+        />
         {/* In the header, so the isolated view hides it along with everything
             else — a banner above the screen would sit on top of a clip that
             is meant to fill it. */}
