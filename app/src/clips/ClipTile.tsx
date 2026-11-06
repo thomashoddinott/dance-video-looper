@@ -7,6 +7,7 @@ import { DANCE_STYLES } from './danceStyle'
 import { formatAdded, formatDuration } from './format'
 import { Poster } from './Poster'
 import { STYLE_LOOK } from './styleLook'
+import { useNameField } from './useNameField'
 
 /* The chooser's answers: each style in its own colour whether or not it is
    the current one, so the chooser previews the label it will leave, and then
@@ -294,13 +295,8 @@ function PencilIcon() {
   )
 }
 
-/* #54. Its own component so what was typed lives exactly as long as the
-   question does: cancel it, open it again, and it starts from the clip's name
-   rather than from the name that was thrown away.
-
-   Selected on arrival, because a rename is nearly always a whole new name, and
-   a field that put the caret at the end would make every one of them start
-   with a select-all. */
+/* #54. Its own component so the field is mounted only while the question is
+   open, which is how long `useNameField` keeps what was typed. */
 function RenameQuestion({
   name,
   onSave,
@@ -310,39 +306,23 @@ function RenameQuestion({
   readonly onSave: (name: string) => void
   readonly onCancel: () => void
 }) {
-  const [typed, setTyped] = useState(name)
-  const wanted = typed.trim()
+  const { canSave, form, field } = useNameField({ name, onSave, onCancel })
 
   return (
     <form
       aria-label={`Rename ${name}`}
-      onSubmit={(event) => {
-        event.preventDefault()
-
-        /* Saving the name it already has is closing the question, and asks
-           Drive nothing. */
-        if (wanted === name) onCancel()
-        else onSave(wanted)
-      }}
+      {...form}
       className="absolute inset-x-0 top-0 flex aspect-[9/16] flex-col items-center justify-center gap-2 rounded-xl bg-shell/95 px-2 text-center"
     >
       <p className="text-xs font-semibold">Rename</p>
       <input
         aria-label="Clip name"
-        value={typed}
-        onChange={(event) => setTyped(event.target.value)}
-        onFocus={(event) => event.currentTarget.select()}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') onCancel()
-        }}
-        autoFocus
+        {...field}
         className="w-full rounded-lg bg-ink/10 px-2 py-1.5 text-xs text-ink outline-none"
       />
-      {/* Disabled rather than refused after the fact: a clip with no name has
-          nothing on its tile to be found by. */}
       <button
         type="submit"
-        disabled={wanted === ''}
+        disabled={!canSave}
         className="w-full max-w-24 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent-2 disabled:opacity-40"
       >
         Save
