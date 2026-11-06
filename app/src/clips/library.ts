@@ -105,6 +105,13 @@ export const restyled = (
   clips: library.clips.map((clip) => (clip.id === id ? { ...clip, style } : clip)),
 })
 
+/* #54. After the patch, for `restyled`'s reason: a name on a tile is always
+   the name Drive holds. */
+export const renamed = (library: Library, id: string, name: string): Library => ({
+  ...library,
+  clips: library.clips.map((clip) => (clip.id === id ? { ...clip, name } : clip)),
+})
+
 /* The two ways a clip leaves share their mechanics and nothing else, so the
    mechanics live here once and each reason keeps its own name above it. */
 const dropped = (library: Library, id: string): Library => ({
