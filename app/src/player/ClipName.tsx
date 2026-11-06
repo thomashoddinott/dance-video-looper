@@ -23,17 +23,25 @@ export function ClipName({
   /* The grid's alert says which clip kept its name, but the grid is out of
      sight from here — so the player says so itself, under the name it kept. */
   const [refused, setRefused] = useState(false)
+  /* The pencil is swapped out for the field, so it comes back mounted fresh,
+     and takes the focus the field had — or a keyboard lands on the document.
+     Never on the first mount: opening a clip must not steal the focus. */
+  const [returning, setReturning] = useState(false)
+  const closed = () => {
+    setRenaming(false)
+    setReturning(true)
+  }
 
   if (renaming) {
     return (
       <RenameField
         name={clip.name}
         onSave={(name) => {
-          setRenaming(false)
+          closed()
           setRefused(false)
           void onRename?.(clip, name).then((took) => setRefused(!took))
         }}
-        onCancel={() => setRenaming(false)}
+        onCancel={closed}
       />
     )
   }
@@ -50,6 +58,7 @@ export function ClipName({
             type="button"
             aria-label={`Rename ${clip.name}`}
             onClick={() => setRenaming(true)}
+            autoFocus={returning}
             className="shrink-0 rounded-md p-1 text-ink/40 hover:text-ink"
           >
             <PencilIcon />

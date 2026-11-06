@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router'
 
 import type { Clip } from './clip'
@@ -74,6 +74,14 @@ export function ClipTile({
   }
   const answered = () => {
     setAsked(null)
+  }
+  /* #54. The rename question takes the focus into its field, unlike the other
+     two, so closing it has to give the focus back — to the pencil, which never
+     left the tile. */
+  const pencil = useRef<HTMLButtonElement>(null)
+  const renamed = () => {
+    answered()
+    pencil.current?.focus()
   }
   const style = DANCE_STYLES.find(({ id }) => id === clip.style)
 
@@ -179,6 +187,7 @@ export function ClipTile({
       {uploading === undefined && onRename !== undefined && (
         <div className="pointer-events-none absolute inset-x-0 top-0 aspect-[9/16]">
           <button
+            ref={pencil}
             type="button"
             aria-label={`Rename ${clip.name}`}
             aria-expanded={asked === 'rename'}
@@ -196,10 +205,10 @@ export function ClipTile({
         <RenameQuestion
           name={clip.name}
           onSave={(name) => {
-            answered()
+            renamed()
             onRename?.(clip, name)
           }}
-          onCancel={answered}
+          onCancel={renamed}
         />
       )}
 

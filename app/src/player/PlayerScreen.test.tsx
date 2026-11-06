@@ -3566,6 +3566,27 @@ describe('renaming the clip from the player', () => {
     expect(theForm()).not.toBeInTheDocument()
   })
 
+  /* The pencil was swapped out for the field, so it comes back holding the
+     focus the field had — or a keyboard lands on the document. */
+  it('hands the keyboard back to the pencil when the field closes', async () => {
+    renderRenamable()
+
+    await retype('Basic step{Enter}')
+
+    expect(thePencil()).toHaveFocus()
+
+    await userEvent.click(thePencil() as HTMLElement)
+    await userEvent.keyboard('{Escape}')
+
+    expect(thePencil()).toHaveFocus()
+  })
+
+  it('leaves the focus alone when the clip opens', () => {
+    renderRenamable()
+
+    expect(thePencil()).not.toHaveFocus()
+  })
+
   /* BR-05 again, for the second text field on this screen: `f` typed into a
      name isolates nothing. */
   it('fires no shortcut while a name is typed', async () => {

@@ -547,6 +547,22 @@ describe('renaming a clip from its tile', () => {
     expect(theForm()).not.toBeInTheDocument()
   })
 
+  /* The field took the focus, and goes when it closes. Without this a keyboard
+     lands on the document and has to tab back through the whole grid. */
+  it('hands the keyboard back to the pencil when the field closes', async () => {
+    renderRenamableTile()
+
+    await open()
+    await retype('Basic step{Enter}')
+
+    expect(thePencil()).toHaveFocus()
+
+    await open()
+    await userEvent.keyboard('{Escape}')
+
+    expect(thePencil()).toHaveFocus()
+  })
+
   /* A second open starts from the clip's name, not from what was typed and
      thrown away last time. */
   it('forgets what was typed when it was cancelled', async () => {
