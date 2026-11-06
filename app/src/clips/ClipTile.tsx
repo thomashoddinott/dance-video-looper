@@ -20,6 +20,9 @@ const STYLE_ANSWERS: readonly {
   { id: undefined, label: 'None', look: 'bg-control text-ink/70 hover:bg-control-hi' },
 ]
 
+/* What a tile can ask about its clip. */
+type Question = 'delete' | 'style'
+
 /* Visible on a phone and hidden until asked for on a laptop. The ticket asked
    for a hover reveal, and hover is exactly the interaction half this app's
    devices do not have — the phone is half of why any of this syncs through
@@ -55,11 +58,17 @@ export function ClipTile({
   /* The question lives on the tile that asked it, because that is all it is:
      one tile's ephemeral state, meaningless anywhere else and gone the moment
      it is answered. Lifting it to the screen would buy only the guarantee that
-     no two tiles ask at once, which costs nothing to allow. */
-  const [asking, setAsking] = useState(false)
-  /* The second question a tile can ask (#43). It covers the same thumbnail the
-     delete question does, so opening either closes the other. */
-  const [choosing, setChoosing] = useState(false)
+     no two tiles ask at once, which costs nothing to allow.
+
+     One value rather than a flag per question, because every question covers
+     the same thumbnail: asking one is answering "no" to the others. */
+  const [asked, setAsked] = useState<Question | null>(null)
+  const ask = (question: Question) => {
+    setAsked((held) => (held === question ? null : question))
+  }
+  const answered = () => {
+    setAsked(null)
+  }
   const style = DANCE_STYLES.find(({ id }) => id === clip.style)
 
   return (
@@ -119,10 +128,9 @@ export function ClipTile({
         <button
           type="button"
           aria-label={`Delete ${clip.name}`}
-          aria-expanded={asking}
+          aria-expanded={asked === 'delete'}
           onClick={() => {
-            setChoosing(false)
-            setAsking((open) => !open)
+            ask('delete')
           }}
           className={`absolute top-1.5 right-1.5 rounded-full bg-black/70 px-2 py-0.5 text-lg leading-none text-white/70 hover:text-white ${REVEAL}`}
         >
@@ -142,10 +150,9 @@ export function ClipTile({
         <button
           type="button"
           aria-label={`Style of ${clip.name}: ${style?.label ?? 'none'}`}
-          aria-expanded={choosing}
+          aria-expanded={asked === 'style'}
           onClick={() => {
-            setAsking(false)
-            setChoosing((open) => !open)
+            ask('style')
           }}
           className={`absolute top-1.5 left-1.5 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
             style ? STYLE_LOOK[style.id].fill : 'bg-black/40 text-white/70 hover:text-white'
@@ -157,7 +164,7 @@ export function ClipTile({
 
       {/* The current answer is ringed rather than recoloured, since every
           answer already wears its own colour. */}
-      {choosing && (
+      {asked === 'style' && (
         <div
           role="group"
           aria-label={`Choose a style for ${clip.name}`}
@@ -170,7 +177,7 @@ export function ClipTile({
               type="button"
               aria-pressed={clip.style === id}
               onClick={() => {
-                setChoosing(false)
+                answered()
                 onRestyle?.(clip, id)
               }}
               className={`w-full max-w-24 rounded-lg px-3 py-1.5 text-xs font-semibold ${look} ${
@@ -182,9 +189,7 @@ export function ClipTile({
           ))}
           <button
             type="button"
-            onClick={() => {
-              setChoosing(false)
-            }}
+            onClick={answered}
             className="text-[11px] text-ink/50 underline underline-offset-2 hover:text-ink"
           >
             Cancel
@@ -196,7 +201,7 @@ export function ClipTile({
           the focus a keyboard reached it with has somewhere to stay —
           `aria-expanded` is what says the question appeared. Swapping would
           drop focus to the document and leave that dancer nowhere. */}
-      {asking && (
+      {asked === 'delete' && (
         <div
           role="group"
           aria-label={`Delete ${clip.name}?`}
@@ -206,7 +211,7 @@ export function ClipTile({
           <button
             type="button"
             onClick={() => {
-              setAsking(false)
+              answered()
               onDelete?.(clip)
             }}
             className="w-full max-w-24 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent-2"
@@ -215,9 +220,7 @@ export function ClipTile({
           </button>
           <button
             type="button"
-            onClick={() => {
-              setAsking(false)
-            }}
+            onClick={answered}
             className="w-full max-w-24 rounded-lg bg-control px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-control-hi"
           >
             Cancel
