@@ -66,6 +66,7 @@ export function ClipsScreen({
   onAdd,
   onDelete,
   onRestyle,
+  onRename,
   probe,
   notice: driveNotice = null,
   demo = false,
@@ -94,6 +95,8 @@ export function ClipsScreen({
   readonly onDelete: (clip: Clip) => void
   /* #43. Straight through to the library, like the delete above. */
   readonly onRestyle: (clip: Clip, style: DanceStyle | undefined) => void
+  /* #54. Straight through to the library too. */
+  readonly onRename: (clip: Clip, name: string) => void
   readonly probe: ClipProbe
   /* Something that went wrong after the tile was already in the grid — an
      upload that failed. The screen's own notices below are the ones it can see
@@ -373,6 +376,7 @@ export function ClipsScreen({
               uploading={uploadOf(library, clip.id)}
               onDelete={demo ? undefined : onDelete}
               onRestyle={demo ? undefined : onRestyle}
+              onRename={demo ? undefined : onRename}
             />
           ))}
         </ul>

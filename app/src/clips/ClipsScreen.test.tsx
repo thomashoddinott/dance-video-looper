@@ -38,6 +38,7 @@ const noClipIsAdded = () => {}
 const noFileIsProbed: ClipProbe = async () => ({ ok: false })
 const noClipIsDeleted = () => {}
 const noClipIsRestyled = () => {}
+const noClipIsRenamed = () => {}
 
 /* The ordering belongs to the caller now (#16), because the real one has to
    outlive this screen being unmounted for the player. Here the caller is this
@@ -70,6 +71,7 @@ function ScreenUnderTest({
       onAdd={noClipIsAdded}
       onDelete={onDelete}
       onRestyle={onRestyle}
+      onRename={noClipIsRenamed}
       probe={noFileIsProbed}
     />
   )
@@ -888,6 +890,7 @@ describe('the grid in the demo', () => {
             onAdd={noClipIsAdded}
             onDelete={noClipIsDeleted}
             onRestyle={noClipIsRestyled}
+            onRename={noClipIsRenamed}
             probe={noFileIsProbed}
             demo
           />
@@ -936,6 +939,15 @@ describe('the grid in the demo', () => {
 
     expect(
       screen.queryByRole('button', { name: /^Style of/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  /* #54. Nor a name: the clip is the demo's, not the visitor's. */
+  it('offers no way to rename the clip', () => {
+    renderTheDemo()
+
+    expect(
+      screen.queryByRole('button', { name: /^Rename/ }),
     ).not.toBeInTheDocument()
   })
 
