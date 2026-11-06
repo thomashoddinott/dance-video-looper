@@ -398,3 +398,201 @@ describe('the style a tile wears', () => {
     expect(screen.getAllByRole('link')).toHaveLength(1)
   })
 })
+
+/* #54. The pencil sits in the corner the style label and the ✕ left free, and
+   fades in as the ✕ does — which is CSS, and the smoke test's to see. */
+describe('renaming a clip from its tile', () => {
+  const renderRenamableTile = ({
+    uploading,
+    onRename = () => {},
+  }: {
+    readonly uploading?: number
+    readonly onRename?: (clip: Clip, name: string) => void
+  } = {}) =>
+    render(
+      <MemoryRouter>
+        <ClipTile
+          clip={getClip({ id: 'shuffle-drill', name: 'Shuffle drill' })}
+          uploading={uploading}
+          onDelete={() => {}}
+          onRestyle={() => {}}
+          onRename={onRename}
+        />
+      </MemoryRouter>,
+    )
+
+  const thePencil = () =>
+    screen.queryByRole('button', { name: 'Rename Shuffle drill' })
+
+  const theForm = () =>
+    screen.queryByRole('form', { name: 'Rename Shuffle drill' })
+
+  const theField = () =>
+    screen.getByRole<HTMLInputElement>('textbox', { name: 'Clip name' })
+
+  const open = async () => {
+    await userEvent.click(thePencil() as HTMLElement)
+  }
+
+  const retype = async (name: string) => {
+    await userEvent.clear(theField())
+    await userEvent.type(theField(), name)
+  }
+
+  const press = async (name: string) => {
+    await userEvent.click(
+      within(theForm() as HTMLElement).getByRole('button', { name }),
+    )
+  }
+
+  it('carries a pencil that says which clip it means', () => {
+    renderRenamableTile()
+
+    expect(thePencil()).toBeInTheDocument()
+  })
+
+  it('asks for the name in a field holding the current one, ready to type over', async () => {
+    renderRenamableTile()
+
+    await open()
+
+    expect(theField()).toHaveValue('Shuffle drill')
+    expect(theField()).toHaveFocus()
+    expect(theField().selectionStart).toBe(0)
+    expect(theField().selectionEnd).toBe('Shuffle drill'.length)
+  })
+
+  it('renames the clip whose tile asked when the name is saved', async () => {
+    const onRename = vi.fn()
+    renderRenamableTile({ onRename })
+
+    await open()
+    await retype('Basic step')
+    await press('Save')
+
+    expect(onRename).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'shuffle-drill' }),
+      'Basic step',
+    )
+    expect(theForm()).not.toBeInTheDocument()
+  })
+
+  it('renames it on Enter too', async () => {
+    const onRename = vi.fn()
+    renderRenamableTile({ onRename })
+
+    await open()
+    await retype('Basic step{Enter}')
+
+    expect(onRename).toHaveBeenCalledWith(expect.anything(), 'Basic step')
+    expect(theForm()).not.toBeInTheDocument()
+  })
+
+  it('trims the spaces a name was typed with', async () => {
+    const onRename = vi.fn()
+    renderRenamableTile({ onRename })
+
+    await open()
+    await retype('  Basic step  ')
+    await press('Save')
+
+    expect(onRename).toHaveBeenCalledWith(expect.anything(), 'Basic step')
+  })
+
+  it('will not save a name that is empty or only spaces', async () => {
+    const onRename = vi.fn()
+    renderRenamableTile({ onRename })
+
+    await open()
+    await retype('   {Enter}')
+
+    expect(
+      within(theForm() as HTMLElement).getByRole('button', { name: 'Save' }),
+    ).toBeDisabled()
+    expect(onRename).not.toHaveBeenCalled()
+    expect(theForm()).toBeInTheDocument()
+  })
+
+  it('asks nothing when the name is saved unchanged', async () => {
+    const onRename = vi.fn()
+    renderRenamableTile({ onRename })
+
+    await open()
+    await press('Save')
+
+    expect(onRename).not.toHaveBeenCalled()
+    expect(theForm()).not.toBeInTheDocument()
+  })
+
+  it('changes nothing when cancelled', async () => {
+    const onRename = vi.fn()
+    renderRenamableTile({ onRename })
+
+    await open()
+    await retype('Basic step')
+    await press('Cancel')
+
+    expect(onRename).not.toHaveBeenCalled()
+    expect(theForm()).not.toBeInTheDocument()
+  })
+
+  it('changes nothing on Escape', async () => {
+    const onRename = vi.fn()
+    renderRenamableTile({ onRename })
+
+    await open()
+    await retype('Basic step{Escape}')
+
+    expect(onRename).not.toHaveBeenCalled()
+    expect(theForm()).not.toBeInTheDocument()
+  })
+
+  /* A second open starts from the clip's name, not from what was typed and
+     thrown away last time. */
+  it('forgets what was typed when it was cancelled', async () => {
+    renderRenamableTile()
+
+    await open()
+    await retype('Basic step')
+    await press('Cancel')
+    await open()
+
+    expect(theField()).toHaveValue('Shuffle drill')
+  })
+
+  it('asks one question at a time, whichever was asked last', async () => {
+    renderRenamableTile()
+
+    await userEvent.click(theDeleteControl() as HTMLElement)
+    await open()
+
+    expect(theQuestion()).not.toBeInTheDocument()
+    expect(theForm()).toBeInTheDocument()
+
+    await userEvent.click(theDeleteControl() as HTMLElement)
+
+    expect(theForm()).not.toBeInTheDocument()
+    expect(theQuestion()).toBeInTheDocument()
+  })
+
+  /* No Drive file to rename yet — `rename` would refuse it. */
+  it('offers no rename while the clip is still going up', () => {
+    renderRenamableTile({ uploading: 0.38 })
+
+    expect(thePencil()).not.toBeInTheDocument()
+  })
+
+  it('offers no rename where the clip’s name cannot be changed', () => {
+    renderTile()
+
+    expect(thePencil()).not.toBeInTheDocument()
+  })
+
+  it('does not take the tile’s place as the way into the player', async () => {
+    renderRenamableTile()
+
+    await open()
+
+    expect(screen.getAllByRole('link')).toHaveLength(1)
+  })
+})

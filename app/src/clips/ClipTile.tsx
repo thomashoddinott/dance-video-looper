@@ -21,7 +21,7 @@ const STYLE_ANSWERS: readonly {
 ]
 
 /* What a tile can ask about its clip. */
-type Question = 'delete' | 'style'
+type Question = 'delete' | 'style' | 'rename'
 
 /* Visible on a phone and hidden until asked for on a laptop. The ticket asked
    for a hover reveal, and hover is exactly the interaction half this app's
@@ -37,6 +37,7 @@ export function ClipTile({
   uploading,
   onDelete,
   onRestyle,
+  onRename,
 }: {
   readonly clip: Clip
   /* The still stored for this clip (#77), or absent for one that has none —
@@ -54,6 +55,9 @@ export function ClipTile({
   readonly onRestyle?:
     | ((clip: Clip, style: DanceStyle | undefined) => void)
     | undefined
+  /* #54. Handed the new name already trimmed, and only when it is new.
+     Absent where the name cannot be changed, for `onRestyle`'s reason. */
+  readonly onRename?: ((clip: Clip, name: string) => void) | undefined
 }) {
   /* The question lives on the tile that asked it, because that is all it is:
      one tile's ephemeral state, meaningless anywhere else and gone the moment
@@ -162,6 +166,41 @@ export function ClipTile({
         </button>
       )}
 
+      {/* #54. Bottom left, the one corner of the poster still free: the style
+          label has the top left, the ✕ the top right and the length the bottom
+          right. Fades in as the ✕ does, for `REVEAL`'s reason.
+
+          Laid over the poster by a box the poster's own shape, because the
+          button cannot sit inside the link it would be laid over — the ✕'s
+          reason — and the tile below the poster carries the name. The box
+          lets the pointer through to the link everywhere but the pencil. */}
+      {uploading === undefined && onRename !== undefined && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 aspect-[9/16]">
+          <button
+            type="button"
+            aria-label={`Rename ${clip.name}`}
+            aria-expanded={asked === 'rename'}
+            onClick={() => {
+              ask('rename')
+            }}
+            className={`pointer-events-auto absolute bottom-1.5 left-1.5 rounded-full bg-black/70 p-1.5 text-white/70 hover:text-white ${REVEAL}`}
+          >
+            <PencilIcon />
+          </button>
+        </div>
+      )}
+
+      {asked === 'rename' && (
+        <RenameQuestion
+          name={clip.name}
+          onSave={(name) => {
+            answered()
+            onRename?.(clip, name)
+          }}
+          onCancel={answered}
+        />
+      )}
+
       {/* The current answer is ringed rather than recoloured, since every
           answer already wears its own colour. */}
       {asked === 'style' && (
@@ -234,5 +273,87 @@ export function ClipTile({
         </div>
       )}
     </li>
+  )
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+    >
+      <path d="M4 20h4L19 9l-4-4L4 16v4z" />
+      <path d="M13.5 6.5l4 4" />
+    </svg>
+  )
+}
+
+/* #54. Its own component so what was typed lives exactly as long as the
+   question does: cancel it, open it again, and it starts from the clip's name
+   rather than from the name that was thrown away.
+
+   Selected on arrival, because a rename is nearly always a whole new name, and
+   a field that put the caret at the end would make every one of them start
+   with a select-all. */
+function RenameQuestion({
+  name,
+  onSave,
+  onCancel,
+}: {
+  readonly name: string
+  readonly onSave: (name: string) => void
+  readonly onCancel: () => void
+}) {
+  const [typed, setTyped] = useState(name)
+  const wanted = typed.trim()
+
+  return (
+    <form
+      aria-label={`Rename ${name}`}
+      onSubmit={(event) => {
+        event.preventDefault()
+
+        /* Saving the name it already has is closing the question, and asks
+           Drive nothing. */
+        if (wanted === name) onCancel()
+        else onSave(wanted)
+      }}
+      className="absolute inset-x-0 top-0 flex aspect-[9/16] flex-col items-center justify-center gap-2 rounded-xl bg-shell/95 px-2 text-center"
+    >
+      <p className="text-xs font-semibold">Rename</p>
+      <input
+        aria-label="Clip name"
+        value={typed}
+        onChange={(event) => setTyped(event.target.value)}
+        onFocus={(event) => event.currentTarget.select()}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') onCancel()
+        }}
+        autoFocus
+        className="w-full rounded-lg bg-ink/10 px-2 py-1.5 text-xs text-ink outline-none"
+      />
+      {/* Disabled rather than refused after the fact: a clip with no name has
+          nothing on its tile to be found by. */}
+      <button
+        type="submit"
+        disabled={wanted === ''}
+        className="w-full max-w-24 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent-2 disabled:opacity-40"
+      >
+        Save
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="w-full max-w-24 rounded-lg bg-control px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-control-hi"
+      >
+        Cancel
+      </button>
+    </form>
   )
 }
