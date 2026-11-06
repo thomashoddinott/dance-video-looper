@@ -3516,7 +3516,7 @@ describe('renaming the clip from the player', () => {
 
     await retype('Basic step')
     await userEvent.click(
-      within(theForm() as HTMLElement).getByRole('button', { name: 'Save' }),
+      within(theForm() as HTMLElement).getByRole('button', { name: 'Save name' }),
     )
 
     expect(onRename).toHaveBeenCalledWith(
@@ -3540,7 +3540,7 @@ describe('renaming the clip from the player', () => {
     await retype('  {Enter}')
 
     expect(
-      within(theForm() as HTMLElement).getByRole('button', { name: 'Save' }),
+      within(theForm() as HTMLElement).getByRole('button', { name: 'Save name' }),
     ).toBeDisabled()
     expect(onRename).not.toHaveBeenCalled()
   })

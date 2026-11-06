@@ -102,6 +102,10 @@ function RenameField({
       />
       <button
         type="submit"
+        /* Named for what it saves: the player already has a Save, the one
+           that keeps a loop. Starting with the word on the button, so a voice
+           user saying "Save" still reaches it. */
+        aria-label="Save name"
         disabled={!canSave}
         className="shrink-0 rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-on-accent hover:bg-accent-2 disabled:opacity-40"
       >

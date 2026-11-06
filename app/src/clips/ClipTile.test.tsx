@@ -468,7 +468,7 @@ describe('renaming a clip from its tile', () => {
 
     await open()
     await retype('Basic step')
-    await press('Save')
+    await press('Save name')
 
     expect(onRename).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'shuffle-drill' }),
@@ -494,7 +494,7 @@ describe('renaming a clip from its tile', () => {
 
     await open()
     await retype('  Basic step  ')
-    await press('Save')
+    await press('Save name')
 
     expect(onRename).toHaveBeenCalledWith(expect.anything(), 'Basic step')
   })
@@ -507,7 +507,7 @@ describe('renaming a clip from its tile', () => {
     await retype('   {Enter}')
 
     expect(
-      within(theForm() as HTMLElement).getByRole('button', { name: 'Save' }),
+      within(theForm() as HTMLElement).getByRole('button', { name: 'Save name' }),
     ).toBeDisabled()
     expect(onRename).not.toHaveBeenCalled()
     expect(theForm()).toBeInTheDocument()
@@ -518,7 +518,7 @@ describe('renaming a clip from its tile', () => {
     renderRenamableTile({ onRename })
 
     await open()
-    await press('Save')
+    await press('Save name')
 
     expect(onRename).not.toHaveBeenCalled()
     expect(theForm()).not.toBeInTheDocument()

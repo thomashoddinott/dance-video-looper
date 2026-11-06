@@ -314,6 +314,8 @@ function RenameQuestion({
       />
       <button
         type="submit"
+        /* The player's own Save names itself the same way (`ClipName`). */
+        aria-label="Save name"
         disabled={!canSave}
         className="w-full max-w-24 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent-2 disabled:opacity-40"
       >
