@@ -27,6 +27,7 @@ export const aDriveApi = (overrides: Partial<DriveApi> = {}): DriveApi => ({
   })),
   trash: vi.fn(async () => {}),
   setStyle: vi.fn(async () => {}),
+  rename: vi.fn(async () => {}),
   download: vi.fn(async () => new Blob([new Uint8Array(9)])),
   toUrl: vi.fn(() => 'blob:downloaded'),
   releaseUrl: vi.fn(),

@@ -90,6 +90,8 @@ export const demoDriveApi = ({
     /* The grid offers the demo no style control (#43), so this is only the
        answer to a call nothing should make. */
     setStyle: () => refuse('keeps no styles'),
+    /* Nor a rename (#54): the clip is the demo's, not the visitor's. */
+    rename: () => refuse('renames nothing'),
 
     listThumbnails: async () => ({ [clip.id]: STILL_FILE }),
 
