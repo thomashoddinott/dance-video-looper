@@ -40,19 +40,24 @@ export function ClipName({
 
   return (
     <>
-      <span className="truncate text-sm font-semibold">{clip.name}</span>
-      {onRename !== undefined && (
-        <button
-          type="button"
-          aria-label={`Rename ${clip.name}`}
-          onClick={() => setRenaming(true)}
-          className="shrink-0 rounded-md p-1 text-ink/40 hover:text-ink"
-        >
-          <PencilIcon />
-        </button>
-      )}
+      {/* One box from a basis of nothing, so the header — which wraps, for the
+          refusal below — never wraps a long name onto a line of its own. It
+          truncates, as it did before there was a pencil beside it. */}
+      <div className="flex min-w-0 flex-1 items-center gap-1">
+        <span className="truncate text-sm font-semibold">{clip.name}</span>
+        {onRename !== undefined && (
+          <button
+            type="button"
+            aria-label={`Rename ${clip.name}`}
+            onClick={() => setRenaming(true)}
+            className="shrink-0 rounded-md p-1 text-ink/40 hover:text-ink"
+          >
+            <PencilIcon />
+          </button>
+        )}
+      </div>
       {/* A whole line of the header's own, so a refusal never squeezes the
-          name it is about. */}
+          name it is about. Last, so it wraps below the demo label too. */}
       {refused && (
         <p role="alert" className="order-last basis-full text-xs text-ink/60">
           The new name could not be saved to Drive, so the clip keeps its old one.
