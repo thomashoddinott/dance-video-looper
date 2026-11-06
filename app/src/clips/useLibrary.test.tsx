@@ -335,6 +335,132 @@ describe('setting a clip’s dance style', () => {
   })
 })
 
+/* #54. `restyle`'s shape, for the same reason: Drive first, then the tile. */
+describe('renaming a clip', () => {
+  const readyWith = async (api: DriveApi) => {
+    const rendered = renderLibrary(api)
+
+    await waitFor(() => {
+      expect(rendered.result.current.library.state).toBe('ready')
+    })
+
+    return rendered
+  }
+
+  const named = getClip({ ...A_STORED_CLIP, name: 'Shuffle drill', style: 'salsa' })
+
+  const theClip = (library: { readonly clips: readonly Clip[] }) =>
+    library.clips.find((clip) => clip.id === named.id)
+
+  it('renames the clip in Drive, and the tile says the new name', async () => {
+    const api = anApi({ listClips: vi.fn(async () => [named]) })
+    const { result } = await readyWith(api)
+
+    await act(async () => {
+      await result.current.rename(named, 'Basic step')
+    })
+
+    expect(api.rename).toHaveBeenCalledWith(expect.anything(), 'drive-1', 'Basic step')
+    expect(theClip(result.current.library)?.name).toBe('Basic step')
+  })
+
+  /* The id is what the loops, the still and the cached bytes are keyed on. */
+  it('leaves the clip otherwise as it was', async () => {
+    const { result } = await readyWith(
+      anApi({ listClips: vi.fn(async () => [named]) }),
+    )
+
+    await act(async () => {
+      await result.current.rename(named, 'Basic step')
+    })
+
+    expect(theClip(result.current.library)).toEqual({ ...named, name: 'Basic step' })
+  })
+
+  it('says it took, so the screen that asked need say nothing', async () => {
+    const { result } = await readyWith(
+      anApi({ listClips: vi.fn(async () => [named]) }),
+    )
+
+    let took: boolean | undefined
+
+    await act(async () => {
+      took = await result.current.rename(named, 'Basic step')
+    })
+
+    expect(took).toBe(true)
+    expect(result.current.notice).toBeNull()
+  })
+
+  it('keeps the old name when Drive refuses, and says which clip', async () => {
+    const { result } = await readyWith(
+      anApi({
+        listClips: vi.fn(async () => [named]),
+        rename: vi.fn(async () => {
+          throw new DriveError('boom', 500)
+        }),
+      }),
+    )
+
+    let took: boolean | undefined
+
+    await act(async () => {
+      took = await result.current.rename(named, 'Basic step')
+    })
+
+    expect(took).toBe(false)
+    expect(theClip(result.current.library)?.name).toBe('Shuffle drill')
+    expect(result.current.notice).toContain('Shuffle drill')
+  })
+
+  it('reports a withdrawal when the rename is what gets the 401', async () => {
+    const { result } = await readyWith(
+      anApi({
+        rename: vi.fn(async () => {
+          throw new DriveError('no', 401)
+        }),
+      }),
+    )
+
+    await act(async () => {
+      await result.current.rename(A_STORED_CLIP, 'Basic step')
+    })
+
+    expect(result.current.status).toBe('consent-withdrawn')
+  })
+
+  /* The tile and the player hide the pencil until the bytes are stored, so this
+     is a guard — `files/undefined` would be a 404 the dancer could not read. */
+  it('asks Drive nothing about a clip Drive never stored, and says so', async () => {
+    const halfSent = getClip({ id: 'half-sent', name: 'Half sent' })
+    const api = anApi({ listClips: vi.fn(async () => [halfSent]) })
+    const { result } = await readyWith(api)
+
+    await act(async () => {
+      await result.current.rename(halfSent, 'Basic step')
+    })
+
+    expect(api.rename).not.toHaveBeenCalled()
+    expect(result.current.library.clips[0]?.name).toBe('Half sent')
+    expect(result.current.notice).toContain('Half sent')
+  })
+
+  it('says the name was not kept when there is no Drive to keep it in', async () => {
+    const api = anApi()
+    const { result } = renderLibrary(api, refusing, keepingNothing())
+
+    await waitFor(() => {
+      expect(result.current.library.state).toBe('ready')
+    })
+    await act(async () => {
+      await result.current.rename(A_STORED_CLIP, 'Basic step')
+    })
+
+    expect(api.rename).not.toHaveBeenCalled()
+    expect(result.current.notice).toMatch(/could not be renamed in Drive/)
+  })
+})
+
 describe('adding a clip to the library', () => {
   const addedTo = async (api: DriveApi, compress: ClipCompressor = uncompressed) => {
     const rendered = renderLibrary(api, granting, aTokenStore(), compress)

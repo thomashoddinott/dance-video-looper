@@ -1,7 +1,13 @@
 import type { Clip } from '../clips/clip'
 import type { DanceStyle } from '../clips/danceStyle'
 import type { DriveFile, DriveFileMetadata } from './driveClips'
-import { STYLE, clipFromDriveFile, driveFileFor, isClipFile } from './driveClips'
+import {
+  STYLE,
+  clipFromDriveFile,
+  driveFileFor,
+  filenameFor,
+  isClipFile,
+} from './driveClips'
 import { thumbnailFileFor, thumbnailsFromDriveFiles } from './driveThumbnails'
 
 const API = 'https://www.googleapis.com/drive/v3'
@@ -510,6 +516,13 @@ export type DriveApi = {
     driveId: string,
     style: DanceStyle | undefined,
   ) => Promise<void>
+  /* #54. `name` is what the tile says, with no extension — the file keeps
+     its own. Answers nothing, for `trash`'s reason. */
+  readonly rename: (
+    token: string,
+    driveId: string,
+    name: string,
+  ) => Promise<void>
   readonly download: (
     token: string,
     driveId: string,
@@ -613,6 +626,28 @@ export const driveApiOver = (host: DriveHost): DriveApi => ({
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ appProperties: { [STYLE]: style ?? null } }),
+    })
+  },
+
+  /* `setStyle`'s endpoint again, and naming only `name` leaves the file's
+     `appProperties` — its clip id, and with it its loops — where they were.
+
+     Two round trips rather than one, because the extension has to come from
+     the file Drive holds and the tile does not know it: a clip picked as a
+     .MOV went up as the .mp4 it was re-encoded to (`mp4NameFor`). Carrying
+     the filename on every `Clip` would buy back one metadata read on the
+     rarest thing a dancer does to one. */
+  rename: async (token, driveId, name) => {
+    const held = (await driveJson(
+      host,
+      token,
+      `${API}/files/${driveId}?fields=name`,
+    )) as { readonly name: string }
+
+    await driveFetch(host, token, `${API}/files/${driveId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: filenameFor(held.name, name) }),
     })
   },
 

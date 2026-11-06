@@ -89,6 +89,14 @@ export const clipFromDriveFile = (file: DriveFile): Clip => ({
   loops: 0,
 })
 
+/* #54. What a clip's file is called once the dancer renames it: the name they
+   gave, on the extension the file already has. Kept rather than dropped,
+   because `nameFromFilename` strips everything after the last dot — so a
+   "v2.0" saved bare would read back as "v2" — and because the file in their
+   Drive folder should still say what it is. */
+export const filenameFor = (filename: string, name: string) =>
+  `${name}${/\.[^.]+$/.exec(filename)?.[0] ?? ''}`
+
 /* What an upload sends alongside the bytes. The other half of the contract
    `clipFromDriveFile` reads, and the two are tested together — a key renamed on
    one side alone is exactly the failure a round-trip catches and neither test

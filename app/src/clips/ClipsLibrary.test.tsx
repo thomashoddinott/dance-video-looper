@@ -28,6 +28,7 @@ const noOrderingIsChosen = () => {}
 const noFileIsProbed: ClipProbe = async () => ({ ok: false })
 const noClipIsDeleted = () => {}
 const noClipIsRestyled = () => {}
+const noClipIsRenamed = () => {}
 const noStyleIsPicked = () => {}
 
 const renderLibrary = (library: Library) =>
@@ -46,6 +47,7 @@ const renderLibrary = (library: Library) =>
           onAdd={noClipIsAdded}
           onDelete={noClipIsDeleted}
           onRestyle={noClipIsRestyled}
+          onRename={noClipIsRenamed}
           probe={noFileIsProbed}
         />
       </MemoryRouter>

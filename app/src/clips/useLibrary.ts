@@ -18,6 +18,7 @@ import {
   LOADING,
   loaded,
   progressed,
+  renamed,
   restyled,
   stored,
 } from './library'
@@ -39,6 +40,11 @@ export type LibraryHandle = {
      reason: the `driveId` to patch, the `id` to find the tile by, and the
      `name` for the sentence if Drive says no. */
   readonly restyle: (clip: Clip, style: DanceStyle | undefined) => Promise<void>
+  /* #54. `name` is what the tile will say, already trimmed. Resolves to
+     whether Drive took it, which `restyle` has no need to: the player renames
+     too, and the notice above is the grid's, so the player has to hear how it
+     went to say so where the dancer is. */
+  readonly rename: (clip: Clip, name: string) => Promise<boolean>
 }
 
 export const useLibrary = (
@@ -236,5 +242,35 @@ export const useLibrary = (
     [api, folderToken, reportIfWithdrawn],
   )
 
-  return { library, notice, status, add, remove, restyle }
+  /* #54. `restyle`'s ordering, for its reason. Two metadata calls rather than
+     one (`DriveApi.rename`), still a fraction of a second with the field
+     already closed. */
+  const rename = useCallback(
+    async (clip: Clip, name: string) => {
+      setNotice(null)
+
+      try {
+        if (clip.driveId === undefined) throw new Error('no Drive file to rename')
+
+        const reached = await folderToken()
+
+        if (reached === null) throw new Error('no Drive to rename in')
+
+        await api.rename(reached.token, clip.driveId, name)
+
+        setLibrary((held) => renamed(held, clip.id, name))
+
+        return true
+      } catch (error) {
+        reportIfWithdrawn(error)
+
+        setNotice(`${clip.name} could not be renamed in Drive, so it keeps its name.`)
+
+        return false
+      }
+    },
+    [api, folderToken, reportIfWithdrawn],
+  )
+
+  return { library, notice, status, add, remove, restyle, rename }
 }

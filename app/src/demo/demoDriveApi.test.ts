@@ -96,6 +96,12 @@ describe('the demo library', () => {
       aDemoApi().setStyle(A_TOKEN, 'demo-clip', 'salsa'),
     ).rejects.toThrow()
   })
+
+  it('renames nothing', async () => {
+    await expect(
+      aDemoApi().rename(A_TOKEN, 'demo-clip', 'Mine now'),
+    ).rejects.toThrow()
+  })
 })
 
 /* A grey tile is the first thing a visitor would see, so the still is made
