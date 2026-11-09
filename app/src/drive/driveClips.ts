@@ -1,6 +1,7 @@
 import type { Clip } from '../clips/clip'
 import { styleFrom } from '../clips/danceStyle'
 import { nameFromFilename } from '../clips/fileClip'
+import { youTubeIdFor } from '../clips/youtube'
 
 /* The fields the app asks Drive for, and nothing more. `appProperties` is the
    only one of these the app writes: Drive describes a file by name, size and
@@ -155,8 +156,6 @@ export const driveFileFor = (
    is what makes the listing read it as a clip (`isClipFile`), and the id it
    carries is the one its loops are saved under. */
 export const YOUTUBE_MIME = 'text/uri-list'
-
-export const youTubeIdFor = (videoId: string) => `yt:${videoId}`
 
 export type YouTubeFileMetadata = DriveFileMetadata & {
   readonly mimeType: string

@@ -48,6 +48,7 @@ const renderLibrary = (library: Library) =>
           onDelete={noClipIsDeleted}
           onRestyle={noClipIsRestyled}
           onRename={noClipIsRenamed}
+          onAddYouTube={() => {}}
           probe={noFileIsProbed}
         />
       </MemoryRouter>

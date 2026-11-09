@@ -5,6 +5,10 @@
 export const thumbnailFor = (videoId: string) =>
   `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`
 
+/* The id a YouTube entry is known by in the library and in `loops.json`:
+   namespaced, so it can never collide with a clip's. */
+export const youTubeIdFor = (videoId: string) => `yt:${videoId}`
+
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
 
 /* The one video a link names, from any form a share sheet or an address bar

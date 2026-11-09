@@ -1312,6 +1312,52 @@ describe('renaming a clip from the player', () => {
   })
 })
 
+/* #20. Through the app, because the entry has to come back from Drive the way
+   the next listing will read it, and wear YouTube's picture and mark. */
+describe('adding a YouTube video by its link', () => {
+  const A_VIDEO = 'EuT94T544Mg'
+  const TITLE = 'Cuban Salsa for Beginners - Class 12 (Paseala)'
+
+  it('keeps it in Drive, and it is first in the grid with YouTube’s picture', async () => {
+    const driveApi = driveHolding([getClip({ id: 'shuffle-drill', name: 'Shuffle drill' })])
+    render(
+      <DriveSessionProvider tokenSource={sourceGranting()} tokenStore={aConnectedStore()}>
+        <MemoryRouter initialEntries={['/']}>
+          <App
+            driveApi={driveApi}
+            clipCache={holdsNothing}
+            loopsCache={aLoopsCache()}
+            thumbnailCache={noThumbnails}
+            lookUp={async () => ({ found: true, title: TITLE })}
+          />
+        </MemoryRouter>
+      </DriveSessionProvider>,
+    )
+    await waitForTheLibrary()
+
+    await userEvent.click(screen.getByRole('button', { name: 'YouTube link' }))
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'YouTube link' }),
+      `https://www.youtube.com/watch?v=${A_VIDEO}&list=PL8hFYIpg2Jp1EJE3TCWMr0f_zr9WOi10j{Enter}`,
+    )
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('listitem')[0]).toHaveTextContent(TITLE)
+    })
+    const first = screen.getAllByRole('listitem')[0] as HTMLElement
+    expect(within(first).getByRole('img', { name: 'YouTube' })).toBeInTheDocument()
+    expect(first.querySelector('img[src*="i.ytimg.com"]')).toHaveAttribute(
+      'src',
+      `https://i.ytimg.com/vi/${A_VIDEO}/mqdefault.jpg`,
+    )
+    expect(driveApi.addYouTube).toHaveBeenCalledWith(expect.anything(), {
+      folderId: expect.any(String),
+      videoId: A_VIDEO,
+      title: TITLE,
+    })
+  })
+})
+
 describe('the loops saved against each clip', () => {
   const SHUFFLE = getClip({ id: 'shuffle-drill', name: 'Shuffle drill' })
   const PIVOT = getClip({ id: 'pivot-turn', name: 'Pivot turn' })

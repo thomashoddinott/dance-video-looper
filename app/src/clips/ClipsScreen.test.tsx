@@ -8,6 +8,7 @@ import { DriveSessionProvider } from '../drive/DriveSessionProvider'
 import type { TokenSource } from '../drive/gisTokenSource'
 import type { TokenStore } from '../drive/tokenStore'
 import type { Clip } from './clip'
+import type { YouTubeLookUp } from './youtube'
 import type { DanceStyle, StyleFilter } from './danceStyle'
 import { getClip } from './clip.factory'
 import type { ClipProbe } from './clipProbe'
@@ -39,6 +40,11 @@ const noFileIsProbed: ClipProbe = async () => ({ ok: false })
 const noClipIsDeleted = () => {}
 const noClipIsRestyled = () => {}
 const noClipIsRenamed = () => {}
+const noVideoIsAdded = () => {}
+const noVideoIsLookedUp = async (): Promise<YouTubeLookUp> => ({
+  found: false,
+  because: 'unreachable',
+})
 
 /* The ordering belongs to the caller now (#16), because the real one has to
    outlive this screen being unmounted for the player. Here the caller is this
@@ -53,10 +59,14 @@ function ScreenUnderTest({
   library,
   onDelete,
   onRestyle,
+  onAddYouTube = noVideoIsAdded,
+  lookUp = noVideoIsLookedUp,
 }: {
   readonly library: Library
   readonly onDelete: (clip: Clip) => void
   readonly onRestyle: (clip: Clip, style: DanceStyle | undefined) => void
+  readonly onAddYouTube?: (videoId: string, title: string) => void
+  readonly lookUp?: (videoId: string) => Promise<YouTubeLookUp>
 }) {
   const [ordering, setOrdering] = useState<OrderingId>(orderings[0].id)
   const [styleFilter, setStyleFilter] = useState<StyleFilter | undefined>()
@@ -72,6 +82,8 @@ function ScreenUnderTest({
       onDelete={onDelete}
       onRestyle={onRestyle}
       onRename={noClipIsRenamed}
+      onAddYouTube={onAddYouTube}
+      lookUp={lookUp}
       probe={noFileIsProbed}
     />
   )
@@ -891,6 +903,7 @@ describe('the grid in the demo', () => {
             onDelete={noClipIsDeleted}
             onRestyle={noClipIsRestyled}
             onRename={noClipIsRenamed}
+            onAddYouTube={noVideoIsAdded}
             probe={noFileIsProbed}
             demo
           />
@@ -942,6 +955,13 @@ describe('the grid in the demo', () => {
     ).not.toBeInTheDocument()
   })
 
+  /* #20. Nor a YouTube video: the demo keeps no library. */
+  it('offers no way to add a YouTube video', () => {
+    renderTheDemo()
+
+    expect(screen.queryByRole('button', { name: 'YouTube link' })).not.toBeInTheDocument()
+  })
+
   /* #54. Nor a name: the clip is the demo's, not the visitor's. */
   it('offers no way to rename the clip', () => {
     renderTheDemo()
@@ -975,5 +995,115 @@ describe('the grid in the demo', () => {
     expect(
       screen.getByRole('link', { name: /source code/i }),
     ).toHaveAttribute('href', 'https://github.com/thomashoddinott/dance-video-looper')
+  })
+})
+
+/* #20. The second way into the library: a link rather than a file. Nothing is
+   downloaded — what is kept is the video's id and title. */
+describe('adding a YouTube video by its link', () => {
+  const A_VIDEO = 'EuT94T544Mg'
+  const A_LINK = `https://www.youtube.com/watch?v=${A_VIDEO}&list=PL8hFYIpg2Jp1EJE3TCWMr0f_zr9WOi10j&index=12`
+  const TITLE = 'Cuban Salsa for Beginners - Class 12 (Paseala)'
+
+  const renderWithLink = ({
+    clips = [getClip({ id: 'shuffle-drill', name: 'Shuffle drill', added: '2026-08-12' })],
+    onAddYouTube = vi.fn(),
+    lookUp = vi.fn(async (): Promise<YouTubeLookUp> => ({ found: true, title: TITLE })),
+  }: {
+    readonly clips?: readonly Clip[]
+    readonly onAddYouTube?: (videoId: string, title: string) => void
+    readonly lookUp?: (videoId: string) => Promise<YouTubeLookUp>
+  } = {}) => {
+    render(
+      <DriveSessionProvider tokenSource={anUnconfiguredDrive} tokenStore={anEmptyTokenStore}>
+        <MemoryRouter>
+          <ScreenUnderTest
+            library={loaded(LOADING, clips)}
+            onDelete={noClipIsDeleted}
+            onRestyle={noClipIsRestyled}
+            onAddYouTube={onAddYouTube}
+            lookUp={lookUp}
+          />
+        </MemoryRouter>
+      </DriveSessionProvider>,
+    )
+
+    return { onAddYouTube, lookUp }
+  }
+
+  const paste = async (link: string) => {
+    await userEvent.click(screen.getByRole('button', { name: 'YouTube link' }))
+    await userEvent.type(screen.getByRole('textbox', { name: 'YouTube link' }), `${link}{Enter}`)
+  }
+
+  it('adds the video a link names, under the title YouTube gives it', async () => {
+    const { onAddYouTube, lookUp } = renderWithLink()
+
+    await paste(A_LINK)
+
+    expect(lookUp).toHaveBeenCalledWith(A_VIDEO)
+    expect(onAddYouTube).toHaveBeenCalledWith(A_VIDEO, TITLE)
+    expect(screen.queryByRole('textbox', { name: 'YouTube link' })).not.toBeInTheDocument()
+  })
+
+  it('turns away a link that is not YouTube’s, asking YouTube nothing', async () => {
+    const { onAddYouTube, lookUp } = renderWithLink()
+
+    await paste('https://vimeo.com/123456')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('That is not a YouTube link.')
+    expect(lookUp).not.toHaveBeenCalled()
+    expect(onAddYouTube).not.toHaveBeenCalled()
+  })
+
+  it('turns away a video already in the library, and says which', async () => {
+    const { onAddYouTube } = renderWithLink({
+      clips: [getClip({ id: `yt:${A_VIDEO}`, name: 'Paseala', source: 'youtube', videoId: A_VIDEO })],
+    })
+
+    await paste(`https://youtu.be/${A_VIDEO}`)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Paseala is already in your library.')
+    expect(onAddYouTube).not.toHaveBeenCalled()
+  })
+
+  it('says so when the uploader will not let it play outside YouTube', async () => {
+    const { onAddYouTube } = renderWithLink({
+      lookUp: async () => ({ found: false, because: 'embedding-refused' }),
+    })
+
+    await paste(A_LINK)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/does not let it play outside YouTube/)
+    expect(onAddYouTube).not.toHaveBeenCalled()
+  })
+
+  it('says so when there is no such video', async () => {
+    renderWithLink({ lookUp: async () => ({ found: false, because: 'missing' }) })
+
+    await paste(A_LINK)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/private, or does not exist/)
+  })
+
+  it('says so when YouTube cannot be reached', async () => {
+    renderWithLink({ lookUp: async () => ({ found: false, because: 'unreachable' }) })
+
+    await paste(A_LINK)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/YouTube could not be reached/)
+  })
+
+  /* The add's own rule (US-01-04): the new entry is the one the dancer is
+     looking for, so the grid goes back to Recent with nothing hiding it. */
+  it('goes back to Recent with the search cleared, so the new video is where the eye is', async () => {
+    renderWithLink()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Name' }))
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search clips' }), 'zzz')
+    await paste(A_LINK)
+
+    expect(screen.getByRole('button', { name: 'Recent' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('searchbox', { name: 'Search clips' })).toHaveValue('')
   })
 })

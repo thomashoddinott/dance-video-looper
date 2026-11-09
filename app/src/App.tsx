@@ -17,6 +17,7 @@ import type { ThumbnailCapture } from './clips/thumbnail'
 import { browserThumbnailCapture } from './clips/thumbnail'
 import { useLibrary } from './clips/useLibrary'
 import { useThumbnails } from './clips/useThumbnails'
+import type { YouTubeLookUp } from './clips/youtube'
 import type { DriveApi } from './drive/driveApi'
 import { browserDriveApi } from './drive/driveApi'
 import { countOf, laterOf, openedAt } from './loops/loopsChange'
@@ -41,6 +42,8 @@ export type AppProps = {
   readonly openedStore?: OpenedStore
   readonly thumbnailCache?: ThumbnailCache
   readonly capture?: ThumbnailCapture
+  /* #20. Where a YouTube video's title comes from. */
+  readonly lookUp?: ((videoId: string) => Promise<YouTubeLookUp>) | undefined
   /* #33: the same app, mounted at `/demo` over the demo's seams. The screens
      need telling only so they can say so, and so the gallery can drop the
      controls a visitor has no use for. */
@@ -55,12 +58,13 @@ export function App({
   openedStore = browserOpenedStore,
   thumbnailCache = browserThumbnailCache,
   capture = browserThumbnailCapture,
+  lookUp,
   demo = false,
 }: AppProps = {}) {
   /* The cache goes in as well as down to the player: a deleted clip's bytes are
      budget held against something that is not coming back, and this is the only
      place that holds both the library and the cache. */
-  const { library, notice, add, remove, restyle, rename } = useLibrary(driveApi, {
+  const { library, notice, add, remove, restyle, rename, addYouTube } = useLibrary(driveApi, {
     cache: clipCache,
   })
   /* Beside the library rather than inside the player, because both screens
@@ -176,6 +180,10 @@ export function App({
             onRename={(clip, name) => {
               void rename(clip, name)
             }}
+            onAddYouTube={(videoId, title) => {
+              void addYouTube(videoId, title)
+            }}
+            lookUp={lookUp}
             probe={probe}
             notice={notice}
             demo={demo}
