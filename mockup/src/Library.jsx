@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { lookUp, thumbnailFor, videoIdFrom } from './youtube.js'
 
 /* Recent is the day a clip was uploaded and never changes again, so it cannot
    answer "what am I working on". Last opened can, and it moves on the one action
@@ -82,6 +83,19 @@ function formatAdded(added) {
 }
 
 function Thumbnail({ clip }) {
+  /* #20 spike. YouTube's own still, cropped to the tile like a clip's frame
+     is. Served with `access-control-allow-origin: *`, so the product could
+     keep its bytes in Drive's Thumbnails folder and paint it offline. */
+  if (clip.source === 'youtube') {
+    return (
+      <img
+        src={thumbnailFor(clip.videoId)}
+        alt=""
+        className="aspect-[9/16] w-full object-cover transition group-hover:opacity-90"
+      />
+    )
+  }
+
   if (clip.src) {
     return (
       <video
@@ -125,8 +139,19 @@ function ClipTile({ clip, onOpen, onDelete, onStyle, uploading }) {
       >
         <div className="relative overflow-hidden rounded-xl bg-black">
           <Thumbnail clip={clip} />
-          <span className="absolute right-1.5 bottom-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white">
-            {formatDuration(clip.seconds)}
+          {/* #20 spike. A YouTube entry says so in the length chip, because it
+              behaves differently from a clip in ways that matter in the studio:
+              it needs a connection, and it slows only as far as YouTube lets it.
+              Its length is unknown until it is first opened — oEmbed does not
+              give one. */}
+          <span className="absolute right-1.5 bottom-1.5 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white">
+            {clip.source === 'youtube' && (
+              <svg viewBox="0 0 24 24" className="h-3 w-3" aria-label="YouTube">
+                <rect x="1" y="4" width="22" height="16" rx="5" fill="#ff0033" />
+                <path d="M10 8.5v7l6-3.5z" fill="#fff" />
+              </svg>
+            )}
+            {clip.seconds === undefined ? 'YouTube' : formatDuration(clip.seconds)}
           </span>
           {/* Retrofitted from the product (US-01-14, #43). The tile goes into
               the grid the moment the clip is added and the upload runs behind
@@ -423,6 +448,63 @@ function Library({
      rather than "we have not looked yet" (US-01-14 criterion 8). */
   const [loading, setLoading] = useState(true)
   const fileRef = useRef(null)
+  /* #20 spike. The second way in: a link rather than a file. Nothing is
+     downloaded — what is kept is the video's id, its title, and whatever loops
+     get saved against it. */
+  const [linking, setLinking] = useState(false)
+  const [link, setLink] = useState('')
+  const [looking, setLooking] = useState(false)
+
+  const addLink = async (event) => {
+    event.preventDefault()
+    const videoId = videoIdFrom(link)
+
+    if (!videoId) {
+      setNotice('That is not a YouTube link.')
+      return
+    }
+
+    const held = clips.find((clip) => clip.id === `yt:${videoId}`)
+    if (held) {
+      setNotice(`${held.name} is already in your library.`)
+      return
+    }
+
+    setLooking(true)
+    let found
+    try {
+      found = await lookUp(videoId)
+    } catch {
+      found = { refused: 'offline' }
+    }
+    setLooking(false)
+
+    if (found.refused) {
+      setNotice(
+        {
+          embed: 'Its uploader does not allow it to be played outside YouTube, so it cannot be looped here.',
+          missing: 'That video is private, or does not exist.',
+          offline: 'YouTube could not be reached. Try again with a connection.',
+        }[found.refused],
+      )
+      return
+    }
+
+    setNotice(null)
+    setLink('')
+    setLinking(false)
+    onAdd({
+      id: `yt:${videoId}`,
+      source: 'youtube',
+      videoId,
+      name: found.title,
+      added: new Date().toISOString().slice(0, 10),
+      loops: 0,
+    })
+    onSort('added')
+    setQuery('')
+    onFilter('all')
+  }
 
   useEffect(() => {
     const settled = setTimeout(() => setLoading(false), 900)
@@ -551,6 +633,17 @@ function Library({
               <>
                 <button
                   type="button"
+                  aria-expanded={linking}
+                  onClick={() => {
+                    setLinking((open) => !open)
+                    setNotice(null)
+                  }}
+                  className="rounded-lg bg-control px-3 py-2 text-sm font-semibold text-ink/80 hover:bg-control-hi"
+                >
+                  YouTube link
+                </button>
+                <button
+                  type="button"
                   onClick={() => fileRef.current.click()}
                   className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent hover:bg-accent-2"
                 >
@@ -569,6 +662,27 @@ function Library({
         </div>
 
         {demo && <DemoStatus onLeave={() => setDemo(false)} />}
+
+        {linking && !demo && (
+          <form onSubmit={addLink} className="mt-3 flex gap-2">
+            <input
+              autoFocus
+              type="url"
+              value={link}
+              onChange={(event) => setLink(event.target.value)}
+              aria-label="YouTube link"
+              placeholder="Paste a YouTube link"
+              className="min-w-0 flex-1 rounded-lg bg-control px-3 py-2 text-base text-ink placeholder:text-ink/40 sm:text-sm"
+            />
+            <button
+              type="submit"
+              disabled={looking || link.trim() === ''}
+              className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent hover:bg-accent-2 disabled:opacity-40"
+            >
+              {looking ? 'Looking…' : 'Add'}
+            </button>
+          </form>
+        )}
 
         {notice && (
           <p className="mt-2 text-xs text-ink/60">{notice}</p>
