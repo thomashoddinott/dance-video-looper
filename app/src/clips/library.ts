@@ -105,6 +105,13 @@ export const restyled = (
   clips: library.clips.map((clip) => (clip.id === id ? { ...clip, style } : clip)),
 })
 
+/* #20. A YouTube entry, at the front for `adding`'s reason — but only once
+   Drive has it, since there is no upload to run behind the tile. */
+export const arrived = (library: Library, clip: Clip): Library => ({
+  ...library,
+  clips: [clip, ...library.clips],
+})
+
 /* #54. After the patch, for `restyled`'s reason: a name on a tile is always
    the name Drive holds. */
 export const renamed = (library: Library, id: string, name: string): Library => ({
