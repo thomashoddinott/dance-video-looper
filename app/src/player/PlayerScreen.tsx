@@ -14,6 +14,7 @@ import { ClipName } from './ClipName'
 import { useClipSource } from './clipSource'
 import { clamp, type Handle, NUDGE } from './loopRange'
 import { LoopSlider } from './LoopSlider'
+import type { PlaybackSurface } from './playbackSurface'
 import {
   decoded,
   type Loop,
@@ -48,7 +49,7 @@ import { VideoProgress } from './VideoProgress'
    Playback stops for reasons the app never hears about — the clip ends, the phone
    takes a call — and a second copy of the answer would be wrong by then, costing
    the dancer a tap that appears to do nothing. */
-const togglePlay = (surface: HTMLVideoElement | null) => {
+const togglePlay = (surface: PlaybackSurface | null) => {
   if (!surface) return
 
   if (!surface.paused) {
@@ -298,7 +299,13 @@ function OpenedClip({
   /* US-01-06 toggled playback from the clip's own `onClick`, so it never needed a
      handle on the element. A control sitting outside it does, and so does the
      enforcement below, which has to read and write `currentTime`. */
-  const surface = useRef<HTMLVideoElement>(null)
+  const surface = useRef<PlaybackSurface | null>(null)
+  /* A callback rather than the ref itself, because the ref holds a surface
+     rather than an element (#20) — and stable, because a new function each
+     render would detach and reattach the element every time. */
+  const attachVideo = useCallback((element: HTMLVideoElement | null) => {
+    surface.current = element
+  }, [])
   /* Where the marker is drawn. The element's own `currentTime` is the truth, but
      it changes without telling React anything, so the screen needs a copy it can
      re-render from — sampled below at the rate BR-07 sets. */
@@ -967,7 +974,7 @@ function OpenedClip({
                   — height for a portrait one, width for a landscape one — and a
                   video's default object-fit of contain keeps it in proportion. */}
               <video
-                ref={surface}
+                ref={attachVideo}
                 src={source.src}
                 className={
                   isolated
