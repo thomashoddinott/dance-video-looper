@@ -251,6 +251,60 @@ describe('the frame a tile shows', () => {
   })
 })
 
+/* #20. A YouTube entry has no bytes to take a frame from and no still in
+   Drive, but YouTube publishes a picture of every video. */
+describe('a tile for a YouTube video', () => {
+  const A_VIDEO = 'EuT94T544Mg'
+
+  const renderYouTubeTile = (overrides: Partial<Clip> = {}) =>
+    render(
+      <MemoryRouter>
+        <ClipTile
+          clip={getClip({
+            id: `yt:${A_VIDEO}`,
+            name: 'Paseala',
+            source: 'youtube',
+            videoId: A_VIDEO,
+            driveId: 'drive-yt-1',
+            ...overrides,
+          })}
+          onDelete={() => {}}
+        />
+      </MemoryRouter>,
+    )
+
+  it('shows YouTube’s own picture of the video', () => {
+    renderYouTubeTile()
+
+    expect(theStill()).toHaveAttribute(
+      'src',
+      `https://i.ytimg.com/vi/${A_VIDEO}/mqdefault.jpg`,
+    )
+  })
+
+  /* A dancer has to be able to tell, before opening it, that this one needs a
+     connection and slows only as far as YouTube lets it. */
+  it('says it is YouTube’s beside its length', () => {
+    renderYouTubeTile({ seconds: 712 })
+
+    expect(screen.getByRole('img', { name: 'YouTube' })).toBeInTheDocument()
+    expect(screen.getByText('11:52')).toBeInTheDocument()
+  })
+
+  /* Nothing tells the app a video's length until the player has loaded it. */
+  it('says YouTube where its length is not known yet', () => {
+    renderYouTubeTile({ seconds: undefined })
+
+    expect(screen.getByText('YouTube')).toBeInTheDocument()
+  })
+
+  it('carries no YouTube mark on a clip of the dancer’s own', () => {
+    renderTile()
+
+    expect(screen.queryByRole('img', { name: 'YouTube' })).not.toBeInTheDocument()
+  })
+})
+
 /* #43. The style is shown and changed in one place, the tile, because that is
    where a clip lands the moment it is added — so saying what it is belongs to
    the add without being a step in it. */
