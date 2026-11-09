@@ -29,6 +29,9 @@ import { laidOut } from '../test/layout'
 import { holdSeeks, playable, runsOut, seeksSeen } from '../test/media'
 import { SEEK_BACKSTOP } from './seekGate'
 import { PlayerScreen } from './PlayerScreen'
+import type { MountYouTube } from './youtubeMount'
+import { aYouTube, aYouTubePlayer } from './youtubePlayer.factory'
+import { ENDED, PLAYING } from './youtubeSurface'
 
 /* The player reaches Drive now, for a clip this device has never held
    (US-01-14). Nothing in this file is about that — every clip here is local —
@@ -87,6 +90,7 @@ const Player = ({
   stillLoading = false,
   onRename,
   demo = false,
+  mountYouTube,
   ...loops
 }: {
   readonly clip: Clip
@@ -95,6 +99,7 @@ const Player = ({
   readonly stillLoading?: boolean
   readonly onRename?: (clip: Clip, name: string) => Promise<boolean>
   readonly demo?: boolean
+  readonly mountYouTube?: MountYouTube
 } & LoopOptions) => {
   const store = useFakeLoops(loops)
 
@@ -108,6 +113,7 @@ const Player = ({
       loops={store}
       onRename={onRename}
       demo={demo}
+      mountYouTube={mountYouTube}
     />
   )
 }
@@ -3640,5 +3646,190 @@ describe('renaming the clip from the player', () => {
     renderPlayer(A_STORED_CLIP)
 
     expect(thePencil()).not.toBeInTheDocument()
+  })
+})
+
+/* #20. A YouTube video opens in the same player, playing from YouTube's own
+   player where the <video> would be. Everything the player does to a clip it
+   does through the surface YouTube is made into (`youtubeSurface`), so these
+   cases are about the seam — what YouTube is told and what it says back. */
+describe('a YouTube video in the player', () => {
+  const A_VIDEO = 'EuT94T544Mg'
+  const A_YOUTUBE_CLIP = getClip({
+    id: `yt:${A_VIDEO}`,
+    name: 'Paseala',
+    source: 'youtube',
+    videoId: A_VIDEO,
+    driveId: 'drive-yt-1',
+    src: undefined,
+  })
+
+  const renderYouTube = (youtube = aYouTube()) => {
+    const driveApi = aDriveApi()
+    const rendered = render(
+      inASession(
+        <MemoryRouter initialEntries={[`/clip/${A_YOUTUBE_CLIP.id}`]}>
+          <Routes>
+            <Route
+              path="/clip/:clipId"
+              element={
+                <Player
+                  clip={A_YOUTUBE_CLIP}
+                  driveApi={driveApi}
+                  mountYouTube={youtube.mount}
+                />
+              }
+            />
+          </Routes>
+        </MemoryRouter>,
+      ),
+    )
+
+    return { ...rendered, youtube, driveApi }
+  }
+
+  /* Mounted, then told YouTube is ready, the order the IFrame API keeps. */
+  const readyYouTube = async (youtube = aYouTube()) => {
+    const rendered = renderYouTube(youtube)
+
+    await waitFor(() => {
+      expect(youtube.mount).toHaveBeenCalled()
+    })
+    act(() => {
+      youtube.ready()
+    })
+    await screen.findByRole('slider', { name: 'Loop end' })
+
+    return rendered
+  }
+
+  const tapLayer = (container: HTMLElement) =>
+    container.querySelector('[data-tap-layer]')
+
+  const transportButton = (label: 'PLAY' | 'PAUSE') =>
+    within(screen.getByRole('toolbar', { name: 'Transport' })).getByRole('button', {
+      name: label,
+    })
+
+  it('plays the video from YouTube, fetching nothing from Drive', async () => {
+    const { container, youtube, driveApi } = renderYouTube()
+
+    await waitFor(() => {
+      expect(youtube.videoId()).toBe(A_VIDEO)
+    })
+    expect(container.querySelector('video')).toBeNull()
+    expect(driveApi.download).not.toHaveBeenCalled()
+  })
+
+  it('lays the loop over the whole video once YouTube knows its length', async () => {
+    await readyYouTube()
+
+    expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '0')
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '712')
+  })
+
+  it('plays it from the transport', async () => {
+    const youtube = aYouTube()
+    await readyYouTube(youtube)
+
+    await userEvent.click(transportButton('PLAY'))
+
+    expect(youtube.player.playVideo).toHaveBeenCalled()
+  })
+
+  it('offers pause while YouTube is playing', async () => {
+    const youtube = aYouTube()
+    await readyYouTube(youtube)
+
+    act(() => {
+      youtube.state(PLAYING)
+    })
+
+    expect(transportButton('PAUSE')).toBeInTheDocument()
+  })
+
+  it('sets the speed on YouTube', async () => {
+    const youtube = aYouTube()
+    await readyYouTube(youtube)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Slower' }))
+
+    expect(youtube.player.setPlaybackRate).toHaveBeenLastCalledWith(0.95)
+  })
+
+  /* YouTube will not go below 0.25, and a speed control that showed 0.1 while
+     the video played at 0.25 would be lying. */
+  it('says so when YouTube will not go as slow as asked', async () => {
+    const youtube = aYouTube()
+    await readyYouTube(youtube)
+
+    act(() => {
+      youtube.rate(0.25)
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'Much slower' }))
+
+    expect(screen.getByRole('status', { name: 'YouTube speed' })).toHaveTextContent(
+      'YouTube plays this at 0.25x',
+    )
+  })
+
+  it('says nothing about the speed while YouTube plays what was asked', async () => {
+    const youtube = aYouTube()
+    await readyYouTube(youtube)
+
+    act(() => {
+      youtube.rate(1)
+    })
+
+    expect(screen.queryByRole('status', { name: 'YouTube speed' })).toBeNull()
+  })
+
+  it('says it cannot be played when YouTube refuses it', async () => {
+    const youtube = aYouTube()
+    renderYouTube(youtube)
+
+    await waitFor(() => {
+      expect(youtube.mount).toHaveBeenCalled()
+    })
+    act(() => {
+      youtube.error(150)
+    })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('This clip couldn’t be played.')
+  })
+
+  /* The first play goes through YouTube's own button, because iOS may insist
+     that playback starts with a tap inside the iframe. */
+  it('leaves the first tap to YouTube', async () => {
+    const { container } = await readyYouTube()
+
+    expect(tapLayer(container)).toBeNull()
+  })
+
+  /* After it, taps on the video are the player's, and the keyboard focus stays
+     on the page, where the shortcuts listen. */
+  it('takes the taps on the video once it has started', async () => {
+    const player = aYouTubePlayer({ getPlayerState: vi.fn(() => PLAYING) })
+    const youtube = aYouTube(player)
+    const { container } = await readyYouTube(youtube)
+
+    act(() => {
+      youtube.state(PLAYING)
+    })
+    await userEvent.click(tapLayer(container) as HTMLElement)
+
+    expect(player.pauseVideo).toHaveBeenCalled()
+  })
+
+  it('comes back round to A when the video runs out mid-loop', async () => {
+    const youtube = aYouTube()
+    await readyYouTube(youtube)
+
+    act(() => {
+      youtube.state(ENDED)
+    })
+
+    expect(youtube.player.seekTo).toHaveBeenCalledWith(0, true)
+    expect(youtube.player.playVideo).toHaveBeenCalled()
   })
 })

@@ -44,6 +44,9 @@ import {
   settled,
 } from './seekGate'
 import { VideoProgress } from './VideoProgress'
+import { YouTubeFrame } from './YouTubeFrame'
+import { browserMountYouTube, type MountYouTube } from './youtubeMount'
+import { BUFFERING, ENDED, PLAYING } from './youtubeSurface'
 
 /* Asked of the element every time, rather than of a flag the screen keeps.
    Playback stops for reasons the app never hears about — the clip ends, the phone
@@ -176,6 +179,7 @@ export function PlayerScreen({
   stillLoading = false,
   demo = false,
   onRename,
+  mountYouTube = browserMountYouTube,
 }: {
   readonly clips: readonly Clip[]
   /* Fired once the path has resolved to a clip the library holds (#16), which
@@ -204,6 +208,9 @@ export function PlayerScreen({
   /* #54. Resolves to whether Drive took the name. Dropped in the demo, whose
      clip is not the visitor's to rename. */
   readonly onRename?: ((clip: Clip, name: string) => Promise<boolean>) | undefined
+  /* #20. Where YouTube's player comes from — the IFrame API in the browser, a
+     stand-in under test. */
+  readonly mountYouTube?: MountYouTube | undefined
 }) {
   const { clipId } = useParams()
   const clip = clips.find((candidate) => candidate.id === clipId)
@@ -231,6 +238,7 @@ export function PlayerScreen({
       onOpened={onOpened}
       demo={demo}
       onRename={demo ? undefined : onRename}
+      mountYouTube={mountYouTube}
     />
   )
 }
@@ -244,6 +252,7 @@ function OpenedClip({
   onOpened,
   demo,
   onRename,
+  mountYouTube,
 }: {
   readonly clip: Clip
   readonly loops: LoopsHandle
@@ -253,6 +262,7 @@ function OpenedClip({
   readonly onOpened: (clipId: string) => void
   readonly demo: boolean
   readonly onRename: ((clip: Clip, name: string) => Promise<boolean>) | undefined
+  readonly mountYouTube: MountYouTube
 }) {
   /* #16. Here rather than in the parent because this component is keyed on the
      clip and mounted only once the path has resolved to one the library holds —
@@ -306,6 +316,17 @@ function OpenedClip({
   const attachVideo = useCallback((element: HTMLVideoElement | null) => {
     surface.current = element
   }, [])
+  /* #20. The video this clip plays from YouTube, or undefined for a clip with
+     bytes of its own. */
+  const youtube = clip.source === 'youtube' ? clip.videoId : undefined
+  /* Whether YouTube has started playing once. Until it has, a tap on the video
+     goes to YouTube's own button — iOS may insist the first play starts inside
+     the iframe. After it, a layer over the iframe takes the taps, so play and
+     pause are the player's and the keyboard focus stays on the page. */
+  const [started, setStarted] = useState(false)
+  /* What YouTube says it is playing at, which below 0.25 is not what was asked
+     for. Null until it has said anything. */
+  const [youtubeRate, setYoutubeRate] = useState<number | null>(null)
   /* Where the marker is drawn. The element's own `currentTime` is the truth, but
      it changes without telling React anything, so the screen needs a copy it can
      re-render from — sampled below at the rate BR-07 sets. */
@@ -418,6 +439,19 @@ function OpenedClip({
      gate — a correctness rule, not a drag — and the `seeked` it fires lands here
      too, where settling an idle gate is a no-op. */
   const seekLanded = () => issue(settled(gate.current))
+
+  /* B sits at the clip's end until US-01-08 moves it (BR-01), so reaching B and
+     running out are the same instant — and the clip can win that race, ending
+     before the frame that would have sent it back. Once it has ended it is
+     paused, so the loop has stopped scheduling frames and nothing is left to
+     notice. Handled on the one signal that always arrives, from a <video> or
+     from YouTube (#20). */
+  const ended = () => {
+    if (playback.kind !== 'ready' || !playback.looping) return
+
+    seekTo(playback.loop.a)
+    void surface.current?.play()
+  }
 
   /* Whether the clip was already silent when the bar was taken hold of, so
      letting go can put the sound back the way it was rather than switching it
@@ -969,49 +1003,73 @@ function OpenedClip({
             <div
               className={`relative w-fit ${isolated ? 'flex max-h-dvh items-center' : 'mx-auto'}`}
             >
-              {/* Never upscaled or stretched: the clip renders at its own size
-                  and only shrinks to fit. Which limit binds depends on the clip
-                  — height for a portrait one, width for a landscape one — and a
-                  video's default object-fit of contain keeps it in proportion. */}
-              <video
-                ref={attachVideo}
-                src={source.src}
-                className={
-                  isolated
-                    ? 'max-h-dvh max-w-full object-contain'
-                    : 'mx-auto block max-h-[50vh] max-w-full rounded-lg bg-black lg:max-h-[80vh]'
-                }
-                playsInline
-                /* The default fetches metadata and stops, so scrubbing past
-                   whatever happened to arrive turns every seek into a network
-                   fetch *and* a decode — most of what read as the clip freezing
-                   under the thumb. The mockup gate found Chrome holding 4.9s of a
-                   26.7s clip, on localhost.
+              {youtube === undefined ? (
+                <>
+                {/* Never upscaled or stretched: the clip renders at its own size
+                    and only shrinks to fit. Which limit binds depends on the clip
+                    — height for a portrait one, width for a landscape one — and a
+                    video's default object-fit of contain keeps it in proportion. */}
+                <video
+                  ref={attachVideo}
+                  src={source.src}
+                  className={
+                    isolated
+                      ? 'max-h-dvh max-w-full object-contain'
+                      : 'mx-auto block max-h-[50vh] max-w-full rounded-lg bg-black lg:max-h-[80vh]'
+                  }
+                  playsInline
+                  /* The default fetches metadata and stops, so scrubbing past
+                     whatever happened to arrive turns every seek into a network
+                     fetch *and* a decode — most of what read as the clip freezing
+                     under the thumb. The mockup gate found Chrome holding 4.9s of a
+                     26.7s clip, on localhost.
 
-                   Clips are ~6MB and the app is cache-first regardless, so there
-                   is no version of this where fetching the rest later wins. */
-                preload="auto"
-                onLoadedMetadata={(event) =>
-                  setPlayback(decoded(event.currentTarget.duration))
-                }
-                onError={() => setPlayback(undecodable)}
-                onSeeked={seekLanded}
-                onClick={(event) => togglePlay(event.currentTarget)}
-                onPlay={() => setPlaying(true)}
-                onPause={() => setPlaying(false)}
-                /* B sits at the clip's end until US-01-08 moves it (BR-01), so
-                   reaching B and running out are the same instant — and the
-                   element can win that race, ending before the frame that would
-                   have sent it back. Once it has ended it is paused, so the loop
-                   above has stopped scheduling frames and nothing is left to
-                   notice. Handled here, on the one event that always arrives. */
-                onEnded={() => {
-                  if (playback.kind !== 'ready' || !playback.looping) return
-
-                  seekTo(playback.loop.a)
-                  void surface.current?.play()
-                }}
-              />
+                     Clips are ~6MB and the app is cache-first regardless, so there
+                     is no version of this where fetching the rest later wins. */
+                  preload="auto"
+                  onLoadedMetadata={(event) =>
+                    setPlayback(decoded(event.currentTarget.duration))
+                  }
+                  onError={() => setPlayback(undecodable)}
+                  onSeeked={seekLanded}
+                  onClick={(event) => togglePlay(event.currentTarget)}
+                  onPlay={() => setPlaying(true)}
+                  onPause={() => setPlaying(false)}
+                  onEnded={ended}
+                />
+                </>
+              ) : (
+                <>
+                  <YouTubeFrame
+                    videoId={youtube}
+                    mount={mountYouTube}
+                    isolated={isolated}
+                    onReady={(ready) => {
+                      surface.current = ready
+                      ready.playbackRate = speed
+                      setPlayback(decoded(ready.duration))
+                    }}
+                    onState={(state) => {
+                      setPlaying(state === PLAYING || state === BUFFERING)
+                      if (state === PLAYING) setStarted(true)
+                      if (state === ENDED) ended()
+                    }}
+                    onRate={setYoutubeRate}
+                    onError={() => setPlayback(undecodable)}
+                    onSeeked={seekLanded}
+                  />
+                  {/* Under the bar and the isolate button, which come after it,
+                      so those stay reachable over the video. */}
+                  {started && (
+                    <div
+                      data-tap-layer
+                      aria-hidden="true"
+                      onClick={() => togglePlay(surface.current)}
+                      className="absolute inset-0"
+                    />
+                  )}
+                </>
+              )}
 
               {/* Gated on a ready clip like the slider and the transport: before
                   metadata there is no length to lay a bar out against, and a bar
@@ -1085,6 +1143,17 @@ function OpenedClip({
                 <SpeedStepper speed={speed} onChange={setSpeed} />
               )}
             </div>
+            {/* #20. YouTube will not go below 0.25, and a stepper showing 0.1
+                while the video plays at 0.25 would be a control that lies. */}
+            {youtubeRate !== null && Math.abs(youtubeRate - speed) > 0.001 && (
+              <p
+                role="status"
+                aria-label="YouTube speed"
+                className="mt-1.5 text-right text-xs text-accent"
+              >
+                YouTube plays this at {Math.round(youtubeRate * 100) / 100}x
+              </p>
+            )}
 
             {/* The slider appears once there is a length to lay it out against,
                 for the same reason the transport does: before metadata there is

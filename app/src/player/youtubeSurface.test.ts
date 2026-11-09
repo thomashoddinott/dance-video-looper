@@ -1,26 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { YouTubePlayer } from './youtubeSurface'
-import { PLAYING, BUFFERING, PAUSED, youtubeSurface } from './youtubeSurface'
-
-/* A stand-in for the IFrame API's player, holding what YouTube would report
-   and recording what it was asked to do. Complete by construction, like the
-   other seams' factories. */
-const aYouTubePlayer = (overrides: Partial<YouTubePlayer> = {}): YouTubePlayer => ({
-  getCurrentTime: vi.fn(() => 0),
-  seekTo: vi.fn(),
-  getDuration: vi.fn(() => 712),
-  getPlayerState: vi.fn(() => PAUSED),
-  playVideo: vi.fn(),
-  pauseVideo: vi.fn(),
-  getPlaybackRate: vi.fn(() => 1),
-  setPlaybackRate: vi.fn(),
-  isMuted: vi.fn(() => false),
-  mute: vi.fn(),
-  unMute: vi.fn(),
-  destroy: vi.fn(),
-  ...overrides,
-})
+import { aYouTubePlayer } from './youtubePlayer.factory'
+import { BUFFERING, PAUSED, PLAYING, youtubeSurface } from './youtubeSurface'
 
 /* #20. The player drives a YouTube video through the same surface a <video>
    offers, so these are the element's behaviours, answered by YouTube. */
