@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react'
-import { useRef, useState } from 'react'
+import { type FormEvent, useRef, useState } from 'react'
 
 import { DemoStatus } from '../demo/DemoStatus'
 import { DriveStatus } from '../drive/DriveStatus'
@@ -16,6 +16,8 @@ import { orderings } from './ordering'
 import { matching } from './search'
 import { SourceLink } from './SourceLink'
 import { STYLE_LOOK } from './styleLook'
+import type { YouTubeLookUp } from './youtube'
+import { lookUpYouTube, videoIdFrom, youTubeIdFor } from './youtube'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -56,6 +58,14 @@ const STYLE_CHIPS: readonly {
 /* What the **Recent** chip orders by. */
 const RECENT: OrderingId = 'added'
 
+/* #20. What to say when YouTube will not give a video up, by why. */
+const REFUSALS = {
+  'embedding-refused':
+    'Its uploader does not let it play outside YouTube, so it cannot be looped here.',
+  missing: 'That video is private, or does not exist.',
+  unreachable: 'YouTube could not be reached. Try again with a connection.',
+} as const
+
 export function ClipsScreen({
   library,
   ordering: chosen,
@@ -67,6 +77,8 @@ export function ClipsScreen({
   onDelete,
   onRestyle,
   onRename,
+  onAddYouTube,
+  lookUp = lookUpYouTube,
   probe,
   notice: driveNotice = null,
   demo = false,
@@ -97,6 +109,12 @@ export function ClipsScreen({
   readonly onRestyle: (clip: Clip, style: DanceStyle | undefined) => void
   /* #54. Straight through to the library too. */
   readonly onRename: (clip: Clip, name: string) => void
+  /* #20. A YouTube video by its id and title, once this screen has made sure
+     it is new and that YouTube knows it. */
+  readonly onAddYouTube: (videoId: string, title: string) => void
+  /* Where a video's title comes from — YouTube's oEmbed in the browser, a
+     stand-in under test. */
+  readonly lookUp?: ((videoId: string) => Promise<YouTubeLookUp>) | undefined
   readonly probe: ClipProbe
   /* Something that went wrong after the tile was already in the grid — an
      upload that failed. The screen's own notices below are the ones it can see
@@ -121,6 +139,53 @@ export function ClipsScreen({
      that is already running, and state would hand it the value from the render
      it was created in — which is the very staleness below is guarding against. */
   const beingRead = useRef(new Set<string>())
+  /* #20. Whether the link field is open, what is in it, and whether YouTube is
+     being asked about it — which takes a moment, and a second press of Add in
+     that moment would ask twice. */
+  const [linking, setLinking] = useState(false)
+  const [link, setLink] = useState('')
+  const [lookingUp, setLookingUp] = useState(false)
+
+  /* What a dancer adding anything is looking for next is the thing they added:
+     Recent puts it first, and a search or a picked style could hide it. */
+  const showTheNewest = () => {
+    setChosen(RECENT)
+    setQuery('')
+    pick(undefined)
+  }
+
+  const onLinkSubmitted = async (event: FormEvent) => {
+    event.preventDefault()
+
+    const videoId = videoIdFrom(link)
+
+    if (videoId === null) {
+      setNotice('That is not a YouTube link.')
+      return
+    }
+
+    const held = clips.find((clip) => clip.id === youTubeIdFor(videoId))
+
+    if (held) {
+      setNotice(`${held.name} is already in your library.`)
+      return
+    }
+
+    setLookingUp(true)
+    const found = await lookUp(videoId)
+    setLookingUp(false)
+
+    if (!found.found) {
+      setNotice(REFUSALS[found.because])
+      return
+    }
+
+    setNotice(null)
+    setLink('')
+    setLinking(false)
+    onAddYouTube(videoId, found.title)
+    showTheNewest()
+  }
 
   const onFileChosen = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -187,9 +252,7 @@ export function ClipsScreen({
        clip does not match hides it outright, so the dancer would have added a
        clip and been told there are none. So does a picked style (#43): a new
        clip has none yet, so any style picked would hide it. */
-    setChosen(RECENT)
-    setQuery('')
-    pick(undefined)
+    showTheNewest()
   }
 
   const ordering = orderings.find(({ id }) => id === chosen) ?? orderings[0]
@@ -222,6 +285,17 @@ export function ClipsScreen({
               <>
                 <button
                   type="button"
+                  aria-expanded={linking}
+                  onClick={() => {
+                    setLinking((open) => !open)
+                    setNotice(null)
+                  }}
+                  className="rounded-lg bg-control px-3 py-2 text-sm font-semibold text-ink/80 hover:bg-control-hi"
+                >
+                  YouTube link
+                </button>
+                <button
+                  type="button"
                   onClick={() => chooser.current?.click()}
                   className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent hover:bg-accent-2"
                 >
@@ -246,6 +320,37 @@ export function ClipsScreen({
         </div>
 
         {demo && <DemoStatus />}
+
+        {/* #20. Under the header rather than in a dialog: a link is pasted
+            once and the field goes, so it borrows no more of the screen than
+            the alert line below it. 16px on a phone so iOS does not zoom the
+            page in on it. */}
+        {linking && !demo && (
+          <form
+            aria-label="Add a YouTube video"
+            onSubmit={(event) => {
+              void onLinkSubmitted(event)
+            }}
+            className="mt-3 flex gap-2"
+          >
+            <input
+              type="url"
+              autoFocus
+              value={link}
+              onChange={(event) => setLink(event.target.value)}
+              aria-label="YouTube link"
+              placeholder="Paste a YouTube link"
+              className="min-w-0 flex-1 rounded-lg bg-control px-3 py-2 text-base text-ink placeholder:text-ink/40 sm:text-sm"
+            />
+            <button
+              type="submit"
+              disabled={lookingUp || link.trim() === ''}
+              className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent hover:bg-accent-2 disabled:opacity-40"
+            >
+              {lookingUp ? 'Looking…' : 'Add'}
+            </button>
+          </form>
+        )}
 
         {/* `alert`, deliberately, and not a second `status`: the Drive footer
             already owns an unnamed `role="status"` on this screen, so a second

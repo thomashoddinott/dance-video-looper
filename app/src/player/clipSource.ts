@@ -61,7 +61,10 @@ export const useClipSource = (
   const driveId = clip?.driveId
   const clipId = clip?.id
   const checksum = clip?.checksum
-  const wanted = held === undefined && driveId !== undefined
+  /* #20. A YouTube entry's Drive file is a pointer with no bytes in it, and
+     the video plays from YouTube, so there is nothing of it to fetch. */
+  const wanted =
+    held === undefined && driveId !== undefined && clip?.source !== 'youtube'
 
   useEffect(() => {
     if (!wanted || driveId === undefined || clipId === undefined) return

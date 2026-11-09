@@ -461,6 +461,78 @@ describe('renaming a clip', () => {
   })
 })
 
+/* #20. A link rather than a file: Drive keeps a pointer with no bytes, so
+   there is nothing to wait for but a metadata write, and the entry goes in only
+   once Drive has it — `restyle`'s ordering, not `add`'s. */
+describe('adding a YouTube video', () => {
+  const readyWith = async (api: DriveApi) => {
+    const rendered = renderLibrary(api)
+
+    await waitFor(() => {
+      expect(rendered.result.current.library.state).toBe('ready')
+    })
+
+    return rendered
+  }
+
+  const A_VIDEO = 'EuT94T544Mg'
+  const TITLE = 'Cuban Salsa for Beginners - Class 12 (Paseala)'
+
+  it('keeps it in Drive, and puts it first in the grid', async () => {
+    const api = anApi()
+    const { result } = await readyWith(api)
+
+    await act(async () => {
+      await result.current.addYouTube(A_VIDEO, TITLE)
+    })
+
+    expect(api.addYouTube).toHaveBeenCalledWith(expect.anything(), {
+      folderId: expect.any(String),
+      videoId: A_VIDEO,
+      title: TITLE,
+    })
+    expect(result.current.library.clips[0]).toMatchObject({
+      id: `yt:${A_VIDEO}`,
+      name: TITLE,
+      source: 'youtube',
+      videoId: A_VIDEO,
+    })
+  })
+
+  it('adds nothing when Drive refuses, and says which video', async () => {
+    const { result } = await readyWith(
+      anApi({
+        addYouTube: vi.fn(async () => {
+          throw new DriveError('boom', 500)
+        }),
+      }),
+    )
+
+    await act(async () => {
+      await result.current.addYouTube(A_VIDEO, TITLE)
+    })
+
+    expect(result.current.library.clips.map((clip) => clip.id)).toEqual([A_STORED_CLIP.id])
+    expect(result.current.notice).toContain(TITLE)
+  })
+
+  it('reports a withdrawal when the add is what gets the 401', async () => {
+    const { result } = await readyWith(
+      anApi({
+        addYouTube: vi.fn(async () => {
+          throw new DriveError('no', 401)
+        }),
+      }),
+    )
+
+    await act(async () => {
+      await result.current.addYouTube(A_VIDEO, TITLE)
+    })
+
+    expect(result.current.status).toBe('consent-withdrawn')
+  })
+})
+
 describe('adding a clip to the library', () => {
   const addedTo = async (api: DriveApi, compress: ClipCompressor = uncompressed) => {
     const rendered = renderLibrary(api, granting, aTokenStore(), compress)

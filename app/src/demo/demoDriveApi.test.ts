@@ -97,6 +97,12 @@ describe('the demo library', () => {
     ).rejects.toThrow()
   })
 
+  it('keeps no YouTube video', async () => {
+    await expect(
+      aDemoApi().addYouTube(A_TOKEN, { folderId: 'f', videoId: 'EuT94T544Mg', title: 'T' }),
+    ).rejects.toThrow()
+  })
+
   it('renames nothing', async () => {
     await expect(
       aDemoApi().rename(A_TOKEN, 'demo-clip', 'Mine now'),

@@ -84,6 +84,7 @@ export function ClipTile({
     pencil.current?.focus()
   }
   const style = DANCE_STYLES.find(({ id }) => id === clip.style)
+  const youtube = clip.source === 'youtube'
 
   return (
     <li className="group/tile relative">
@@ -92,9 +93,14 @@ export function ClipTile({
       <Link to={`clip/${clip.id}`} className="group block w-full text-left">
         <div className="relative overflow-hidden rounded-xl bg-black transition group-hover:opacity-90">
           <Poster clip={clip} thumbnail={thumbnail} />
-          {clip.seconds !== undefined && (
-            <span className="absolute right-1.5 bottom-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white">
-              {formatDuration(clip.seconds)}
+          {/* #20. A YouTube entry says so here, because it behaves differently
+              where it matters in a studio: it needs a connection, and slows only
+              as far as YouTube lets it. Its length is unknown until the player
+              has loaded it once, and the mark stands in for it until then. */}
+          {(clip.seconds !== undefined || youtube) && (
+            <span className="absolute right-1.5 bottom-1.5 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white">
+              {youtube && <YouTubeMark />}
+              {clip.seconds === undefined ? 'YouTube' : formatDuration(clip.seconds)}
             </span>
           )}
           {/* On the tile rather than in a banner: after an add the ordering has
@@ -284,6 +290,17 @@ export function ClipTile({
         </div>
       )}
     </li>
+  )
+}
+
+/* #20. Named, so the chip reads "YouTube 11:52" to a screen reader as well as
+   to the eye. */
+function YouTubeMark() {
+  return (
+    <svg viewBox="0 0 24 24" role="img" aria-label="YouTube" className="h-3 w-3">
+      <rect x="1" y="4" width="22" height="16" rx="5" fill="#ff0033" />
+      <path d="M10 8.5v7l6-3.5z" fill="#fff" />
+    </svg>
   )
 }
 

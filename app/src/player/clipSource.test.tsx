@@ -84,6 +84,27 @@ describe('a clip added in this session', () => {
   })
 })
 
+/* #20. Its Drive file is a pointer with no bytes in it; the video plays from
+   YouTube, so there is nothing here to fetch, cache or say is fetching. */
+describe('a YouTube video', () => {
+  it('downloads nothing, and is not fetching', async () => {
+    const api = anApi()
+    const clip = getClip({
+      src: undefined,
+      driveId: 'drive-yt-1',
+      source: 'youtube',
+      videoId: 'EuT94T544Mg',
+    })
+
+    const { result } = renderSource(clip, api)
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(api.download).not.toHaveBeenCalled()
+    expect(result.current).toMatchObject({ src: undefined, fetching: false, unreachable: false })
+  })
+})
+
 describe('a clip this device has never held', () => {
   const stored = () => getClip({ src: undefined, driveId: 'drive-1' })
 

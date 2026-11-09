@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import type { Clip } from './clip'
 import { POSTER_AT_SECONDS } from './thumbnail'
+import { thumbnailFor } from './youtube'
 
 /* Three ways to fill a tile, in the order they cost:
 
@@ -29,10 +30,15 @@ export function Poster({
   const [stillFailed, setStillFailed] = useState(false)
   const [failed, setFailed] = useState(false)
 
-  if (thumbnail !== undefined && !stillFailed) {
+  /* #20. A YouTube entry has no bytes and no still of its own, but YouTube
+     publishes a picture of every video, so that is its still. */
+  const still =
+    thumbnail ?? (clip.videoId === undefined ? undefined : thumbnailFor(clip.videoId))
+
+  if (still !== undefined && !stillFailed) {
     return (
       <img
-        src={thumbnail}
+        src={still}
         alt=""
         onError={() => setStillFailed(true)}
         className="aspect-[9/16] w-full object-cover"

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import type { DriveApi } from '../drive/driveApi'
+import { clipFromDriveFile } from '../drive/driveClips'
 import { useDriveSession } from '../drive/driveSession'
 import { withdrewConsent } from '../drive/driveErrors'
 import type { Clip } from './clip'
@@ -13,6 +14,7 @@ import type { Library } from './library'
 import {
   abandoned,
   adding,
+  arrived,
   deleted,
   failed,
   LOADING,
@@ -45,6 +47,9 @@ export type LibraryHandle = {
      too, and the notice above is the grid's, so the player has to hear how it
      went to say so where the dancer is. */
   readonly rename: (clip: Clip, name: string) => Promise<boolean>
+  /* #20. A YouTube video by its id and the title YouTube gave it. Whether the
+     video is already there is the screen's to say, before it asks. */
+  readonly addYouTube: (videoId: string, title: string) => Promise<void>
 }
 
 export const useLibrary = (
@@ -272,5 +277,33 @@ export const useLibrary = (
     [api, folderToken, reportIfWithdrawn],
   )
 
-  return { library, notice, status, add, remove, restyle, rename }
+  /* #20. `restyle`'s ordering rather than `add`'s: there are no bytes to
+     cover with an early tile, only a metadata write, so the entry goes in once
+     Drive has it — read back the way the next listing will read it. */
+  const addYouTube = useCallback(
+    async (videoId: string, title: string) => {
+      setNotice(null)
+
+      try {
+        const reached = await folderToken()
+
+        if (reached === null) throw new Error('no Drive to keep it in')
+
+        const file = await api.addYouTube(reached.token, {
+          folderId: reached.folderId,
+          videoId,
+          title,
+        })
+
+        setLibrary((held) => arrived(held, clipFromDriveFile(file)))
+      } catch (error) {
+        reportIfWithdrawn(error)
+
+        setNotice(`${title} could not be saved to Drive, so it was not added.`)
+      }
+    },
+    [api, folderToken, reportIfWithdrawn],
+  )
+
+  return { library, notice, status, add, remove, restyle, rename, addYouTube }
 }
