@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import YouTubeFrame from './YouTubeFrame.jsx'
+import { ERRORS } from './youtube.js'
 
 const NUDGE = 1
 const SPEED_STEP = 0.05
@@ -463,8 +465,73 @@ function VideoProgress({
   )
 }
 
-function Player({ clip, onBack }) {
+/* #20 spike only. What the IFrame API actually does on this device, read off
+   while the clip is being used, so the phone can answer the questions a
+   compatibility table cannot. */
+const median = (values) => {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((one, two) => one - two)
+  return sorted[Math.floor(sorted.length / 2)]
+}
+
+function SpikeReadings({ rates, speed, actualRate, readings, onCheckSeeks }) {
+  const ms = (value) => (value === null ? '—' : `${Math.round(value)} ms`)
+  const cadence = median(readings.cadence)
+  const overshoot = readings.overshoot.map((past) => past * 1000)
+
+  return (
+    <details open className="mt-4 rounded-xl bg-shell/60 p-4 text-xs text-ink/70">
+      <summary className="cursor-pointer text-xs font-bold tracking-widest text-ink/50">
+        SPIKE READINGS
+      </summary>
+      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 tabular-nums">
+        <dt>Rates YouTube offers</dt>
+        <dd>{rates.length ? rates.join(', ') : '—'}</dd>
+        <dt>Speed asked / playing</dt>
+        <dd>
+          {formatSpeed(speed)}x / {formatSpeed(actualRate)}x
+        </dd>
+        <dt>Time reported every</dt>
+        <dd>
+          {ms(cadence)} median, {ms(readings.cadence.length ? Math.max(...readings.cadence) : null)} worst
+          {' '}({readings.cadence.length} reports)
+        </dd>
+        <dt>Loop ran past B by</dt>
+        <dd>
+          {ms(median(overshoot))} median, {ms(overshoot.length ? Math.max(...overshoot) : null)} worst
+          {' '}({overshoot.length} loops)
+        </dd>
+        <dt>Seek error</dt>
+        <dd>
+          {readings.seekErrors.length ? readings.seekErrors.map((error) => `${error} ms`).join(', ') : '—'}{' '}
+          <button type="button" onClick={onCheckSeeks} className="ml-1 font-medium text-accent hover:underline">
+            Check
+          </button>
+        </dd>
+      </dl>
+    </details>
+  )
+}
+
+function Player({ clip, onBack, onDuration }) {
+  /* #20 spike: a YouTube entry plays in the IFrame player, which hands back a
+     surface shaped like the <video> this ref otherwise holds. Nothing below the
+     render knows which it got. */
+  const youtube = clip.source === 'youtube'
   const videoRef = useRef(null)
+  /* What YouTube is actually doing, as against what was asked of it. */
+  const [actualRate, setActualRate] = useState(1)
+  const [rates, setRates] = useState([])
+  const [ytError, setYtError] = useState(null)
+  /* Before the first play the tap has to reach YouTube's own button, because
+     iOS may insist that playback starts inside the iframe. After it, a layer
+     over the iframe takes the taps, so play/pause is ours and the keyboard
+     focus stays on the page where the shortcuts listen. */
+  const [started, setStarted] = useState(false)
+  /* The spike's instruments. Filled by the loop tick and the seek check below,
+     copied out twice a second for the panel to draw. */
+  const readingsRef = useRef({ cadence: [], overshoot: [], lastRaw: null, lastRawAt: 0 })
+  const [readings, setReadings] = useState({ cadence: [], overshoot: [], seekErrors: [] })
   const [duration, setDuration] = useState(0)
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -530,7 +597,24 @@ function Player({ clip, onBack }) {
           b > a &&
           video.currentTime >= b
         ) {
+          const past = video.currentTime - b
+          const r = readingsRef.current
+          r.overshoot = [...r.overshoot.slice(-49), past]
           video.currentTime = a
+        }
+
+        /* How often YouTube actually tells us where it is. The loop can only be
+           as tight as this, because the tick above reads nothing finer. */
+        if (video.player && !video.paused) {
+          const raw = video.player.getCurrentTime()
+          const r = readingsRef.current
+          const now = performance.now()
+
+          if (raw !== r.lastRaw) {
+            if (r.lastRawAt) r.cadence = [...r.cadence.slice(-99), now - r.lastRawAt]
+            r.lastRaw = raw
+            r.lastRawAt = now
+          }
         }
 
         /* The drawn playhead follows the finger, not the decoder. This line used
@@ -609,11 +693,47 @@ function Player({ clip, onBack }) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  const onLoadedMetadata = (event) => {
-    const video = event.currentTarget
+  const loaded = (video) => {
     setDuration(video.duration)
     setLoop({ a: 0, b: video.duration })
     video.playbackRate = speed
+    onDuration?.(video.duration)
+  }
+
+  const onLoadedMetadata = (event) => loaded(event.currentTarget)
+
+  const youtubeReady = (surface) => {
+    videoRef.current = surface
+    /* Spike only: lets a measurement script read YouTube's own clock. */
+    window.spikePlayer = surface.player
+    setRates(surface.player.getAvailablePlaybackRates())
+    setActualRate(surface.player.getPlaybackRate())
+    loaded(surface)
+  }
+
+  useEffect(() => {
+    if (!youtube) return
+    const copy = setInterval(() => {
+      const { cadence, overshoot } = readingsRef.current
+      setReadings((held) => ({ ...held, cadence, overshoot }))
+    }, 500)
+    return () => clearInterval(copy)
+  }, [youtube])
+
+  /* Paused, five seeks to awkward times, each read back once YouTube has had
+     the better part of a second to land it. The error is what a saved loop's A
+     would be off by when it is opened. */
+  const checkSeeks = async () => {
+    const video = videoRef.current
+    if (!video?.player) return
+    video.pause()
+    const errors = []
+    for (const target of [3, 7.25, 12.5, 20.1, 33.33]) {
+      video.currentTime = target
+      await new Promise((resolve) => setTimeout(resolve, 900))
+      errors.push(Math.round((video.player.getCurrentTime() - target) * 1000))
+    }
+    setReadings((held) => ({ ...held, seekErrors: errors }))
   }
 
   /* One seek in flight, always to the newest position asked for. A pointermove
@@ -849,6 +969,33 @@ function Player({ clip, onBack }) {
             {/* Never upscaled or stretched: the clip renders at its own size and only
                 shrinks to fit the viewport. Which limit binds depends on the clip —
                 height for a portrait one, width for a landscape one. */}
+            {youtube ? (
+              <>
+                <YouTubeFrame
+                  videoId={clip.videoId}
+                  zen={zen}
+                  onReady={youtubeReady}
+                  onState={(state) => {
+                    setPlaying(state === 1 || state === 3)
+                    if (state === 1) setStarted(true)
+                  }}
+                  onRate={setActualRate}
+                  onError={(code) => setYtError(ERRORS[code] ?? `YouTube error ${code}`)}
+                  onSeeked={() => {
+                    seekingRef.current = false
+                    flushSeekRef.current?.()
+                  }}
+                />
+                {started && (
+                  <div className="absolute inset-0" onClick={togglePlay} aria-hidden="true" />
+                )}
+                {ytError && (
+                  <p className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/85 px-6 text-center text-sm text-white">
+                    {ytError}
+                  </p>
+                )}
+              </>
+            ) : (
             <video
               ref={videoRef}
               src={clip.src}
@@ -875,6 +1022,7 @@ function Player({ clip, onBack }) {
               onPause={() => setPlaying(false)}
               onClick={togglePlay}
             />
+            )}
 
             <VideoProgress
               time={time}
@@ -911,6 +1059,13 @@ function Player({ clip, onBack }) {
             </div>
             <SpeedStepper speed={speed} onChange={setSpeed} />
           </div>
+          {/* The speed control does not lie: when YouTube plays at something
+              other than what was asked, the screen says so. */}
+          {youtube && Math.abs(actualRate - speed) > 0.001 && (
+            <p className="mt-1.5 text-right text-xs text-accent">
+              YouTube is playing this at {formatSpeed(actualRate)}x
+            </p>
+          )}
 
           <LoopSlider
             duration={duration}
@@ -1093,6 +1248,8 @@ function Player({ clip, onBack }) {
               )}
             </ul>
           </div>
+
+          {youtube && <SpikeReadings rates={rates} speed={speed} actualRate={actualRate} readings={readings} onCheckSeeks={checkSeeks} />}
           </div>
         </div>
       </main>

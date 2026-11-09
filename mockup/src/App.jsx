@@ -40,6 +40,19 @@ const SEED_CLIPS = [
     opened: '2026-09-06T18:04:11.000Z',
     style: 'salsa',
   },
+  /* #20 spike. A YouTube entry, never downloaded: an id, a title, and the
+     loops saved against it. The example from the ticket — the link it came from
+     carried a playlist, which is dropped. */
+  {
+    id: 'yt:EuT94T544Mg',
+    source: 'youtube',
+    videoId: 'EuT94T544Mg',
+    name: 'Cuban Salsa for Beginners - Class 12 (Paseala)',
+    added: '2026-08-28',
+    seconds: 712,
+    loops: 0,
+    style: 'salsa',
+  },
   { id: 3, name: 'Clip 3', added: '2026-08-24', seconds: 41, loops: 0, style: 'bachata' },
   {
     id: 4,
@@ -88,7 +101,21 @@ function App() {
   const deleteClip = (gone) => setClips(clips.filter((clip) => clip.id !== gone.id))
 
   if (clip) {
-    return <Player clip={clip} onBack={() => setClip(null)} />
+    return (
+      <Player
+        clip={clip}
+        onBack={() => setClip(null)}
+        /* A YouTube entry added by link has no length until the player loads
+           it (oEmbed does not give one), so the first open fills it in. */
+        onDuration={(seconds) =>
+          setClips((held) =>
+            held.map((one) =>
+              one.id === clip.id && one.seconds === undefined ? { ...one, seconds } : one,
+            ),
+          )
+        }
+      />
+    )
   }
 
   // Placeholder clips have no source of their own, so they fall back to the
@@ -116,7 +143,11 @@ function App() {
             clip.id === chosen.id ? { ...clip, opened: at } : clip,
           ),
         )
-        setClip({ ...chosen, src: chosen.src ?? '/sample.mp4' })
+        setClip(
+          chosen.source === 'youtube'
+            ? chosen
+            : { ...chosen, src: chosen.src ?? '/sample.mp4' },
+        )
       }}
     />
   )
