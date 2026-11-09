@@ -19,6 +19,7 @@ export function YouTubeFrame({
   videoId,
   mount,
   isolated,
+  knownLength,
   onReady,
   onState,
   onRate,
@@ -28,7 +29,11 @@ export function YouTubeFrame({
   readonly videoId: string
   readonly mount: MountYouTube
   readonly isolated: boolean
-  readonly onReady: (surface: PlaybackSurface) => void
+  /* The length the entry already carries, if it does. A cued video can report
+     none until it has been played once, and without a length the player has no
+     loop to lay out — so this stands in until YouTube gives one. */
+  readonly knownLength?: number | undefined
+  readonly onReady: (surface: PlaybackSurface, length: number) => void
   readonly onState: (state: number) => void
   readonly onRate: (rate: number) => void
   readonly onError: (code: number) => void
@@ -38,10 +43,10 @@ export function YouTubeFrame({
   /* The player is made once per video; the handlers change every render, so
      it reaches the current ones through here rather than closing over the
      first. */
-  const handlers = useRef({ onReady, onState, onRate, onError, onSeeked })
+  const handlers = useRef({ knownLength, onReady, onState, onRate, onError, onSeeked })
 
   useEffect(() => {
-    handlers.current = { onReady, onState, onRate, onError, onSeeked }
+    handlers.current = { knownLength, onReady, onState, onRate, onError, onSeeked }
   })
 
   useEffect(() => {
@@ -56,13 +61,16 @@ export function YouTubeFrame({
     const whenItHasALength = () => {
       if (!alive) return
 
-      if (!player || player.getDuration() <= 0) {
+      const length = (player?.getDuration() || handlers.current.knownLength) ?? 0
+
+      if (!player || length <= 0) {
         waiting = setTimeout(whenItHasALength, LENGTH_POLL)
         return
       }
 
       handlers.current.onReady(
         youtubeSurface(player, { onSeeked: () => handlers.current.onSeeked() }),
+        length,
       )
     }
 

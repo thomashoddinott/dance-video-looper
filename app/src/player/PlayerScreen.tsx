@@ -1044,10 +1044,11 @@ function OpenedClip({
                     videoId={youtube}
                     mount={mountYouTube}
                     isolated={isolated}
-                    onReady={(ready) => {
+                    knownLength={clip.seconds}
+                    onReady={(ready, length) => {
                       surface.current = ready
                       ready.playbackRate = speed
-                      setPlayback(decoded(ready.duration))
+                      setPlayback(decoded(length))
                     }}
                     onState={(state) => {
                       setPlaying(state === PLAYING || state === BUFFERING)

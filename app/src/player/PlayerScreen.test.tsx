@@ -3728,6 +3728,42 @@ describe('a YouTube video in the player', () => {
     expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '712')
   })
 
+  /* A cued video can report no length until it has been played once, which
+     would leave the loops and the controls hidden behind YouTube's own play
+     button. The entry's stored length stands in until YouTube gives one. */
+  it('is ready to loop before the first play when the entry knows its length', async () => {
+    const youtube = aYouTube(aYouTubePlayer({ getDuration: vi.fn(() => 0) }))
+    render(
+      inASession(
+        <MemoryRouter initialEntries={[`/clip/${A_YOUTUBE_CLIP.id}`]}>
+          <Routes>
+            <Route
+              path="/clip/:clipId"
+              element={
+                <Player
+                  clip={{ ...A_YOUTUBE_CLIP, seconds: 345.86 }}
+                  mountYouTube={youtube.mount}
+                />
+              }
+            />
+          </Routes>
+        </MemoryRouter>,
+      ),
+    )
+
+    await waitFor(() => {
+      expect(youtube.mount).toHaveBeenCalled()
+    })
+    act(() => {
+      youtube.ready()
+    })
+
+    expect(await screen.findByRole('slider', { name: 'Loop end' })).toHaveAttribute(
+      'aria-valuenow',
+      '345.86',
+    )
+  })
+
   it('plays it from the transport', async () => {
     const youtube = aYouTube()
     await readyYouTube(youtube)
