@@ -28,6 +28,13 @@ export const aDriveApi = (overrides: Partial<DriveApi> = {}): DriveApi => ({
   trash: vi.fn(async () => {}),
   setStyle: vi.fn(async () => {}),
   rename: vi.fn(async () => {}),
+  addYouTube: vi.fn(async (_token, { videoId, title }) => ({
+    id: `drive-yt-${videoId}`,
+    name: `${title}.youtube`,
+    mimeType: 'text/uri-list',
+    createdTime: '2026-11-09T19:12:00.000Z',
+    appProperties: { clipId: `yt:${videoId}`, youtube: videoId },
+  })),
   download: vi.fn(async () => new Blob([new Uint8Array(9)])),
   toUrl: vi.fn(() => 'blob:downloaded'),
   releaseUrl: vi.fn(),

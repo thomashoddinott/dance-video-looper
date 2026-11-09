@@ -92,6 +92,8 @@ export const demoDriveApi = ({
     setStyle: () => refuse('keeps no styles'),
     /* Nor a rename (#54): the clip is the demo's, not the visitor's. */
     rename: () => refuse('renames nothing'),
+    /* #20. The demo keeps no library, YouTube's or otherwise. */
+    addYouTube: () => refuse('keeps no YouTube videos'),
 
     listThumbnails: async () => ({ [clip.id]: STILL_FILE }),
 

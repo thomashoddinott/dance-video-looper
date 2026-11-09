@@ -30,6 +30,9 @@ export const SECONDS = 'seconds'
    the dancer says what a clip is once it is already in the grid, so this one
    arrives by `setStyle` rather than with the bytes. */
 export const STYLE = 'style'
+/* #20. The YouTube video a library entry stands for. Its presence is what
+   makes the entry YouTube's rather than a clip with bytes of its own. */
+export const YOUTUBE = 'youtube'
 
 const VIDEO = 'video/'
 
@@ -71,6 +74,11 @@ const secondsFrom = (stored: string | undefined) => {
   return Number.isFinite(seconds) ? seconds : undefined
 }
 
+/* Spread rather than assigned, so a clip with bytes carries neither key and
+   reads exactly as it did before YouTube entries existed. */
+const youTubeFrom = (videoId: string | undefined) =>
+  videoId === undefined ? {} : { source: 'youtube' as const, videoId }
+
 export const clipFromDriveFile = (file: DriveFile): Clip => ({
   /* The id the file had when it was local, so US-01-04's duplicate refusal
      still recognises it after a reload or on another device. Drive's own id
@@ -86,6 +94,7 @@ export const clipFromDriveFile = (file: DriveFile): Clip => ({
   seconds: secondsFrom(file.appProperties?.[SECONDS]),
   checksum: file.md5Checksum,
   style: styleFrom(file.appProperties?.[STYLE]),
+  ...youTubeFrom(file.appProperties?.[YOUTUBE]),
   loops: 0,
 })
 
@@ -131,4 +140,39 @@ export const driveFileFor = (
     [CLIP_ID]: clipId,
     [SECONDS]: String(seconds),
   },
+})
+
+/* #20. What adding a YouTube video puts in the app's folder: a file with no
+   bytes, standing in the library for a video that stays on YouTube.
+
+   Named for the title with `.youtube` on the end, which does two jobs. The
+   dancer's own Drive folder says what the file is, and a title with a dot in it
+   survives being read back, since `nameFromFilename` strips only what follows
+   the last dot — the trap `filenameFor` (#54) keeps an extension for. Renaming
+   it later keeps the `.youtube` for the same reason.
+
+   `text/uri-list` because that is what it is: a pointer to a URL. The `clipId`
+   is what makes the listing read it as a clip (`isClipFile`), and the id it
+   carries is the one its loops are saved under. */
+export const YOUTUBE_MIME = 'text/uri-list'
+
+export const youTubeIdFor = (videoId: string) => `yt:${videoId}`
+
+export type YouTubeFileMetadata = DriveFileMetadata & {
+  readonly mimeType: string
+}
+
+export const youTubeFileFor = ({
+  folderId,
+  videoId,
+  title,
+}: {
+  readonly folderId: string
+  readonly videoId: string
+  readonly title: string
+}): YouTubeFileMetadata => ({
+  name: `${title}.youtube`,
+  parents: [folderId],
+  mimeType: YOUTUBE_MIME,
+  appProperties: { [CLIP_ID]: youTubeIdFor(videoId), [YOUTUBE]: videoId },
 })

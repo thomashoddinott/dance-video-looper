@@ -7,6 +7,7 @@ import {
   driveFileFor,
   filenameFor,
   isClipFile,
+  youTubeFileFor,
 } from './driveClips'
 import { thumbnailFileFor, thumbnailsFromDriveFiles } from './driveThumbnails'
 
@@ -425,6 +426,12 @@ const listThumbnailFiles = async (
   return listed.files ?? []
 }
 
+export type YouTubeRequest = {
+  readonly folderId: string
+  readonly videoId: string
+  readonly title: string
+}
+
 export type ThumbnailUploadRequest = {
   readonly bytes: Blob
   readonly clipId: string
@@ -523,6 +530,13 @@ export type DriveApi = {
     driveId: string,
     name: string,
   ) => Promise<void>
+  /* #20. A YouTube video into the library, which costs a file of metadata
+     and no bytes. Answers the file as a listing would read it, so the entry
+     goes into the grid exactly as the next reload will list it. */
+  readonly addYouTube: (
+    token: string,
+    request: YouTubeRequest,
+  ) => Promise<DriveFile>
   readonly download: (
     token: string,
     driveId: string,
@@ -650,6 +664,15 @@ export const driveApiOver = (host: DriveHost): DriveApi => ({
       body: JSON.stringify({ name: filenameFor(held.name, name) }),
     })
   },
+
+  /* The plain `/files` endpoint with a JSON body, as `createJson` does: there
+     are no bytes, so nothing goes to `/upload/`. */
+  addYouTube: async (token, request) =>
+    (await driveJson(host, token, `${API}/files?fields=${query(CLIP_FILE_FIELDS)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(youTubeFileFor(request)),
+    })) as DriveFile,
 
   /* Whole-file, not ranged. The spike measured ~7 s for 9 MB and settled that
      the resulting blob url plays, seeks and changes rate exactly as a local
