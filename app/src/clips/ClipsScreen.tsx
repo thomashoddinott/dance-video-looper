@@ -1,6 +1,7 @@
 import type { ChangeEvent } from 'react'
 import { type FormEvent, useRef, useState } from 'react'
 
+import { DemoInvite } from '../demo/DemoInvite'
 import { DemoStatus } from '../demo/DemoStatus'
 import { DriveStatus } from '../drive/DriveStatus'
 import type { Clip } from './clip'
@@ -488,6 +489,8 @@ export function ClipsScreen({
 
         {!demo && (
           <>
+            <DemoInvite />
+
             <p className="mt-6 text-xs text-ink/40">
               Clips live in Google Drive. The app only sees files it uploaded
               itself, so every clip has to come in through Add clip.

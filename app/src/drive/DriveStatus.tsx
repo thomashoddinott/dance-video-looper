@@ -1,5 +1,3 @@
-import { Link } from 'react-router'
-
 import { useDriveSession } from './driveSession'
 import { isConnected, type SessionStatus } from './session'
 
@@ -53,20 +51,6 @@ export function DriveStatus() {
         </button>
       )}
 
-      {/* #33. Offered wherever Connect is, because both answer "no Drive" —
-          one for the dancer, one for anyone who followed a link to look at
-          the player. A link rather than a button: it goes somewhere, and
-          `/demo` is an address a CV can point at directly. In the accent
-          Add clip wears rather than Connect's grey, so a visitor can tell it
-          apart from the sign-in beside it at a glance. */}
-      {!connected && (
-        <Link
-          to="/demo"
-          className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent-2"
-        >
-          Demo mode
-        </Link>
-      )}
     </div>
   )
 }
