@@ -787,15 +787,24 @@ describe('the Drive session on the Clips screen', () => {
 describe('the way into the demo', () => {
   const demoMode = () => screen.queryByRole('link', { name: 'Demo mode' })
 
-  it('sits beside Connect Google Drive for a visitor who has not signed in', () => {
+  /* #59. Beside Connect in the footer it went unclicked, so it moved to the
+     middle of the empty grid — where a visitor's eye already is. */
+  it('sits in the empty grid, ahead of Connect Google Drive, for a visitor who has not signed in', () => {
     renderAppAt('/')
 
     expect(
       inDocumentOrder({
         connect: screen.getByRole('button', { name: /connect google drive/i }),
         demo: demoMode() ?? document.body,
+        clips: screen.getByRole('list', { name: 'Clips' }),
       }),
-    ).toEqual(['connect', 'demo'])
+    ).toEqual(['clips', 'demo', 'connect'])
+  })
+
+  it('is offered once, and not again beside Connect Google Drive', () => {
+    renderAppAt('/')
+
+    expect(screen.getAllByRole('link', { name: 'Demo mode' })).toHaveLength(1)
   })
 
   it('is not there once the dancer has signed in', async () => {
