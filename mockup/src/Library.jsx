@@ -312,8 +312,10 @@ const DRIVE_STATES = [
   },
 ]
 
-function DriveStatus({ onDemo }) {
-  const [state, setState] = useState(0)
+/* The state is held by `Library` rather than here (#59): signed out, the
+   product's grid is empty — Drive is where the library comes from — and the
+   grid has to know that to draw the demo button in its place. */
+function DriveStatus({ state, onNext }) {
   const { notice, connected } = DRIVE_STATES[state]
 
   return (
@@ -323,31 +325,17 @@ function DriveStatus({ onDemo }) {
       {!connected && (
         <button
           type="button"
-          onClick={() => setState((at) => (at + 1) % DRIVE_STATES.length)}
+          onClick={onNext}
           className="rounded-lg bg-control px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-control-hi"
         >
           Connect Google Drive
         </button>
       )}
 
-      {/* Retrofitted from the product (#33): offered wherever Connect is. In
-          the product it is a link to `/demo`, the same app over one bundled
-          clip; the mockup has no second mount, so it flips the grid instead.
-          In the accent Add clip wears, so it reads apart from Connect. */}
-      {!connected && (
-        <button
-          type="button"
-          onClick={onDemo}
-          className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent-2"
-        >
-          Demo mode
-        </button>
-      )}
-
       {connected && (
         <button
           type="button"
-          onClick={() => setState((at) => (at + 1) % DRIVE_STATES.length)}
+          onClick={onNext}
           className="text-xs text-ink/25 underline underline-offset-2"
         >
           next state
@@ -396,7 +384,7 @@ const UPLOAD_PLAYS_OUT_OVER = 2500
    in the footer: the first thing a visitor should know is that this is a
    sample. Both buttons leave the demo — in the product Connect is the real
    sign-in, and signing in hands over to the dancer's own library. */
-function DemoStatus({ onLeave }) {
+function DemoStatus({ onConnect, onLeave }) {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
       <p className="text-xs text-ink/60">
@@ -406,7 +394,7 @@ function DemoStatus({ onLeave }) {
 
       <button
         type="button"
-        onClick={onLeave}
+        onClick={onConnect}
         className="rounded-lg bg-control px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-control-hi"
       >
         Connect Google Drive
@@ -418,6 +406,25 @@ function DemoStatus({ onLeave }) {
         className="rounded-lg bg-control px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-control-hi"
       >
         Exit demo
+      </button>
+    </div>
+  )
+}
+
+/* #59, the mockup gate pass, drawn ahead of the build. The way into the demo
+   is where a signed-out visitor's eye already is — the middle of the empty
+   grid — rather than a pill in the footer beside Connect. One large button
+   and nothing else: two other takes (a card saying what the app is for, and
+   the demo clip playing) were drawn and passed over for this one. */
+function DemoInvite({ onDemo }) {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center">
+      <button
+        type="button"
+        onClick={onDemo}
+        className="rounded-2xl bg-accent px-8 py-4 text-lg font-semibold text-on-accent shadow-lg shadow-accent/25 hover:bg-accent-2"
+      >
+        Demo mode
       </button>
     </div>
   )
@@ -439,7 +446,12 @@ function Library({
      clip, so it stands in for the bundled one. The player's own "Demo" label
      is in the product only. */
   const [demo, setDemo] = useState(false)
-  const shown = demo ? clips.slice(0, 1) : clips
+  /* #59. Opens signed out, as the product does for a first visit: an empty
+     grid with the demo in it. Connect walks the Drive states from there. */
+  const [drive, setDrive] = useState(0)
+  const nextDriveState = () => setDrive((at) => (at + 1) % DRIVE_STATES.length)
+  const signedOut = !DRIVE_STATES[drive].connected && !demo
+  const shown = demo ? clips.slice(0, 1) : signedOut ? [] : clips
   const [query, setQuery] = useState('')
   const [notice, setNotice] = useState(null)
   const [uploading, setUploading] = useState({})
@@ -661,7 +673,15 @@ function Library({
           </div>
         </div>
 
-        {demo && <DemoStatus onLeave={() => setDemo(false)} />}
+        {demo && (
+          <DemoStatus
+            onConnect={() => {
+              setDemo(false)
+              setDrive(DRIVE_STATES.findIndex(({ connected }) => connected))
+            }}
+            onLeave={() => setDemo(false)}
+          />
+        )}
 
         {linking && !demo && (
           <form onSubmit={addLink} className="mt-3 flex gap-2">
@@ -787,6 +807,8 @@ function Library({
           ))}
         </ul>
 
+        {signedOut && <DemoInvite onDemo={() => setDemo(true)} />}
+
         {!demo && (
           <>
             <p className="mt-6 text-xs text-ink/40">
@@ -794,7 +816,7 @@ function Library({
               itself, so every clip has to come in through Add clip.
             </p>
 
-            <DriveStatus onDemo={() => setDemo(true)} />
+            <DriveStatus state={drive} onNext={nextDriveState} />
           </>
         )}
       </main>
