@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Navigate } from 'react-router'
 
 import { App } from '../App'
@@ -11,36 +11,18 @@ import type { DriveApi } from '../drive/driveApi'
 import { browserDriveApi } from '../drive/driveApi'
 import { useDriveSession } from '../drive/driveSession'
 import { isConnected } from '../drive/session'
-import type { KeyValueStorage } from '../drive/tokenStore'
 import { LOOPS_FILE } from '../loops/driveLoops'
 import { localLoopsCache } from '../loops/loopsCache'
 import { DEMO_CLIP, DEMO_YOUTUBE } from './demoClip'
 import { demoDriveApi } from './demoDriveApi'
 import demoLoops from './demoLoops.json'
 import { DemoSession } from './DemoSession'
-import { prefixedStorage } from './prefixedStorage'
-
-/* Every key the demo writes starts with this, so nothing it keeps can be read
-   back as the dancer's own. */
-export const DEMO_PREFIX = 'looper.demo.'
+import { memoryStorage } from './memoryStorage'
 
 export type DemoProps = {
-  readonly storage?: KeyValueStorage
   readonly fetchBytes?: (url: string) => Promise<Blob>
   readonly capture?: ThumbnailCapture
   readonly urls?: Pick<DriveApi, 'toUrl' | 'releaseUrl'>
-}
-
-/* Wrapped rather than handed over whole, so importing this module never
-   touches the global — the care `browserLoopsCache` takes, for its reason. */
-const browserStorage: KeyValueStorage = {
-  getItem: (key) => localStorage.getItem(key),
-  setItem: (key, value) => {
-    localStorage.setItem(key, value)
-  },
-  removeItem: (key) => {
-    localStorage.removeItem(key)
-  },
 }
 
 const fetchOverNetwork = async (url: string) => {
@@ -77,29 +59,32 @@ const stillsInMemory = (): ThumbnailStore => {
 }
 
 /* #33. The whole app, at `/demo`, over seams that need no Google account: one
-   bundled clip, loops kept in this browser under a prefix of their own, and a
+   bundled clip and a few YouTube videos, the loops they ship with, and a
    session that always has a token without asking Google for one. Nothing in
    the player knows the difference, which is the point — it is the player a
    visitor has come to try.
 
    Exit demo is how a visitor leaves (#61). And the moment the real session
    is connected — signed in from the dashboard, or in another tab — this
-   hands over to the dancer's own library. */
+   hands over to the dancer's own library.
+
+   Not persistent (#66): what a visitor does here lasts while they stay, and
+   is gone the next time they come — a reload, a new tab, or Exit demo and
+   back — so every visit opens on the loops it ships with. */
 export function DemoApp({
-  storage = browserStorage,
   fetchBytes = fetchOverNetwork,
   capture = browserThumbnailCapture,
   urls = browserDriveApi,
 }: DemoProps) {
   const { status } = useDriveSession()
+  /* One per visit to the demo: made when it mounts, gone when it unmounts. */
+  const [kept] = useState(memoryStorage)
 
   /* Built once. Every hook in the app keys an effect on these, and a fresh
      api each render would re-list the library and re-fetch the clip on every
      one of them. */
-  const seams = useMemo(() => {
-    const kept = prefixedStorage(storage, DEMO_PREFIX)
-
-    return {
+  const seams = useMemo(
+    () => ({
       driveApi: demoDriveApi({
         clip: DEMO_CLIP,
         youtube: DEMO_YOUTUBE,
@@ -115,8 +100,9 @@ export function DemoApp({
       loopsCache: localLoopsCache(kept),
       openedStore: localOpenedStore(kept),
       thumbnailCache: thumbnailCacheOver(stillsInMemory()),
-    }
-  }, [storage, fetchBytes, capture, urls])
+    }),
+    [kept, fetchBytes, capture, urls],
+  )
 
   if (isConnected(status)) return <Navigate to="/" replace />
 
