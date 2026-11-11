@@ -165,14 +165,18 @@ describe('going into the demo', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('says it is a demo, so no one mistakes it for a real library', async () => {
+  /* #61. No sentence about the demo and no sign-in: Exit demo says what this
+     is, and is the way out. */
+  it('offers only Exit demo under the heading', async () => {
     renderRootAt('/demo')
 
     await theDemoTile()
 
-    expect(screen.getByRole('status', { name: 'Demo' })).toHaveTextContent(
-      /demo/i,
-    )
+    expect(screen.getByRole('link', { name: 'Exit demo' })).toBeInTheDocument()
+    expect(screen.queryByRole('status', { name: 'Demo' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /connect google drive/i }),
+    ).not.toBeInTheDocument()
   })
 
   it('never reaches the dancer’s Drive, nor asks Google for a token', async () => {
@@ -321,10 +325,12 @@ describe('leaving the demo', () => {
     expect(where()).toBe('/')
   })
 
-  it('ends the demo on signing in, and shows the dancer’s real library', async () => {
+  /* #61. The demo no longer offers sign-in itself; it is one step away. */
+  it('leads to sign-in, and from there to the dancer’s real library', async () => {
     renderRootAt('/demo')
     await theDemoTile()
 
+    await userEvent.click(screen.getByRole('link', { name: 'Exit demo' }))
     await userEvent.click(
       screen.getByRole('button', { name: /connect google drive/i }),
     )

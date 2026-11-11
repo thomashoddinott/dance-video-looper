@@ -972,9 +972,7 @@ describe('the grid in the demo', () => {
     ).not.toBeInTheDocument()
   })
 
-  /* Connect Google Drive stays — it is how a visitor leaves — but the
-     library's explanation and the connection sentence describe a Drive the
-     demo does not have. */
+  /* The connection sentence describes a Drive the demo does not have. */
   it('says nothing about where clips are kept, or whether Drive is connected', () => {
     renderTheDemo()
 
@@ -982,12 +980,15 @@ describe('the grid in the demo', () => {
     expect(screen.queryByText(/connected to drive/i)).not.toBeInTheDocument()
   })
 
-  it('says it is a demo', () => {
+  /* #61. Exit demo alone: no sentence about the demo, and no sign-in. */
+  it('offers Exit demo and nothing else under the heading', () => {
     renderTheDemo()
 
-    expect(screen.getByRole('status', { name: 'Demo' })).toHaveTextContent(
-      /demo mode/i,
-    )
+    expect(screen.getByRole('link', { name: 'Exit demo' })).toBeInTheDocument()
+    expect(screen.queryByRole('status', { name: 'Demo' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /connect google drive/i }),
+    ).not.toBeInTheDocument()
   })
 
   it('still links to the source code', () => {
