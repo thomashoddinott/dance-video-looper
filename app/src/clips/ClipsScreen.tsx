@@ -491,11 +491,6 @@ export function ClipsScreen({
           <>
             <DemoInvite />
 
-            <p className="mt-6 text-xs text-ink/40">
-              Clips live in Google Drive. The app only sees files it uploaded
-              itself, so every clip has to come in through Add clip.
-            </p>
-
             <DriveStatus />
           </>
         )}

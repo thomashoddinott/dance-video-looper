@@ -319,7 +319,7 @@ function DriveStatus({ state, onNext }) {
   const { notice, connected } = DRIVE_STATES[state]
 
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
+    <div className="mt-6 flex flex-wrap items-center gap-2">
       <p className="text-xs text-ink/40">{notice}</p>
 
       {!connected && (
@@ -381,25 +381,12 @@ const UPLOAD_PLAYS_OUT_OVER = 2500
    the grid in front of you rather than a setting, so coming back with the whole
    library showing is the honest default. */
 /* Retrofitted from the product (#33), which sits under the heading rather than
-   in the footer: the first thing a visitor should know is that this is a
-   sample. Both buttons leave the demo — in the product Connect is the real
-   sign-in, and signing in hands over to the dancer's own library. */
-function DemoStatus({ onConnect, onLeave }) {
+   in the footer, where a visitor looks first. Exit demo and nothing else
+   (#61): the sentence about the demo was helper copy, and signing in is one
+   step away, on the dashboard Exit demo leads to. */
+function DemoStatus({ onLeave }) {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
-      <p className="text-xs text-ink/60">
-        Demo mode — sample clips to try the player on. Loops you save stay in
-        this browser.
-      </p>
-
-      <button
-        type="button"
-        onClick={onConnect}
-        className="rounded-lg bg-control px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-control-hi"
-      >
-        Connect Google Drive
-      </button>
-
       <button
         type="button"
         onClick={onLeave}
@@ -710,15 +697,7 @@ function Library({
           </div>
         </div>
 
-        {demo && (
-          <DemoStatus
-            onConnect={() => {
-              setDemo(false)
-              setDrive(DRIVE_STATES.findIndex(({ connected }) => connected))
-            }}
-            onLeave={() => setDemo(false)}
-          />
-        )}
+        {demo && <DemoStatus onLeave={() => setDemo(false)} />}
 
         {linking && !demo && (
           <form onSubmit={addLink} className="mt-3 flex gap-2">
@@ -848,11 +827,6 @@ function Library({
 
         {!demo && (
           <>
-            <p className="mt-6 text-xs text-ink/40">
-              Clips live in Google Drive. The app only sees files it uploaded
-              itself, so every clip has to come in through Add clip.
-            </p>
-
             <DriveStatus state={drive} onNext={nextDriveState} />
           </>
         )}

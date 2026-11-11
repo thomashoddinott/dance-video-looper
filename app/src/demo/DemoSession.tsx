@@ -14,7 +14,7 @@ const nothingToReport = () => {}
 
 /* The session as the demo sees it: a token always to hand, and never one from
    Google. The status and the sign-in are the real session's, passed straight
-   through, because signing in is how a visitor leaves the demo — and a demo
+   through, because a visitor who signs in has left the demo — and a demo
    claiming to be connected would be telling them something untrue.
 
    Reporting a withdrawn consent is swallowed. Nothing the demo's api refuses

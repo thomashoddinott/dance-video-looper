@@ -1241,11 +1241,6 @@ function Player({ clip, onBack, onDuration }) {
                   </button>
                 </li>
               ))}
-              {saved.length === 0 && (
-                <li className="py-1 text-sm text-ink/40">
-                  Drag A and B, then save. Most clips have a few worth keeping.
-                </li>
-              )}
             </ul>
           </div>
 

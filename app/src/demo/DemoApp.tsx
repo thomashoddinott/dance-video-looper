@@ -82,8 +82,9 @@ const stillsInMemory = (): ThumbnailStore => {
    the player knows the difference, which is the point — it is the player a
    visitor has come to try.
 
-   Signing in is how a visitor leaves: the moment the real session is
-   connected, this hands over to the dancer's own library. */
+   Exit demo is how a visitor leaves (#61). And the moment the real session
+   is connected — signed in from the dashboard, or in another tab — this
+   hands over to the dancer's own library. */
 export function DemoApp({
   storage = browserStorage,
   fetchBytes = fetchOverNetwork,
