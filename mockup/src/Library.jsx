@@ -388,7 +388,7 @@ function DemoStatus({ onConnect, onLeave }) {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
       <p className="text-xs text-ink/60">
-        Demo mode — a sample clip to try the player on. Loops you save stay in
+        Demo mode — sample clips to try the player on. Loops you save stay in
         this browser.
       </p>
 
@@ -430,6 +430,41 @@ function DemoInvite({ onDemo }) {
   )
 }
 
+/* #58, retrofitted from the build (`app/src/demo/demoClip.ts`): the demo's
+   YouTube videos, after the bundled clip. */
+const DEMO_YOUTUBE = [
+  {
+    id: 'yt:l-H1OAu9N28',
+    source: 'youtube',
+    videoId: 'l-H1OAu9N28',
+    name: 'Bachata Sensual — 20 moves, Part 1',
+    added: '2026-09-24',
+    seconds: 346,
+    loops: 0,
+    style: 'bachata',
+  },
+  {
+    id: 'yt:CkZO6nyJwjw',
+    source: 'youtube',
+    videoId: 'CkZO6nyJwjw',
+    name: 'Cuban Salsa — Class 10',
+    added: '2026-09-23',
+    seconds: 767,
+    loops: 0,
+    style: 'salsa',
+  },
+  {
+    id: 'yt:mBHXNXJOF84',
+    source: 'youtube',
+    videoId: 'mBHXNXJOF84',
+    name: 'Elena & Derek — Ultima llamada',
+    added: '2026-09-22',
+    seconds: 224,
+    loops: 0,
+    style: 'bachata',
+  },
+]
+
 function Library({
   clips,
   sort,
@@ -444,14 +479,16 @@ function Library({
   /* #33. The product's demo is one bundled clip with nothing to manage — no
      Add clip, no ✕, no Drive footer. The first entry is the mockup's only real
      clip, so it stands in for the bundled one. The player's own "Demo" label
-     is in the product only. */
+     is in the product only.
+
+     #58, retrofitted from the build: three YouTube videos follow it. */
   const [demo, setDemo] = useState(false)
   /* #59. Opens signed out, as the product does for a first visit: an empty
      grid with the demo in it. Connect walks the Drive states from there. */
   const [drive, setDrive] = useState(0)
   const nextDriveState = () => setDrive((at) => (at + 1) % DRIVE_STATES.length)
   const signedOut = !DRIVE_STATES[drive].connected && !demo
-  const shown = demo ? clips.slice(0, 1) : signedOut ? [] : clips
+  const shown = demo ? [clips[0], ...DEMO_YOUTUBE] : signedOut ? [] : clips
   const [query, setQuery] = useState('')
   const [notice, setNotice] = useState(null)
   const [uploading, setUploading] = useState({})
@@ -540,9 +577,7 @@ function Library({
 
   const active = SORTS.find((option) => option.id === sort)
   const wanted = query.trim().toLowerCase()
-  /* #43. The demo is one clip with no style control, so a filter carried in
-     from the dancer's own library must not be able to hide it. */
-  const styled = demo ? null : FILTER_CHIPS.find(({ id }) => id === filter)
+  const styled = FILTER_CHIPS.find(({ id }) => id === filter)
   const inStyle = styled ? shown.filter(styled.matches) : shown
   /* Filter, then order. The style and the search both narrow the set and the
      chosen chip orders what is left, so the controls compose rather than
@@ -756,24 +791,24 @@ function Library({
               Lettered in the style's colour until picked, then filled with it:
               the same colour as the labels it is about to leave on screen. A
               filled chip is also one a hover cannot pass for, which the
-              ordering chips' grey-on-grey could. */}
-          {!demo && (
-            <div role="group" aria-label="Filter by style" className="ml-auto flex gap-1.5">
-              {FILTER_CHIPS.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  aria-pressed={option.id === filter}
-                  onClick={() => onFilter(option.id === filter ? 'all' : option.id)}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    option.id === filter ? option.picked : option.unpicked
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          )}
+              ordering chips' grey-on-grey could.
+
+              In the demo too (#58), which holds salsa and bachata. */}
+          <div role="group" aria-label="Filter by style" className="ml-auto flex gap-1.5">
+            {FILTER_CHIPS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={option.id === filter}
+                onClick={() => onFilter(option.id === filter ? 'all' : option.id)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  option.id === filter ? option.picked : option.unpicked
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* An empty grid is only honest about an empty library. Under a search it
