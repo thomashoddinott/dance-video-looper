@@ -13,7 +13,7 @@ import { useDriveSession } from '../drive/driveSession'
 import { isConnected } from '../drive/session'
 import type { KeyValueStorage } from '../drive/tokenStore'
 import { localLoopsCache } from '../loops/loopsCache'
-import { DEMO_CLIP } from './demoClip'
+import { DEMO_CLIP, DEMO_YOUTUBE } from './demoClip'
 import { demoDriveApi } from './demoDriveApi'
 import { DemoSession } from './DemoSession'
 import { prefixedStorage } from './prefixedStorage'
@@ -99,6 +99,7 @@ export function DemoApp({
     return {
       driveApi: demoDriveApi({
         clip: DEMO_CLIP,
+        youtube: DEMO_YOUTUBE,
         storage: kept,
         fetchBytes,
         capture,

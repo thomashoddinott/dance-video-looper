@@ -16,7 +16,7 @@ export function DemoStatus() {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
       <p role="status" aria-label="Demo" className="text-xs text-ink/60">
-        Demo mode — a sample clip to try the player on. Loops you save stay in
+        Demo mode — sample clips to try the player on. Loops you save stay in
         this browser.
       </p>
 

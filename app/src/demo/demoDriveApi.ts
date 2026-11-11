@@ -1,6 +1,8 @@
+import type { DanceStyle } from '../clips/danceStyle'
+import type { ThumbnailCapture } from '../clips/thumbnail'
+import { youTubeIdFor } from '../clips/youtube'
 import type { DriveApi, StoredJson } from '../drive/driveApi'
 import type { KeyValueStorage } from '../drive/tokenStore'
-import type { ThumbnailCapture } from '../clips/thumbnail'
 
 /* The one clip a visitor gets, bundled with the site rather than fetched from
    anyone's Drive. `seconds` is written down rather than probed: probing means
@@ -11,11 +13,24 @@ export type DemoClip = {
   readonly name: string
   readonly added: string
   readonly seconds: number
+  readonly style: DanceStyle
   readonly url: string
+}
+
+/* #58. A YouTube video beside the clip. Nothing of it is bundled: YouTube's
+   own player plays it. `seconds` is written down for the clip's reason, and
+   because YouTube gives no length until the video has played. */
+export type DemoYouTube = {
+  readonly videoId: string
+  readonly name: string
+  readonly added: string
+  readonly seconds: number
+  readonly style: DanceStyle
 }
 
 type Deps = {
   readonly clip: DemoClip
+  readonly youtube: readonly DemoYouTube[]
   /* Where the loops live — the dancer's own `localStorage`, under a prefix of
      its own, so a visitor's loops survive a reload the way a normal site
      remembers you, and never reach the real library's keys. */
@@ -39,6 +54,10 @@ const STILL_FILE = 'demo-still-file'
    path identical to the one Drive takes. */
 type Stored = { readonly version: string; readonly body: string }
 
+/* A video's stand-in for the Drive file a real `.youtube` entry stands as.
+   Nothing is ever downloaded by it; the player only needs one to be there. */
+const youTubeFile = (videoId: string) => `demo-youtube-file-${videoId}`
+
 const fileKey = (name: string) => `demo.file.${name}`
 
 const refuse = (what: string) =>
@@ -46,10 +65,11 @@ const refuse = (what: string) =>
 
 /* A `DriveApi` for a visitor with no Google account. The player, the loops and
    the gallery all run the code they run against Drive; only this answers
-   differently. It holds one clip, keeps no clip a visitor adds, deletes
-   nothing, and keeps `loops.json` in the browser. */
+   differently. It holds one clip and a few YouTube videos, keeps nothing a
+   visitor adds, deletes nothing, and keeps `loops.json` in the browser. */
 export const demoDriveApi = ({
   clip,
+  youtube,
   storage,
   fetchBytes,
   capture,
@@ -79,9 +99,21 @@ export const demoDriveApi = ({
         name: clip.name,
         added: clip.added,
         seconds: clip.seconds,
+        style: clip.style,
         loops: 0,
         driveId: CLIP_FILE,
       },
+      ...youtube.map((video) => ({
+        id: youTubeIdFor(video.videoId),
+        name: video.name,
+        added: video.added,
+        seconds: video.seconds,
+        style: video.style,
+        source: 'youtube' as const,
+        videoId: video.videoId,
+        loops: 0,
+        driveId: youTubeFile(video.videoId),
+      })),
     ],
 
     upload: () => refuse('keeps no clips'),

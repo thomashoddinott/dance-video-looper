@@ -4,7 +4,7 @@ import { inMemoryStorage } from '../drive/keyValueStorage.factory'
 import { getLoop } from '../loops/loop.factory'
 import { applyToLoops, readLoops } from '../loops/driveLoops'
 import { withLoop } from '../loops/loopsChange'
-import type { DemoClip } from './demoDriveApi'
+import type { DemoClip, DemoYouTube } from './demoDriveApi'
 import { demoDriveApi } from './demoDriveApi'
 
 const A_TOKEN = 'demo'
@@ -14,8 +14,18 @@ const theDemoClip: DemoClip = {
   name: 'Passitos',
   added: '2026-09-25',
   seconds: 16.8,
+  style: 'bachata',
   url: '/assets/demo-clip.mp4',
 }
+
+const aDemoVideo = (overrides: Partial<DemoYouTube> = {}): DemoYouTube => ({
+  videoId: 'aaaaaaaaaaa',
+  name: 'A class',
+  added: '2026-09-24',
+  seconds: 600,
+  style: 'salsa',
+  ...overrides,
+})
 
 const clipBytes = new Blob([new Uint8Array(12)], { type: 'video/mp4' })
 const aStill = new Blob([new Uint8Array(3)], { type: 'image/jpeg' })
@@ -24,9 +34,11 @@ const aDemoApi = ({
   storage = inMemoryStorage(),
   fetchBytes = vi.fn(async () => clipBytes),
   capture = vi.fn(async (_bytes: Blob): Promise<Blob | null> => aStill),
+  youtube = [] as readonly DemoYouTube[],
 } = {}) =>
   demoDriveApi({
     clip: theDemoClip,
+    youtube,
     storage,
     fetchBytes,
     capture,
@@ -38,7 +50,7 @@ const folderOf = (api: ReturnType<typeof aDemoApi>) =>
   api.findOrCreateFolder(A_TOKEN)
 
 describe('the demo library', () => {
-  it('holds exactly the one bundled clip', async () => {
+  it('holds the bundled clip, with its style', async () => {
     const api = aDemoApi()
 
     const clips = await api.listClips(A_TOKEN, await folderOf(api))
@@ -49,8 +61,70 @@ describe('the demo library', () => {
       name: 'Passitos',
       added: '2026-09-25',
       seconds: 16.8,
+      style: 'bachata',
       loops: 0,
     })
+  })
+
+  /* #58. YouTube's own player plays them, so nothing of theirs is hosted
+     here — which is what makes them safe to show a visitor. */
+  it('holds the YouTube videos beside it, after the bundled clip', async () => {
+    const api = aDemoApi({
+      youtube: [
+        aDemoVideo({ videoId: 'l-H1OAu9N28' }),
+        aDemoVideo({ videoId: 'CkZO6nyJwjw' }),
+      ],
+    })
+
+    const clips = await api.listClips(A_TOKEN, await folderOf(api))
+
+    expect(clips.map(({ id }) => id)).toEqual([
+      'demo-clip',
+      'yt:l-H1OAu9N28',
+      'yt:CkZO6nyJwjw',
+    ])
+  })
+
+  it('lists a YouTube video as a library entry played from YouTube', async () => {
+    const api = aDemoApi({
+      youtube: [
+        aDemoVideo({
+          videoId: 'CkZO6nyJwjw',
+          name: 'Cuban Salsa — Class 10',
+          added: '2026-09-23',
+          seconds: 767,
+          style: 'salsa',
+        }),
+      ],
+    })
+
+    const [, video] = await api.listClips(A_TOKEN, await folderOf(api))
+
+    expect(video).toMatchObject({
+      id: 'yt:CkZO6nyJwjw',
+      source: 'youtube',
+      videoId: 'CkZO6nyJwjw',
+      name: 'Cuban Salsa — Class 10',
+      added: '2026-09-23',
+      seconds: 767,
+      style: 'salsa',
+      loops: 0,
+    })
+  })
+
+  /* The player opens an entry with no file id as undecodable, so each video
+     gets one, as a real `.youtube` file has — one per video, since loops and
+     tiles are told apart by it. */
+  it('gives each YouTube video a file id of its own', async () => {
+    const api = aDemoApi({
+      youtube: [aDemoVideo({ videoId: 'l-H1OAu9N28' }), aDemoVideo({ videoId: 'CkZO6nyJwjw' })],
+    })
+
+    const [clip, ...videos] = await api.listClips(A_TOKEN, await folderOf(api))
+    const ids = videos.map(({ driveId }) => driveId)
+
+    expect(ids).not.toContain(undefined)
+    expect(new Set([clip?.driveId, ...ids]).size).toBe(3)
   })
 
   /* The player plays a clip by downloading it and minting a url, so the demo
