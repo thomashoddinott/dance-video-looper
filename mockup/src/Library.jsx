@@ -431,7 +431,9 @@ function DemoInvite({ onDemo }) {
 }
 
 /* #58, retrofitted from the build (`app/src/demo/demoClip.ts`): the demo's
-   YouTube videos, after the bundled clip. */
+   YouTube videos, after the bundled clip. The counts are the loops the demo
+   ships with (#63, `app/src/demo/demoLoops.json`); the mockup's player has
+   no loops to open onto, so only the tiles show them. */
 const DEMO_YOUTUBE = [
   {
     id: 'yt:l-H1OAu9N28',
@@ -440,7 +442,7 @@ const DEMO_YOUTUBE = [
     name: 'Bachata Sensual — 20 moves, Part 1',
     added: '2026-09-24',
     seconds: 346,
-    loops: 0,
+    loops: 11,
     style: 'bachata',
   },
   {
@@ -450,7 +452,7 @@ const DEMO_YOUTUBE = [
     name: 'Cuban Salsa — Class 10',
     added: '2026-09-23',
     seconds: 767,
-    loops: 0,
+    loops: 1,
     style: 'salsa',
   },
   {
@@ -460,7 +462,7 @@ const DEMO_YOUTUBE = [
     name: 'Elena & Derek — Ultima llamada',
     added: '2026-09-22',
     seconds: 224,
-    loops: 0,
+    loops: 1,
     style: 'bachata',
   },
 ]

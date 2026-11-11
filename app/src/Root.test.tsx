@@ -7,6 +7,7 @@ import { getClip } from './clips/clip.factory'
 import { holdsNothing, noThumbnails } from './clips/clipCache.factory'
 import { localOpenedStore } from './clips/openedStore'
 import { DEMO_CLIP, DEMO_YOUTUBE } from './demo/demoClip'
+import demoLoops from './demo/demoLoops.json'
 import type { DriveApi } from './drive/driveApi'
 import { aDriveApi } from './drive/driveApi.factory'
 import { DriveSessionProvider } from './drive/DriveSessionProvider'
@@ -239,6 +240,28 @@ describe('the demo clip', () => {
 /* The loops are the product. A visitor who saves one and wanders back to the
    gallery must find it still there, as they would on any site that remembers
    them — and a reload is not leaving. */
+/* #63. A visitor opens the demo onto loops already made — the moves picked
+   out of each video — rather than onto clips with nothing in them. */
+describe('the loops the demo ships with', () => {
+  it('are counted on each tile they belong to', async () => {
+    renderRootAt('/demo')
+    await theDemoTile()
+    const shipped = Object.entries(demoLoops.clips)
+
+    expect(shipped).not.toHaveLength(0)
+
+    for (const [clipId, loops] of shipped) {
+      const name =
+        DEMO_YOUTUBE.find(({ videoId }) => `yt:${videoId}` === clipId)?.name ?? DEMO_CLIP.name
+      const tile = screen.getByRole('link', { name: new RegExp(name) })
+
+      await waitFor(() => {
+        expect(tile).toHaveTextContent(`(${loops.length})`)
+      })
+    }
+  })
+})
+
 describe('loops saved in the demo', () => {
   it('are still there after a trip back to the gallery', async () => {
     const { container } = renderRootAt('/demo')
