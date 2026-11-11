@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { inMemoryStorage } from '../drive/keyValueStorage.factory'
 import { getLoop } from '../loops/loop.factory'
-import { applyToLoops, readLoops } from '../loops/driveLoops'
+import { applyToLoops, LOOPS_FILE, readLoops } from '../loops/driveLoops'
+import { SCHEMA, serialiseLoops } from '../loops/loopsFile'
 import { withLoop } from '../loops/loopsChange'
 import type { DemoClip, DemoYouTube } from './demoDriveApi'
 import { demoDriveApi } from './demoDriveApi'
@@ -30,15 +31,27 @@ const aDemoVideo = (overrides: Partial<DemoYouTube> = {}): DemoYouTube => ({
 const clipBytes = new Blob([new Uint8Array(12)], { type: 'video/mp4' })
 const aStill = new Blob([new Uint8Array(3)], { type: 'image/jpeg' })
 
+const theBundledLoops = {
+  [LOOPS_FILE]: serialiseLoops({
+    schema: SCHEMA,
+    clips: {
+      'yt:l-H1OAu9N28': [{ id: 'cambre', name: 'Cambré', a: 18.8, b: 45.76, speed: 1 }],
+    },
+    touched: {},
+  }),
+}
+
 const aDemoApi = ({
   storage = inMemoryStorage(),
   fetchBytes = vi.fn(async () => clipBytes),
   capture = vi.fn(async (_bytes: Blob): Promise<Blob | null> => aStill),
   youtube = [] as readonly DemoYouTube[],
+  bundled = {} as Readonly<Record<string, string>>,
 } = {}) =>
   demoDriveApi({
     clip: theDemoClip,
     youtube,
+    bundled,
     storage,
     fetchBytes,
     capture,
@@ -219,12 +232,51 @@ describe('the demo clip’s still', () => {
    everything the player does with them — save, correct, remove — works in the
    demo without a line of it knowing. */
 describe('the demo’s saved loops', () => {
-  it('start empty', async () => {
+  it('start empty when the site bundles none', async () => {
     const api = aDemoApi()
 
     expect(await readLoops(api, A_TOKEN, await folderOf(api))).toMatchObject({
       readable: true,
       loops: { clips: {} },
+    })
+  })
+
+  /* #63. A visitor cannot reach anyone's Drive, so the loops the demo opens
+     with ship with the site. */
+  it('start from the loops bundled with the site', async () => {
+    const api = aDemoApi({ bundled: theBundledLoops })
+
+    expect(await readLoops(api, A_TOKEN, await folderOf(api))).toMatchObject({
+      loops: { clips: { 'yt:l-H1OAu9N28': [{ id: 'cambre', name: 'Cambré' }] } },
+    })
+  })
+
+  it('keep a visitor’s loop beside the bundled ones', async () => {
+    const api = aDemoApi({ bundled: theBundledLoops })
+    const folder = await folderOf(api)
+
+    await applyToLoops(api, A_TOKEN, folder, (held) =>
+      withLoop(held, 'yt:l-H1OAu9N28', getLoop({ id: 'mine' })),
+    )
+
+    expect(await readLoops(api, A_TOKEN, folder)).toMatchObject({
+      loops: { clips: { 'yt:l-H1OAu9N28': [{ id: 'cambre' }, { id: 'mine' }] } },
+    })
+  })
+
+  /* One visitor's saves are theirs: the next browser starts from what the
+     site ships, not from what someone else did with it. */
+  it('start from the bundled loops again in a browser that has saved none', async () => {
+    const before = aDemoApi({ bundled: theBundledLoops })
+
+    await applyToLoops(before, A_TOKEN, await folderOf(before), (held) =>
+      withLoop(held, 'yt:l-H1OAu9N28', getLoop({ id: 'mine' })),
+    )
+
+    const elsewhere = aDemoApi({ bundled: theBundledLoops, storage: inMemoryStorage() })
+
+    expect(await readLoops(elsewhere, A_TOKEN, await folderOf(elsewhere))).toMatchObject({
+      loops: { clips: { 'yt:l-H1OAu9N28': [{ id: 'cambre' }] } },
     })
   })
 

@@ -31,6 +31,10 @@ export type DemoYouTube = {
 type Deps = {
   readonly clip: DemoClip
   readonly youtube: readonly DemoYouTube[]
+  /* #63. Files the site ships, by name, that the demo starts from — the loops
+     a visitor opens onto. Read until the visitor writes a copy of their own,
+     never written. */
+  readonly bundled: Readonly<Record<string, string>>
   /* Where the loops live — the dancer's own `localStorage`, under a prefix of
      its own, so a visitor's loops survive a reload the way a normal site
      remembers you, and never reach the real library's keys. */
@@ -70,16 +74,23 @@ const refuse = (what: string) =>
 export const demoDriveApi = ({
   clip,
   youtube,
+  bundled,
   storage,
   fetchBytes,
   capture,
   toUrl,
   releaseUrl,
 }: Deps): DriveApi => {
+  /* The visitor's copy if they have one, else what the site ships, at
+     version 0 — so their first write is version 1 and takes over from it. */
   const read = (name: string): Stored | null => {
     const raw = storage.getItem(fileKey(name))
 
-    return raw === null ? null : (JSON.parse(raw) as Stored)
+    if (raw !== null) return JSON.parse(raw) as Stored
+
+    const shipped = bundled[name]
+
+    return shipped === undefined ? null : { version: '0', body: shipped }
   }
 
   const write = (name: string, body: string): StoredJson => {

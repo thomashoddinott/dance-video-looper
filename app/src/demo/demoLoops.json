@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "clips": {
+    "yt:l-H1OAu9N28": [
+      { "id": "demo-bachata-cambre", "name": "Cambré", "a": 18.8, "b": 45.76, "speed": 1 },
+      { "id": "demo-bachata-body-isolations", "name": "Body Isolations", "a": 45.76, "b": 72.68, "speed": 1 },
+      { "id": "demo-bachata-dip", "name": "Dip", "a": 72.68, "b": 103, "speed": 1 },
+      { "id": "demo-bachata-side-body-wave", "name": "Side Body Wave", "a": 103, "b": 130.16, "speed": 1 },
+      { "id": "demo-bachata-break-forward-slide", "name": "Break Forward + Slide", "a": 130.16, "b": 156.84, "speed": 1 },
+      { "id": "demo-bachata-pinch-chest-isolation", "name": "Pinch + Chest Isolation", "a": 178.48, "b": 205.48, "speed": 1 },
+      { "id": "demo-bachata-head-roll", "name": "Head Roll", "a": 205.48, "b": 232.52, "speed": 1 },
+      { "id": "demo-bachata-booty-roll", "name": "Booty Roll", "a": 232.52, "b": 260.4, "speed": 1 },
+      { "id": "demo-bachata-break-forward-turn", "name": "Break Forward + 180°/360°", "a": 267.68, "b": 284.68, "speed": 1 },
+      { "id": "demo-bachata-shadow-position", "name": "Shadow Position", "a": 284.68, "b": 310.76, "speed": 1 },
+      { "id": "demo-bachata-combine-the-moves", "name": "Bonus: Combine The Moves", "a": 310.76, "b": 331.6, "speed": 1 }
+    ],
+    "yt:CkZO6nyJwjw": [
+      { "id": "demo-salsa-choreo", "name": "Choreo", "a": 0, "b": 10, "speed": 1 }
+    ],
+    "yt:mBHXNXJOF84": [
+      { "id": "demo-elena-derek-loop-1", "name": "Loop 1", "a": 105, "b": 125, "speed": 1 }
+    ]
+  },
+  "touched": {}
+}

@@ -12,9 +12,11 @@ import { browserDriveApi } from '../drive/driveApi'
 import { useDriveSession } from '../drive/driveSession'
 import { isConnected } from '../drive/session'
 import type { KeyValueStorage } from '../drive/tokenStore'
+import { LOOPS_FILE } from '../loops/driveLoops'
 import { localLoopsCache } from '../loops/loopsCache'
 import { DEMO_CLIP, DEMO_YOUTUBE } from './demoClip'
 import { demoDriveApi } from './demoDriveApi'
+import demoLoops from './demoLoops.json'
 import { DemoSession } from './DemoSession'
 import { prefixedStorage } from './prefixedStorage'
 
@@ -100,6 +102,9 @@ export function DemoApp({
       driveApi: demoDriveApi({
         clip: DEMO_CLIP,
         youtube: DEMO_YOUTUBE,
+        /* #63. The loops a visitor opens onto. Edit `demoLoops.json` to change
+           them; it is `loops.json`'s own shape. */
+        bundled: { [LOOPS_FILE]: JSON.stringify(demoLoops) },
         storage: kept,
         fetchBytes,
         capture,
