@@ -96,14 +96,6 @@ describe('a library with nothing in it', () => {
 
     expect(theLoadingNotice()).not.toBeInTheDocument()
   })
-
-  it('still carries the standing note about why the grid can only fill this way', () => {
-    renderLibrary(loaded(LOADING, []))
-
-    expect(
-      screen.getByText(/only sees files it uploaded itself/i),
-    ).toBeInTheDocument()
-  })
 })
 
 describe('a library that could not be read', () => {

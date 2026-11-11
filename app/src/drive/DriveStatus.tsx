@@ -36,7 +36,7 @@ export function DriveStatus() {
   const connected = isConnected(status)
 
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
+    <div className="mt-6 flex flex-wrap items-center gap-2">
       <p role="status" className="text-xs text-ink/40">
         {renewed && connected ? `${NOTICES[status]} ${RENEWED}` : NOTICES[status]}
       </p>

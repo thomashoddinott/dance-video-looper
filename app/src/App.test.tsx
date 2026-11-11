@@ -300,18 +300,18 @@ describe('the Clips screen', () => {
     expect(screen.getByRole('button', { name: 'Add clip' })).toBeInTheDocument()
   })
 
-  it('explains that clips live in Drive and only arrive through the app', () => {
+  /* #61. The note on where clips live and how they arrive was helper copy
+     the screen reads better without. */
+  it('says nothing about where clips are kept', () => {
     renderAppAt('/')
 
-    const note = screen.getByText(/clips live in google drive/i)
-
-    expect(note).toHaveTextContent(/only sees files it uploaded itself/i)
+    expect(screen.queryByText(/clips live in google drive/i)).not.toBeInTheDocument()
   })
 
   /* Search reads before ordering, and both read before the grid they act on: you
      narrow the library, then say how what is left should be arranged. The style
      chips share the ordering's row, at its far end (#43). */
-  it('lays the shell out heading, search, ordering, style, clips, then the note', () => {
+  it('lays the shell out heading, search, ordering, style, then clips', () => {
     renderAppAt('/')
 
     const order = inDocumentOrder({
@@ -320,10 +320,9 @@ describe('the Clips screen', () => {
       ordering: screen.getByRole('toolbar', { name: 'Order clips' }),
       style: screen.getByRole('group', { name: 'Filter by style' }),
       clips: screen.getByRole('list', { name: 'Clips' }),
-      note: screen.getByText(/clips live in google drive/i),
     })
 
-    expect(order).toEqual(['heading', 'search', 'ordering', 'style', 'clips', 'note'])
+    expect(order).toEqual(['heading', 'search', 'ordering', 'style', 'clips'])
   })
 })
 
