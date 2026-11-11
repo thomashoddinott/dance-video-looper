@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { getClip } from './clips/clip.factory'
 import { holdsNothing, noThumbnails } from './clips/clipCache.factory'
 import { localOpenedStore } from './clips/openedStore'
-import { DEMO_CLIP } from './demo/demoClip'
+import { DEMO_CLIP, DEMO_YOUTUBE } from './demo/demoClip'
 import type { DriveApi } from './drive/driveApi'
 import { aDriveApi } from './drive/driveApi.factory'
 import { DriveSessionProvider } from './drive/DriveSessionProvider'
@@ -102,6 +102,14 @@ const tiles = () =>
 const theDemoTile = () =>
   screen.findByRole('link', { name: new RegExp(DEMO_CLIP.name) })
 
+const aDemoVideo = () => {
+  const [video] = DEMO_YOUTUBE
+
+  if (video === undefined) throw new Error('the demo holds no YouTube video')
+
+  return video
+}
+
 const panel = () => within(screen.getByRole('region', { name: 'Saved loops' }))
 
 /* The clip is downloaded before it plays, and jsdom has no media stack — so
@@ -125,14 +133,35 @@ const saveALoop = async () => {
 }
 
 describe('going into the demo', () => {
-  it('shows a gallery holding only the demo clip', async () => {
+  it('shows a gallery holding the demo clip and the YouTube videos', async () => {
     renderRootAt('/')
 
     await userEvent.click(screen.getByRole('link', { name: 'Demo mode' }))
 
     await theDemoTile()
     expect(where()).toBe('/demo')
-    expect(tiles()).toHaveLength(1)
+    expect(tiles().map((tile) => within(tile).getByRole('link').textContent)).toEqual([
+      expect.stringContaining(DEMO_CLIP.name),
+      ...DEMO_YOUTUBE.map(({ name }) => expect.stringContaining(name)),
+    ])
+  })
+
+  /* #58. Played from YouTube, so there is nothing to fetch — and nothing to
+     fail at fetching, which an entry the player took for a clip would. */
+  it('opens a YouTube video in the player, with nothing to fetch', async () => {
+    renderRootAt('/demo')
+    const video = aDemoVideo()
+
+    await userEvent.click(
+      await screen.findByRole('link', { name: new RegExp(video.name) }),
+    )
+
+    expect(where()).toBe(`/demo/clip/yt:${video.videoId}`)
+    expect(
+      await screen.findByText(video.name, { selector: 'header *' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/fetching this clip/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('says it is a demo, so no one mistakes it for a real library', async () => {
