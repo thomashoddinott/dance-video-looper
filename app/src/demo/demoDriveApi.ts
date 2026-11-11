@@ -35,9 +35,8 @@ type Deps = {
      a visitor opens onto. Read until the visitor writes a copy of their own,
      never written. */
   readonly bundled: Readonly<Record<string, string>>
-  /* Where the loops live — the dancer's own `localStorage`, under a prefix of
-     its own, so a visitor's loops survive a reload the way a normal site
-     remembers you, and never reach the real library's keys. */
+  /* Where a visitor's loops live while they stay in the demo — memory that
+     goes when they leave (#66), so the next visit opens on `bundled` again. */
   readonly storage: KeyValueStorage
   readonly fetchBytes: (url: string) => Promise<Blob>
   readonly capture: ThumbnailCapture
@@ -70,7 +69,7 @@ const refuse = (what: string) =>
 /* A `DriveApi` for a visitor with no Google account. The player, the loops and
    the gallery all run the code they run against Drive; only this answers
    differently. It holds one clip and a few YouTube videos, keeps nothing a
-   visitor adds, deletes nothing, and keeps `loops.json` in the browser. */
+   visitor adds, deletes nothing, and keeps `loops.json` in `storage`. */
 export const demoDriveApi = ({
   clip,
   youtube,

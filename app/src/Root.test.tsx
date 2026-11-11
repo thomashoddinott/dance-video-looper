@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getClip } from './clips/clip.factory'
 import { holdsNothing, noThumbnails } from './clips/clipCache.factory'
@@ -13,7 +13,7 @@ import { aDriveApi } from './drive/driveApi.factory'
 import { DriveSessionProvider } from './drive/DriveSessionProvider'
 import type { TokenSource } from './drive/gisTokenSource'
 import { inMemoryStorage } from './drive/keyValueStorage.factory'
-import type { KeyValueStorage, TokenStore } from './drive/tokenStore'
+import type { TokenStore } from './drive/tokenStore'
 import { aLoopsCache } from './loops/loopsCache.factory'
 import { Root } from './Root'
 import { playable } from './test/media'
@@ -58,19 +58,29 @@ const Where = () => <p data-testid="where">{useLocation().pathname}</p>
 
 const where = () => screen.getByTestId('where').textContent
 
+/* The browser's own `localStorage`, fresh for each test and the same one
+   across renders inside it — so a test can reload against it, and catch
+   anything written to it (#66). The test environment's own is not a working
+   one (`keyValueStorage.factory`). */
+beforeEach(() => {
+  vi.stubGlobal('localStorage', inMemoryStorage())
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 const renderRootAt = (
   path: string,
   {
     tokenSource = sourceGranting(),
     tokenStore = nothingKept(),
     liveApi = theDancersDrive(),
-    storage = inMemoryStorage(),
     fetchBytes = vi.fn(async (_url: string) => clipBytes),
   }: {
     readonly tokenSource?: TokenSource
     readonly tokenStore?: TokenStore
     readonly liveApi?: DriveApi
-    readonly storage?: KeyValueStorage
     readonly fetchBytes?: (url: string) => Promise<Blob>
   } = {},
 ) =>
@@ -86,7 +96,6 @@ const renderRootAt = (
             thumbnailCache: noThumbnails,
           }}
           demo={{
-            storage,
             fetchBytes,
             capture: async () => null,
             urls: { toUrl: () => 'blob:demo-clip', releaseUrl: () => {} },
@@ -283,35 +292,71 @@ describe('loops saved in the demo', () => {
     ).toBeInTheDocument()
   })
 
-  it('are still there after a reload', async () => {
-    const storage = inMemoryStorage()
-    const first = renderRootAt('/demo', { storage })
+  /* #66. The demo is not persistent: a visitor who comes back finds it as
+     they first did, on the loops it ships with. */
+  it('are gone after a reload', async () => {
+    const first = renderRootAt('/demo')
 
     await userEvent.click(await theDemoTile())
     await aPlayingDemoClip(first.container)
     await saveALoop()
     first.unmount()
 
-    const second = renderRootAt(`/demo/clip/${DEMO_CLIP.id}`, { storage })
+    const second = renderRootAt(`/demo/clip/${DEMO_CLIP.id}`)
     await aPlayingDemoClip(second.container)
 
-    expect(
-      await panel().findByRole('button', { name: /^Loop 1/ }),
-    ).toBeInTheDocument()
+    expect(panel().queryByRole('button', { name: /^Loop 1/ })).not.toBeInTheDocument()
   })
 
-  it('are kept apart from the dancer’s own, under keys of their own', async () => {
-    const storage = inMemoryStorage()
-    const setItem = vi.spyOn(storage, 'setItem')
-    const { container } = renderRootAt('/demo', { storage })
+  it('are gone after leaving the demo and coming back', async () => {
+    const { container } = renderRootAt('/demo')
+
+    await userEvent.click(await theDemoTile())
+    await aPlayingDemoClip(container)
+    await saveALoop()
+    await userEvent.click(screen.getByRole('link', { name: 'Back to clips' }))
+    await userEvent.click(await screen.findByRole('link', { name: 'Exit demo' }))
+    await userEvent.click(screen.getByRole('link', { name: 'Demo mode' }))
+    await userEvent.click(await theDemoTile())
+    await aPlayingDemoClip(container)
+
+    expect(panel().queryByRole('button', { name: /^Loop 1/ })).not.toBeInTheDocument()
+  })
+
+  it('are never written to this browser', async () => {
+    const setItem = vi.spyOn(localStorage, 'setItem')
+    const { container } = renderRootAt('/demo')
 
     await userEvent.click(await theDemoTile())
     await aPlayingDemoClip(container)
     await saveALoop()
 
-    expect(setItem).toHaveBeenCalled()
-    setItem.mock.calls.forEach(([key]) => {
-      expect(key).toMatch(/^looper\.demo\./)
+    expect(setItem).not.toHaveBeenCalled()
+  })
+
+  /* #66's reproduction: a browser that saved in the demo before it stopped
+     keeping anything. Its old keys are left where they are and never read. */
+  it('do not hide the shipped loops in a browser that saved in the demo before', async () => {
+    localStorage.setItem(
+      'looper.demo.demo.file.loops.json',
+      JSON.stringify({
+        version: '1',
+        body: JSON.stringify({
+          schema: 1,
+          clips: { [DEMO_CLIP.id]: [{ id: 'old', name: 'Old', a: 0, b: 5, speed: 1 }] },
+          touched: {},
+        }),
+      }),
+    )
+
+    renderRootAt('/demo')
+    await theDemoTile()
+    const shipped = demoLoops.clips['yt:l-H1OAu9N28']
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('link', { name: /Bachata Sensual/ }),
+      ).toHaveTextContent(`(${shipped.length})`)
     })
   })
 })
