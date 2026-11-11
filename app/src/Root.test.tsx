@@ -189,6 +189,25 @@ describe('going into the demo', () => {
     expect(tokenSource).not.toHaveBeenCalled()
   })
 
+  /* #58. Salsa and bachata both, so the filter has something to do. */
+  it('narrows the gallery to one style', async () => {
+    renderRootAt('/demo')
+    await theDemoTile()
+
+    await userEvent.click(
+      within(screen.getByRole('group', { name: 'Filter by style' })).getByRole(
+        'button',
+        { name: 'Salsa' },
+      ),
+    )
+
+    expect(tiles().map((tile) => within(tile).getByRole('link').textContent)).toEqual(
+      DEMO_YOUTUBE.filter(({ style }) => style === 'salsa').map(({ name }) =>
+        expect.stringContaining(name),
+      ),
+    )
+  })
+
   it('lands a dancer who is already signed in on their own library', async () => {
     renderRootAt('/demo', { tokenStore: connectedEarlier() })
 

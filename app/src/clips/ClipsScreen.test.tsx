@@ -882,7 +882,7 @@ describe('setting a clip’s style', () => {
   })
 })
 
-/* #33. A visitor gets one clip to practise on and nothing to manage: the
+/* #33. A visitor gets clips to practise on and nothing to manage: the
    demo's api keeps no clip and deletes none, so offering either would be a
    control that could only fail. And there is no Drive in the demo to explain. */
 describe('the grid in the demo', () => {
@@ -936,13 +936,14 @@ describe('the grid in the demo', () => {
     ).not.toBeInTheDocument()
   })
 
-  /* #43. One clip with no style to change has nothing to filter. */
-  it('offers no style filter', () => {
+  /* #58. The demo holds salsa and bachata, so there is something to narrow
+     by — narrowing changes nothing that is kept. */
+  it('offers the style filter', () => {
     renderTheDemo()
 
     expect(
-      screen.queryByRole('group', { name: 'Filter by style' }),
-    ).not.toBeInTheDocument()
+      screen.getByRole('group', { name: 'Filter by style' }),
+    ).toBeInTheDocument()
   })
 
   /* #43. The demo's api keeps no style, so a label would be a control that

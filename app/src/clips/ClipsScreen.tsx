@@ -121,8 +121,9 @@ export function ClipsScreen({
      upload that failed. The screen's own notices below are the ones it can see
      for itself: a duplicate, and a file that would not decode. */
   readonly notice?: string | null
-  /* #33: the grid a visitor sees at `/demo`. One bundled clip and nothing to
-     manage — the demo keeps no clip and deletes none, so Add clip and the ✕
+  /* #33: the grid a visitor sees at `/demo`. A bundled clip and a few YouTube
+     videos (#58), and nothing to manage — the demo keeps no clip and deletes
+     none, so Add clip and the ✕
      would be controls that could only fail — and no Drive to talk about. */
   readonly demo?: boolean
 }) {
@@ -425,24 +426,23 @@ export function ClipsScreen({
               two groups apart in the hand. An ordering is always chosen; a style
               need not be.
 
-              Absent in the demo, whose one clip has no style to narrow by. */}
-          {!demo && (
-            <div role="group" aria-label="Filter by style" className="ml-auto flex gap-1.5">
-              {STYLE_CHIPS.map((chip) => (
-                <button
-                  key={chip.id}
-                  type="button"
-                  aria-pressed={chip.id === picked}
-                  onClick={() => pick(chip.id === picked ? undefined : chip.id)}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    chip.id === picked ? chip.picked : chip.unpicked
-                  }`}
-                >
-                  {chip.label}
-                </button>
-              ))}
-            </div>
-          )}
+              In the demo too (#58), which holds salsa and bachata: narrowing
+              keeps nothing, so it is the one style control a visitor gets. */}
+          <div role="group" aria-label="Filter by style" className="ml-auto flex gap-1.5">
+            {STYLE_CHIPS.map((chip) => (
+              <button
+                key={chip.id}
+                type="button"
+                aria-pressed={chip.id === picked}
+                onClick={() => pick(chip.id === picked ? undefined : chip.id)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  chip.id === picked ? chip.picked : chip.unpicked
+                }`}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* An empty grid is only honest about a library that is empty. Under a
