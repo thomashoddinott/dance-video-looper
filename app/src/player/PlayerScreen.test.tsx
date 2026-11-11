@@ -1705,10 +1705,12 @@ describe('the saved loops panel', () => {
     expect(nameField()).toHaveAttribute('placeholder', 'Loop 1')
   })
 
-  it('says what to do rather than showing an empty box', () => {
+  /* #61. No hint line under the field: with nothing saved, the list is
+     empty, and the field and Save say what to do. */
+  it('lists nothing until a loop is saved', () => {
     aReadyClip({ seconds: 12 })
 
-    expect(panel().getByText(/drag a and b, then save/i)).toBeInTheDocument()
+    expect(panel().queryAllByRole('listitem')).toHaveLength(0)
   })
 
   /* Gated exactly as the transport, the slider and the stepper already are. A
@@ -1729,8 +1731,7 @@ describe('the saved loops panel', () => {
 
 /* What each entry says, read off the control that recalls it rather than off the
    row — the row also holds the × that removes it, and a list of loops is not the
-   place to be asserting on that glyph. The empty-state row has no control at all,
-   so it drops out and an empty list reads as empty. */
+   place to be asserting on that glyph. */
 const savedEntries = () =>
   panel()
     .queryAllByRole('listitem')
@@ -2065,13 +2066,13 @@ describe('removing a saved loop', () => {
     expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '12')
   })
 
-  it('says what to do again once the last one is gone', async () => {
+  it('lists nothing once the last one is gone', async () => {
     aReadyClip({ seconds: 12 })
 
     await userEvent.click(saveControl())
     await userEvent.click(removeControl('Loop 1'))
 
-    expect(panel().getByText(/drag a and b, then save/i)).toBeInTheDocument()
+    expect(panel().queryAllByRole('listitem')).toHaveLength(0)
   })
 })
 
