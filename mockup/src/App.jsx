@@ -81,9 +81,10 @@ function App() {
   const [clips, setClips] = useState(SEED_CLIPS)
   const [clip, setClip] = useState(null)
   /* Above the two screens, because the grid is unmounted while the player is up
-     and **Last opened** is a chip you pick *before* opening a clip and want to
-     still be on when you come back (#16). */
-  const [sort, setSort] = useState('added')
+     and a chip picked *before* opening a clip is one you want to still be on
+     when you come back (#16). Starts on **Last opened**, so the grid opens on
+     the clip you were just practising (#73). */
+  const [sort, setSort] = useState('opened')
   /* Up here for the same reason as `sort` (#43): a dancer who narrowed the
      grid to bachata, opened a clip and came back is still practising bachata. */
   const [filter, setFilter] = useState('all')

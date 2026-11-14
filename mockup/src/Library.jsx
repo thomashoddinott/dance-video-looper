@@ -13,8 +13,9 @@ import { lookUp, thumbnailFor, videoIdFrom } from './youtube.js'
    never-opened tail below every clip that has been — and still draws it, because
    a clip vanishing from the grid under one chip would read as a clip deleted.
 
-   Last of the four so that `SORTS[0]` stays Recent: it is the default, and it
-   is where the grid jumps back to after an add. */
+   Last of the four so that Recent still leads the row, and Recent is where the
+   grid jumps back to after an add. The grid starts on Last opened all the same
+   (#73): that is `App`'s initial `sort`, not the first entry here. */
 const SORTS = [
   { id: 'added', label: 'Recent', compare: (a, b) => b.added.localeCompare(a.added) },
   { id: 'name', label: 'Name', compare: (a, b) => a.name.localeCompare(b.name) },

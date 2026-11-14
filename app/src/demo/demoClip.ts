@@ -23,7 +23,9 @@ export const DEMO_CLIP: DemoClip = {
    embedding — check that before adding another (`youtube.ts`'s oEmbed).
 
    `seconds` read off each watch page. `added` falls before the clip's, so
-   the clip leads the grid under Recent. */
+   the clip leads the grid under Recent. It leads on arrival too: a visit
+   opens on Last opened (#73) with nothing opened yet, which ties every entry
+   and keeps the order they are listed in — the clip, then these as written. */
 export const DEMO_YOUTUBE: readonly DemoYouTube[] = [
   {
     videoId: 'l-H1OAu9N28',
