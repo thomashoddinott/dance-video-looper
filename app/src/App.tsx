@@ -64,7 +64,7 @@ export function App({
   /* The cache goes in as well as down to the player: a deleted clip's bytes are
      budget held against something that is not coming back, and this is the only
      place that holds both the library and the cache. */
-  const { library, notice, add, remove, restyle, rename, addYouTube } = useLibrary(driveApi, {
+  const { library, notice, add, remove, restyle, regroup, rename, addYouTube } = useLibrary(driveApi, {
     cache: clipCache,
   })
   /* Beside the library rather than inside the player, because both screens
@@ -179,6 +179,9 @@ export function App({
             }}
             onRename={(clip, name) => {
               void rename(clip, name)
+            }}
+            onRegroup={(clip, group) => {
+              void regroup(clip, group)
             }}
             onAddYouTube={(videoId, title) => {
               void addYouTube(videoId, title)

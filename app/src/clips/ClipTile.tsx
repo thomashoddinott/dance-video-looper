@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Link } from 'react-router'
 
 import type { Clip } from './clip'
+import { fitsAsGroupName } from './clipGroups'
 import type { DanceStyle } from './danceStyle'
 import { DANCE_STYLES } from './danceStyle'
 import { formatAdded, formatDuration } from './format'
@@ -23,7 +24,7 @@ const STYLE_ANSWERS: readonly {
 ]
 
 /* What a tile can ask about its clip. */
-type Question = 'delete' | 'style' | 'rename'
+type Question = 'delete' | 'style' | 'rename' | 'group'
 
 /* Visible on a phone and hidden until asked for on a laptop. The ticket asked
    for a hover reveal, and hover is exactly the interaction half this app's
@@ -40,6 +41,8 @@ export function ClipTile({
   onDelete,
   onRestyle,
   onRename,
+  groups = [],
+  onRegroup,
 }: {
   readonly clip: Clip
   /* The still stored for this clip (#77), or absent for one that has none —
@@ -60,6 +63,11 @@ export function ClipTile({
   /* #54. Handed the new name already trimmed, and only when it is new.
      Absent where the name cannot be changed, for `onRestyle`'s reason. */
   readonly onRename?: ((clip: Clip, name: string) => void) | undefined
+  /* #70. Every group, newest first, for the chooser to offer. */
+  readonly groups?: readonly string[]
+  /* #70. Undefined takes the clip out of its group. Absent where the group
+     cannot be changed, for `onRestyle`'s reason. */
+  readonly onRegroup?: ((clip: Clip, group: string | undefined) => void) | undefined
 }) {
   /* The question lives on the tile that asked it, because that is all it is:
      one tile's ephemeral state, meaningless anywhere else and gone the moment
@@ -135,6 +143,40 @@ export function ClipTile({
         </p>
         <p className="text-xs text-ink/50">{formatAdded(clip.added)}</p>
       </Link>
+
+      {/* #70. Under the date rather than on the poster: its four corners are
+          taken, and a group is read with the clip's name. A sibling of the
+          link, for the ✕'s reason. Absent while the bytes are going up, for the
+          style's: there is no Drive file yet to carry it. */}
+      {uploading === undefined && onRegroup !== undefined && (
+        <button
+          type="button"
+          aria-label={`Group of ${clip.name}: ${clip.group ?? 'none'}`}
+          aria-expanded={asked === 'group'}
+          onClick={() => {
+            ask('group')
+          }}
+          className={`mt-0.5 block max-w-full truncate rounded px-1.5 py-0.5 text-left text-[11px] font-semibold ${
+            clip.group
+              ? 'bg-accent/15 text-accent hover:bg-accent/25'
+              : 'text-ink/40 hover:text-ink'
+          }`}
+        >
+          {clip.group ?? '+ Group'}
+        </button>
+      )}
+
+      {asked === 'group' && (
+        <GroupQuestion
+          clip={clip}
+          groups={groups}
+          onChoose={(group) => {
+            answered()
+            onRegroup?.(clip, group)
+          }}
+          onCancel={answered}
+        />
+      )}
 
       {/* A sibling of the link, never a child of it: a button inside an anchor
           is invalid markup, and the router would swallow the click besides. The
@@ -290,6 +332,95 @@ export function ClipTile({
         </div>
       )}
     </li>
+  )
+}
+
+/* #70. Over the tile, as the style chooser is: a new group named in place,
+   every group there is, newest first, the current one ringed, and a way out
+   of the group the clip is in. Its own component so the field is mounted only
+   while the question is open, which is how long a half-typed name lasts.
+   Scrolls inside the tile once there are more groups than it holds. */
+function GroupQuestion({
+  clip,
+  groups,
+  onChoose,
+  onCancel,
+}: {
+  readonly clip: Clip
+  readonly groups: readonly string[]
+  readonly onChoose: (group: string | undefined) => void
+  readonly onCancel: () => void
+}) {
+  const [typed, setTyped] = useState('')
+  const name = typed.trim()
+  const canAdd = name !== '' && fitsAsGroupName(name)
+
+  return (
+    <div
+      role="group"
+      aria-label={`Choose a group for ${clip.name}`}
+      className="absolute inset-x-0 top-0 flex aspect-[9/16] flex-col items-center gap-1.5 overflow-y-auto rounded-xl bg-shell/95 px-2 py-3 text-center"
+    >
+      <p className="text-xs font-semibold">Group</p>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (canAdd) onChoose(name)
+        }}
+        className="flex w-full shrink-0 gap-1.5"
+      >
+        {/* 16px on a phone so iOS does not zoom the page in on it (#20). */}
+        <input
+          value={typed}
+          onChange={(event) => {
+            setTyped(event.target.value)
+          }}
+          aria-label="New group"
+          placeholder="New group"
+          className="min-w-0 flex-1 rounded-lg bg-ink/10 px-2 py-1.5 text-base text-ink outline-none placeholder:text-ink/40 sm:text-xs"
+        />
+        <button
+          type="submit"
+          disabled={!canAdd}
+          className="rounded-lg bg-accent px-2.5 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent-2 disabled:opacity-40"
+        >
+          Add
+        </button>
+      </form>
+      {groups.map((group) => (
+        <button
+          key={group}
+          type="button"
+          aria-pressed={clip.group === group}
+          onClick={() => {
+            onChoose(group)
+          }}
+          className={`w-full shrink-0 truncate rounded-lg bg-control px-2 py-1.5 text-xs font-semibold text-ink/80 hover:bg-control-hi ${
+            clip.group === group ? 'ring-2 ring-accent ring-offset-2 ring-offset-shell' : ''
+          }`}
+        >
+          {group}
+        </button>
+      ))}
+      {clip.group !== undefined && (
+        <button
+          type="button"
+          onClick={() => {
+            onChoose(undefined)
+          }}
+          className="w-full shrink-0 rounded-lg bg-control px-2 py-1.5 text-xs font-semibold text-ink/60 hover:bg-control-hi"
+        >
+          Take out of group
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onCancel}
+        className="shrink-0 text-[11px] text-ink/50 underline underline-offset-2 hover:text-ink"
+      >
+        Cancel
+      </button>
+    </div>
   )
 }
 

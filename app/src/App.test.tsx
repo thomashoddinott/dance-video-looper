@@ -1135,6 +1135,76 @@ describe('setting a clip’s style', () => {
   })
 })
 
+/* #70. The tile asks, the library stores — joined here, as the style is. */
+describe('putting a clip in a group', () => {
+  const A_CLIP_IN_DRIVE = getClip({
+    id: 'shuffle-drill',
+    name: 'Shuffle drill',
+    driveId: 'drive-shuffle',
+  })
+
+  const theGroupLabel = (name: string) =>
+    within(tileFor(name)).getByRole('button', { name: new RegExp(`^Group of ${name}`) })
+
+  it('stores a new group in Drive, and the tile wears it', async () => {
+    const driveApi = driveHolding([A_CLIP_IN_DRIVE])
+    await renderLibraryWith(probeReading(26), driveApi)
+
+    await userEvent.click(theGroupLabel('Shuffle drill'))
+    await userEvent.type(
+      within(tileFor('Shuffle drill')).getByRole('textbox', { name: 'New group' }),
+      'Tuesday class{Enter}',
+    )
+
+    expect(
+      await within(tileFor('Shuffle drill')).findByRole('button', {
+        name: 'Group of Shuffle drill: Tuesday class',
+      }),
+    ).toBeInTheDocument()
+    expect(driveApi.setGroup).toHaveBeenCalledWith(
+      expect.anything(),
+      'drive-shuffle',
+      'Tuesday class',
+    )
+  })
+
+  it('offers the groups other clips are already in', async () => {
+    const driveApi = driveHolding([
+      A_CLIP_IN_DRIVE,
+      getClip({ id: 'body-roll', name: 'Body roll', driveId: 'drive-roll', group: 'Shines' }),
+    ])
+    await renderLibraryWith(probeReading(26), driveApi)
+
+    await userEvent.click(theGroupLabel('Shuffle drill'))
+    await userEvent.click(
+      within(tileFor('Shuffle drill')).getByRole('button', { name: 'Shines' }),
+    )
+
+    expect(driveApi.setGroup).toHaveBeenCalledWith(expect.anything(), 'drive-shuffle', 'Shines')
+  })
+
+  it('says which clip kept its group when Drive refuses', async () => {
+    await renderLibraryWith(
+      probeReading(26),
+      aDriveApi({
+        listClips: async () => [A_CLIP_IN_DRIVE],
+        setGroup: vi.fn(async () => {
+          throw new Error('Drive said no')
+        }),
+      }),
+    )
+
+    await userEvent.click(theGroupLabel('Shuffle drill'))
+    await userEvent.type(
+      within(tileFor('Shuffle drill')).getByRole('textbox', { name: 'New group' }),
+      'Shines{Enter}',
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Shuffle drill')
+    expect(theGroupLabel('Shuffle drill')).toHaveAccessibleName('Group of Shuffle drill: none')
+  })
+})
+
 /* #54. From the tile here; from the player in `renaming a clip from the
    player` below. */
 describe('renaming a clip from its tile', () => {

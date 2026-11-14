@@ -5,6 +5,7 @@ import { DemoInvite } from '../demo/DemoInvite'
 import { DemoStatus } from '../demo/DemoStatus'
 import { DriveStatus } from '../drive/DriveStatus'
 import type { Clip } from './clip'
+import { groupsOf } from './clipGroups'
 import type { ClipProbe } from './clipProbe'
 import { ClipTile } from './ClipTile'
 import type { DanceStyle, StyleFilter } from './danceStyle'
@@ -78,6 +79,7 @@ export function ClipsScreen({
   onDelete,
   onRestyle,
   onRename,
+  onRegroup,
   onAddYouTube,
   lookUp = lookUpYouTube,
   probe,
@@ -110,6 +112,9 @@ export function ClipsScreen({
   readonly onRestyle: (clip: Clip, style: DanceStyle | undefined) => void
   /* #54. Straight through to the library too. */
   readonly onRename: (clip: Clip, name: string) => void
+  /* #70. Straight through to the library too. Absent, no tile offers a
+     group. */
+  readonly onRegroup?: ((clip: Clip, group: string | undefined) => void) | undefined
   /* #20. A YouTube video by its id and title, once this screen has made sure
      it is new and that YouTube knows it. */
   readonly onAddYouTube: (videoId: string, title: string) => void
@@ -258,6 +263,10 @@ export function ClipsScreen({
   }
 
   const ordering = orderings.find(({ id }) => id === chosen) ?? orderings[0]
+  /* #70. Read off the whole library, not the narrowed grid: a tile's chooser
+     offers every group, whatever the grid is showing. */
+  const groups = groupsOf(clips)
+  const groupNames = groups.map(({ name }) => name)
   /* Narrow, then order — never the other way about. The style and the search
      both narrow the set and the chosen chip decides the order of what is left,
      so the controls compose instead of competing for the same result. */
@@ -483,6 +492,8 @@ export function ClipsScreen({
               onDelete={demo ? undefined : onDelete}
               onRestyle={demo ? undefined : onRestyle}
               onRename={demo ? undefined : onRename}
+              groups={groupNames}
+              onRegroup={demo ? undefined : onRegroup}
             />
           ))}
         </ul>
