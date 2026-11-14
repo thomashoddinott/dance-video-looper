@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { groupsOf } from './clipGroups.js'
+import { GroupChooser, GroupFilter, GroupLabel } from './Groups.jsx'
 import { lookUp, thumbnailFor, videoIdFrom } from './youtube.js'
 
 /* Recent is the day a clip was uploaded and never changes again, so it cannot
@@ -123,11 +125,13 @@ function Thumbnail({ clip }) {
    same constraint bites harder. It is always in the document and only *fades*
    on hover, because a phone has no hover and the phone is half of why the
    product syncs through Drive at all. */
-function ClipTile({ clip, onOpen, onDelete, onStyle, uploading }) {
+function ClipTile({ clip, onOpen, onDelete, onStyle, onGroup, groups, uploading }) {
   const [asking, setAsking] = useState(false)
   /* #43. One question on the tile at a time: the style chooser and the delete
-     prompt cover the same thumbnail, so opening either closes the other. */
+     prompt cover the same thumbnail, so opening either closes the other. The
+     group chooser (#70) is the third. */
   const [choosing, setChoosing] = useState(false)
+  const [choosingGroup, setChoosingGroup] = useState(false)
   const style = styleOf(clip.style)
 
   return (
@@ -176,6 +180,19 @@ function ClipTile({ clip, onOpen, onDelete, onStyle, uploading }) {
         <p className="text-xs text-ink/50">{formatAdded(clip.added)}</p>
       </button>
 
+      {/* #70. Under the date rather than in a corner: all four corners of the
+          poster are taken, and a group is read with the name, not the clip. */}
+      {uploading === undefined && onGroup && (
+        <GroupLabel
+          clip={clip}
+          onAsk={() => {
+            setAsking(false)
+            setChoosing(false)
+            setChoosingGroup((open) => !open)
+          }}
+        />
+      )}
+
       {uploading === undefined && onDelete && (
         <button
           type="button"
@@ -183,6 +200,7 @@ function ClipTile({ clip, onOpen, onDelete, onStyle, uploading }) {
           aria-expanded={asking}
           onClick={() => {
             setChoosing(false)
+            setChoosingGroup(false)
             setAsking((open) => !open)
           }}
           className="absolute top-1.5 right-1.5 rounded-full bg-black/70 px-2 py-0.5 text-lg leading-none text-white/70 opacity-100 transition hover:text-white sm:opacity-0 sm:group-hover/tile:opacity-100 sm:focus-visible:opacity-100 sm:aria-expanded:opacity-100"
@@ -203,6 +221,7 @@ function ClipTile({ clip, onOpen, onDelete, onStyle, uploading }) {
           aria-expanded={choosing}
           onClick={() => {
             setAsking(false)
+            setChoosingGroup(false)
             setChoosing((open) => !open)
           }}
           className={`absolute top-1.5 left-1.5 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
@@ -211,6 +230,18 @@ function ClipTile({ clip, onOpen, onDelete, onStyle, uploading }) {
         >
           {style?.label ?? '+ Style'}
         </button>
+      )}
+
+      {choosingGroup && (
+        <GroupChooser
+          clip={clip}
+          groups={groups}
+          onChoose={(group) => {
+            setChoosingGroup(false)
+            onGroup(clip, group)
+          }}
+          onCancel={() => setChoosingGroup(false)}
+        />
       )}
 
       {/* Every style is drawn in its colour whether or not it is the current
@@ -464,6 +495,9 @@ function Library({
   onAdd,
   onDelete,
   onStyle,
+  onGroup,
+  group,
+  onPickGroup,
 }) {
   /* #33. The product's demo is one bundled clip with nothing to manage — no
      Add clip, no ✕, no Drive footer. The first entry is the mockup's only real
@@ -478,6 +512,10 @@ function Library({
   const nextDriveState = () => setDrive((at) => (at + 1) % DRIVE_STATES.length)
   const signedOut = !DRIVE_STATES[drive].connected && !demo
   const shown = demo ? [clips[0], ...DEMO_YOUTUBE] : signedOut ? [] : clips
+  /* #70. Groups are read off the clips, newest first; the demo has none. A
+     picked group whose last clip has left it is no longer picked. */
+  const groups = demo ? [] : groupsOf(shown)
+  const pickedGroup = groups.some(({ name }) => name === group) ? group : null
   const [query, setQuery] = useState('')
   const [notice, setNotice] = useState(null)
   const [uploading, setUploading] = useState({})
@@ -571,9 +609,15 @@ function Library({
   /* Filter, then order. The style and the search both narrow the set and the
      chosen chip orders what is left, so the controls compose rather than
      compete. */
+  const inGroup = pickedGroup ? inStyle.filter((clip) => clip.group === pickedGroup) : inStyle
+  /* #70: a search matches a group's name as well as a clip's. */
   const found = wanted
-    ? inStyle.filter((clip) => clip.name.toLowerCase().includes(wanted))
-    : inStyle
+    ? inGroup.filter(
+        (clip) =>
+          clip.name.toLowerCase().includes(wanted) ||
+          clip.group?.toLowerCase().includes(wanted),
+      )
+    : inGroup
   const ordered = [...found].sort(active.compare)
 
   /* Reads the real duration off the chosen file before adding it, so the new
@@ -742,6 +786,8 @@ function Library({
           className="mt-3 w-full rounded-lg bg-control px-3 py-2 text-sm text-ink placeholder:text-ink/40"
         />
 
+        <GroupFilter groups={groups} picked={pickedGroup} onPick={onPickGroup} />
+
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {SORTS.map((option) => (
             <button
@@ -802,11 +848,13 @@ function Library({
 
             A style that nothing has yet is the same case (#43), and names the
             style so the dancer can see which control emptied the grid. */}
-        {(wanted || styled) && shown.length > 0 && ordered.length === 0 && (
+        {(wanted || styled || pickedGroup) && shown.length > 0 && ordered.length === 0 && (
           <p className="mt-4 text-xs text-ink/60">
             {wanted
-              ? `No ${styled ? `${styled.noun} ` : ''}clips match “${query.trim()}”.`
-              : styled.none}
+              ? `No ${styled ? `${styled.noun} ` : ''}clips${pickedGroup ? ` in ${pickedGroup}` : ''} match “${query.trim()}”.`
+              : pickedGroup
+                ? `No ${styled.noun} clips in ${pickedGroup}.`
+                : styled.none}
           </p>
         )}
 
@@ -818,6 +866,8 @@ function Library({
               onOpen={onOpen}
               onDelete={demo ? undefined : onDelete}
               onStyle={demo ? undefined : onStyle}
+              onGroup={demo ? undefined : onGroup}
+              groups={groups}
               uploading={uploading[clip.id]}
             />
           ))}
