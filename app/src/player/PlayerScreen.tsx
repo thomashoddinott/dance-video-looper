@@ -353,10 +353,11 @@ function OpenedClip({
   const saved = loopsFor(loops.loops, clip.id)
   const [loopName, setLoopName] = useState('')
   /* Which saved loop the player is *on*, and therefore the one a save writes
-     over (#30). Set by opening one from the list, and — the half that is easy
-     to miss — by saving one: without that, the first save of a new loop is
-     still followed by Loop 2, Loop 3, Loop 4 as the dancer corrects it, which
-     is the whole complaint.
+     over (#30). Set only by opening one from the list, and let go by every
+     write that lands (#71). #30 also set it by saving one, so a correction
+     would not need a click — and the next section framed and saved went over
+     the loop just kept. Editing a loop is the deliberate act now, not saving
+     one.
 
      An id rather than the loop itself, looked up against the list below. The
      list is Drive's, not this screen's, so a held copy would be a second answer
@@ -657,14 +658,28 @@ function OpenedClip({
       speed,
     }
 
-    /* The field is emptied only once Drive has taken the loop, and the loop
-       just written becomes the one the next press corrects. A dancer who typed
-       "the hard bit" and lost the write should not lose what they called it as
-       well — the retry is then one press rather than a re-type. */
+    /* Once Drive has taken the loop, the player goes back to the way a clip
+       opens (#71): the whole clip framed, space armed for A, nothing open,
+       nothing ticked and nothing typed — so the next Save is a new loop. The
+       loop just written is deliberately *not* left open. #30 left it open so a
+       correction would not need a click, and the cost was a dancer framing the
+       next section and pressing Save, as they always had, writing it over the
+       one they had just kept. Correcting a loop starts from clicking it.
+
+       Only once the write has landed. A dancer who typed "the hard bit" and
+       lost the write should not lose what they called it, or the section they
+       framed, as well — the retry is then one press rather than a re-frame. */
     void to(kept).then((written) => {
       if (!written) return
 
-      setEditingId(kept.id)
+      setPlayback((held) =>
+        held.kind === 'ready'
+          ? { ...held, loop: { a: 0, b: held.duration } }
+          : held,
+      )
+      setNextPoint('a')
+      setEditingId(null)
+      setChain([])
       setLoopName('')
     })
   }

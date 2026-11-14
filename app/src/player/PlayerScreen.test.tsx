@@ -1788,19 +1788,6 @@ describe('saving a loop', () => {
     expect(nameField()).toHaveValue('')
   })
 
-  /* #30. The field is cleared as it always was, but what it offers afterwards is
-     the loop just saved rather than the next number going — because that loop is
-     now the one a save writes to, and offering `Loop 2` over it would rename it
-     on the next press. The next free number is what it offers when nothing is
-     open, which the restored-loops case below pins. */
-  it('offers the loop just saved, which is the one a save now writes to', async () => {
-    aReadyClip({ seconds: 12 })
-
-    await userEvent.click(saveControl())
-
-    expect(nameField()).toHaveAttribute('placeholder', 'Loop 1')
-  })
-
   /* BR-10 again: the offered name is what an empty field means, and a field
      holding only spaces is empty in every sense the dancer intends. */
   it('takes the offered name when the field holds only spaces', async () => {
@@ -1810,6 +1797,106 @@ describe('saving a loop', () => {
     await userEvent.click(saveControl())
 
     expect(savedEntries()).toEqual(['Loop 10:00 - 0:12 · 1x'])
+  })
+})
+
+/* #71. Since #30 the loop just written had been left open, so the next Save
+   wrote over it — and a dancer who framed the next section and pressed Save, as
+   they always had, lost the one they had just kept. Every write now hands the
+   player back the way a clip opens: the whole clip framed, nothing open, nothing
+   typed. Correcting a loop starts from clicking it in the list. */
+describe('after a loop is written', () => {
+  it('keeps the next section saved as a second loop, not over the first', async () => {
+    const clip = aReadyClip({ seconds: 12 })
+
+    clip.currentTime = 3
+    press('Space')
+    clip.currentTime = 7
+    press('Space')
+    await userEvent.click(saveControl())
+    clip.currentTime = 8
+    press('Space')
+    clip.currentTime = 11
+    press('Space')
+    await userEvent.click(saveControl())
+
+    expect(savedEntries()).toEqual([
+      'Loop 10:03 - 0:07 · 1x',
+      'Loop 20:08 - 0:11 · 1x',
+    ])
+  })
+
+  it('offers Save again, with nothing to update', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+
+    expect(saveControl()).toBeInTheDocument()
+    expect(panel().queryByRole('button', { name: 'Update' })).toBeNull()
+    expect(panel().queryByRole('button', { name: 'Save as new' })).toBeNull()
+  })
+
+  it('frames the whole clip again', async () => {
+    const clip = aReadyClip({ seconds: 12 })
+
+    clip.currentTime = 3
+    press('Space')
+    clip.currentTime = 7
+    press('Space')
+    await userEvent.click(saveControl())
+
+    expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '0')
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '12')
+  })
+
+  it('leaves no loop marked as the one a save writes to', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+
+    expect(markedEntries()).toEqual([])
+  })
+
+  /* BR-10: with nothing open, an empty field means the next number going. */
+  it('offers the next number going', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(saveControl())
+
+    expect(nameField()).toHaveAttribute('placeholder', 'Loop 2')
+  })
+
+  /* Only the loop goes back. The tempo is the dancer's, and the next section
+     is usually learned at the one the last was. */
+  it('leaves the tempo where it was', async () => {
+    aReadyClip({ seconds: 12 })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Much slower' }))
+    await userEvent.click(saveControl())
+
+    expect(speedShown()).toBe('0.9')
+  })
+
+  it('does the same after an update', async () => {
+    await aLoopSavedAndOpened()
+
+    fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
+    await userEvent.click(updateControl())
+
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '12')
+    expect(markedEntries()).toEqual([])
+    expect(saveControl()).toBeInTheDocument()
+  })
+
+  it('does the same after Save as new', async () => {
+    await aLoopSavedAndOpened()
+
+    fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
+    await userEvent.click(saveAsNewControl())
+
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '12')
+    expect(markedEntries()).toEqual([])
+    expect(saveControl()).toBeInTheDocument()
   })
 })
 
@@ -2022,15 +2109,13 @@ const removeControl = (name: string) =>
    reaching for them with a thumb — so removing has to be its own target, not a
    corner of the one that recalls. */
 describe('removing a saved loop', () => {
-  /* Three presses of Save would now be one loop corrected twice (#30), so the
-     list is built the way a dancer builds one: the first is a save, and each
-     one after it is deliberately a new one. */
+  /* Three presses of Save are three loops (#71). */
   const threeSaved = async () => {
     aReadyClip({ seconds: 12 })
 
     await userEvent.click(saveControl())
-    await userEvent.click(saveAsNewControl())
-    await userEvent.click(saveAsNewControl())
+    await userEvent.click(saveControl())
+    await userEvent.click(saveControl())
   }
 
   it('takes it out of the list', async () => {
@@ -2044,13 +2129,9 @@ describe('removing a saved loop', () => {
     ])
   })
 
-  /* Loop 3 goes first because it is the one the player is set to, and the offer
-     is its name for as long as it is (#30). Once it is gone there is nothing to
-     write over, and the offer goes back to being the lowest number free. */
   it('frees the number for the next loop saved', async () => {
     await threeSaved()
 
-    await userEvent.click(removeControl('Loop 3'))
     await userEvent.click(removeControl('Loop 1'))
 
     expect(nameField()).toHaveAttribute('placeholder', 'Loop 1')
@@ -2072,7 +2153,6 @@ describe('removing a saved loop', () => {
     clip.currentTime = 7
     press('Space')
     await userEvent.click(saveControl())
-    fireEvent.keyDown(boundary('Loop end'), { key: 'End' })
 
     await userEvent.click(removeControl('Loop 1'))
 
@@ -2105,10 +2185,14 @@ const markedEntries = () =>
    that at exactly the moment it mattered: drag A back half a second and the app
    had forgotten which loop was being corrected. */
 describe('the loop the player is set to', () => {
-  it('is marked as soon as it is saved', async () => {
+  /* Opened from the list, and only from there (#71): a save leaves nothing
+     marked, which the cases after a write pin. */
+  it('is marked once it is opened from the list', async () => {
     aReadyClip({ seconds: 12 })
 
     await userEvent.click(saveControl())
+    await userEvent.click(saveControl())
+    await userEvent.click(savedLoop('Loop 1'))
 
     expect(markedEntries()).toEqual(['Loop 10:00 - 0:12 · 1x'])
   })
@@ -2129,36 +2213,27 @@ describe('the loop the player is set to', () => {
     expect(markedEntries()).toEqual(['Loop 10:00 - 0:12 · 1x'])
   })
 
-  it('moves to the loop that is opened', async () => {
+  it('moves to the next loop opened, and off the one before', async () => {
     aReadyClip({ seconds: 12 })
 
     await userEvent.click(saveControl())
-    await userEvent.click(saveAsNewControl())
+    await userEvent.click(saveControl())
     await userEvent.click(savedLoop('Loop 1'))
-
-    expect(markedEntries()).toEqual(['Loop 10:00 - 0:12 · 1x'])
-  })
-
-  it('marks one entry and not its neighbours', async () => {
-    aReadyClip({ seconds: 12 })
-
-    await userEvent.click(saveControl())
-    await userEvent.click(saveAsNewControl())
+    await userEvent.click(savedLoop('Loop 2'))
 
     expect(markedEntries()).toEqual(['Loop 20:00 - 0:12 · 1x'])
   })
 
   /* Looked up rather than held, so the mark cannot outlive the entry — and the
-     panel goes back to adding, which is what the Save label says. */
-  it('leaves nothing marked once that loop is removed', async () => {
-    aReadyClip({ seconds: 12 })
+     panel goes back to adding, which is what the Save label says. Held, the
+     next press would write to an id that is gone, which writes nothing. */
+  it('stops being the one a save writes to once that loop is removed', async () => {
+    await aLoopSavedAndOpened()
 
-    await userEvent.click(saveControl())
     await userEvent.click(removeControl('Loop 1'))
     await userEvent.click(saveControl())
 
-    expect(markedEntries()).toEqual(['Loop 10:00 - 0:12 · 1x'])
-    expect(savedEntries()).toHaveLength(1)
+    expect(savedEntries()).toEqual(['Loop 10:00 - 0:12 · 1x'])
   })
 })
 
@@ -2234,7 +2309,7 @@ describe('correcting the loop the player is set to', () => {
     aReadyClip({ seconds: 12 })
 
     await userEvent.click(saveControl())
-    await userEvent.click(saveAsNewControl())
+    await userEvent.click(saveControl())
     await userEvent.click(savedLoop('Loop 1'))
     fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
     await userEvent.click(updateControl())
@@ -2243,31 +2318,6 @@ describe('correcting the loop the player is set to', () => {
       'Loop 10:00 - 0:11 · 1x',
       'Loop 20:00 - 0:12 · 1x',
     ])
-  })
-
-  it('updates the loop opened from the list, not the one last saved', async () => {
-    aReadyClip({ seconds: 12 })
-
-    await userEvent.click(saveControl())
-    await userEvent.click(saveAsNewControl())
-    await userEvent.click(savedLoop('Loop 1'))
-    fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
-    await userEvent.click(updateControl())
-
-    expect(savedEntries()).toHaveLength(2)
-  })
-
-  /* A save does not have to be followed by a recall to be editable. Without
-     this, the first save of a new loop is still followed by Loop 2, Loop 3,
-     Loop 4 as the dancer corrects it — which is the whole complaint. */
-  it('corrects the loop just saved without it having to be opened again', async () => {
-    aReadyClip({ seconds: 12 })
-
-    await userEvent.click(saveControl())
-    fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
-    await userEvent.click(updateControl())
-
-    expect(savedEntries()).toEqual(['Loop 10:00 - 0:11 · 1x'])
   })
 
   it('goes back to saving once the loop being corrected is removed', async () => {
@@ -2315,20 +2365,6 @@ describe('saving a new loop while one is open', () => {
     expect(savedEntries()).toEqual([
       'Loop 10:00 - 0:12 · 1x',
       'Loop 20:00 - 0:12 · 1x',
-    ])
-  })
-
-  it('leaves the new one open, so the next press corrects it', async () => {
-    aReadyClip({ seconds: 12 })
-
-    await userEvent.click(saveControl())
-    await userEvent.click(saveAsNewControl())
-    fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
-    await userEvent.click(updateControl())
-
-    expect(savedEntries()).toEqual([
-      'Loop 10:00 - 0:12 · 1x',
-      'Loop 20:00 - 0:11 · 1x',
     ])
   })
 
@@ -2402,6 +2438,29 @@ describe('saving with the s key', () => {
     press('KeyS')
 
     expect(savedEntries()).toEqual(['Loop 10:03 - 0:07 · 1x'])
+  })
+
+  /* #71, by the route a dancer framing with space is already on: two sections,
+     two presses, two loops. */
+  it('keeps the next section as a second loop on the next press', async () => {
+    const clip = aReadyClip({ seconds: 12 })
+
+    clip.currentTime = 3
+    press('Space')
+    clip.currentTime = 7
+    press('Space')
+    press('KeyS')
+    await panel().findByRole('button', { name: /^Loop 1/ })
+    clip.currentTime = 8
+    press('Space')
+    clip.currentTime = 11
+    press('Space')
+    press('KeyS')
+
+    expect(savedEntries()).toEqual([
+      'Loop 10:03 - 0:07 · 1x',
+      'Loop 20:08 - 0:11 · 1x',
+    ])
   })
 
   it('keeps it under the name the field is showing', async () => {
@@ -2618,11 +2677,33 @@ describe('a loop on its way to Drive', () => {
     expect(saveControl()).toBeDisabled()
 
     letGo()
-    /* Update by the time it is enabled again: the loop that has just landed is
-       the one the next press writes to (#30). */
+    /* Save, not Update, by the time it is enabled again: the loop that has
+       just landed is not left open for the next press to write over (#71). */
     await waitFor(() => {
-      expect(updateControl()).toBeEnabled()
+      expect(saveControl()).toBeEnabled()
     })
+  })
+
+  /* #71. The player goes back to a fresh loop when the write lands, not when
+     it is asked for — so a space pressed while it was going is undone with
+     everything else, and space is armed for A rather than for the B of a mark
+     that is no longer there. */
+  it('lands on a fresh loop even if space was pressed while it was going', async () => {
+    const { held, letGo } = holdOpen()
+
+    const clip = aReadyClip({ seconds: 12, held })
+
+    await userEvent.click(saveControl())
+    clip.currentTime = 5
+    press('Space')
+
+    letGo()
+    await waitFor(() => {
+      expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '0')
+    })
+    expect(
+      screen.getByRole('note', { name: 'Keyboard shortcuts' }),
+    ).toHaveTextContent(/space\s+sets\s+A/i)
   })
 
   it('refuses the s key while one is already going', async () => {
@@ -2659,6 +2740,21 @@ describe('a loop on its way to Drive', () => {
     await userEvent.click(saveControl())
 
     expect(nameField()).toHaveValue('the hard bit')
+  })
+
+  /* And the section they framed, for the same reason (#71): only a write that
+     landed hands the player back as a fresh loop. */
+  it('keeps the section framed, so the retry is one press', async () => {
+    const clip = aReadyClip({ seconds: 12, refuses: true })
+
+    clip.currentTime = 3
+    press('Space')
+    clip.currentTime = 7
+    press('Space')
+    await userEvent.click(saveControl())
+
+    expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '3')
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '7')
   })
 })
 
@@ -2855,6 +2951,19 @@ describe('chaining saved loops together', () => {
     expect(chainBox('the opening')).not.toBeChecked()
     expect(chainBox('the answer')).not.toBeChecked()
     expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '11')
+  })
+
+  /* #71. Saving the run as a loop of its own hands the player back as a fresh
+     loop, and ticks left behind would claim a run it is no longer set to. */
+  it('takes the ticks off once the run is saved', async () => {
+    aClipWithTwoSections()
+
+    await userEvent.click(chainBox('the opening'))
+    await userEvent.click(chainBox('the answer'))
+    await userEvent.click(saveControl())
+
+    expect(chainBox('the opening')).not.toBeChecked()
+    expect(chainBox('the answer')).not.toBeChecked()
   })
 
   it('drops the tick of a loop that is removed, and stays where it is', async () => {
