@@ -542,12 +542,11 @@ function Player({ clip, onBack, onDuration }) {
   const [chain, setChain] = useState([])
   const [name, setName] = useState('')
   const [nextId, setNextId] = useState(1)
-  /* Which saved loop the controls are currently *on*. Set by opening one from
-     the list, and also by saving — so the loop you just wrote is the loop you
-     are now editing, and a second press of Save corrects it rather than laying
-     down Loop 4, Loop 5, Loop 6 beside it. Making a new one is a deliberate
-     act now ("Save as new"), which is the right way round: the common move
-     after loading a loop is to fix it. */
+  /* Which saved loop the controls are currently *on*. Set only by opening one
+     from the list, and let go by every write (#71). Saving used to set it too,
+     so the next section framed and saved went over the loop just kept. Once a
+     loop is opened, Update corrects it and "Save as new" is the deliberate way
+     to a second one: the common move after loading a loop is to fix it. */
   const [editingId, setEditingId] = useState(null)
   const [nextPoint, setNextPoint] = useState('a')
   const [zen, setZen] = useState(false)
@@ -838,6 +837,18 @@ function Player({ clip, onBack, onDuration }) {
       editing.speed !== speed ||
       editing.name !== willName)
 
+  /* After every write, back to the way a clip opens: the whole clip framed,
+     nothing open, nothing ticked, nothing typed — so the next Save is a new
+     loop rather than a correction of the one just kept (#71). Correcting one
+     starts from tapping it in the list. */
+  const startAfresh = () => {
+    setLoop({ a: 0, b: duration })
+    setNextPoint('a')
+    setEditingId(null)
+    setChain([])
+    setName('')
+  }
+
   const saveLoop = () => {
     if (halfSet) return
     if (!editing) return saveAsNew()
@@ -849,7 +860,7 @@ function Player({ clip, onBack, onDuration }) {
           : item,
       ),
     )
-    setName('')
+    startAfresh()
   }
 
   /* The way out. Loading a loop and then wanting a *second* one from the same
@@ -872,8 +883,7 @@ function Player({ clip, onBack, onDuration }) {
 
     setSaved([...saved, added])
     setNextId(nextId + 1)
-    setName('')
-    setEditingId(added.id)
+    startAfresh()
   }
 
   // the key handler subscribes once, so it reaches save through a ref

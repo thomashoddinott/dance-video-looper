@@ -16,7 +16,7 @@ import { ClipsScreen } from './ClipsScreen'
 import type { Library } from './library'
 import { LOADING, failed, loaded } from './library'
 import type { OrderingId } from './ordering'
-import { orderings } from './ordering'
+import { OPENING_ORDERING } from './ordering'
 
 /* The screen carries the Drive status footer (US-01-13), and the session
    deliberately throws rather than degrading when there is no provider above it.
@@ -49,7 +49,8 @@ const noVideoIsLookedUp = async (): Promise<YouTubeLookUp> => ({
 /* The ordering belongs to the caller now (#16), because the real one has to
    outlive this screen being unmounted for the player. Here the caller is this
    wrapper, so the chips still switch for real and the cases below are unchanged
-   by the move.
+   by the move. It starts the grid where `App` does (#73), so the screen is
+   tested as the dancer first meets it.
 
    It takes the library whole rather than the clips in it, because `renderScreen`
    below builds a `ready` one by construction — and the two states that carry no
@@ -68,7 +69,7 @@ function ScreenUnderTest({
   readonly onAddYouTube?: (videoId: string, title: string) => void
   readonly lookUp?: (videoId: string) => Promise<YouTubeLookUp>
 }) {
-  const [ordering, setOrdering] = useState<OrderingId>(orderings[0].id)
+  const [ordering, setOrdering] = useState<OrderingId>(OPENING_ORDERING)
   const [styleFilter, setStyleFilter] = useState<StyleFilter | undefined>()
   const [groupFilter, setGroupFilter] = useState<string | undefined>()
 
@@ -296,12 +297,6 @@ describe('the ordering chips', () => {
     ])
   })
 
-  it('starts on Recent, before the dancer has chosen anything', () => {
-    renderScreen([])
-
-    expect(pressedChips()).toEqual(['Recent'])
-  })
-
   it('moves the active state to whichever chip is chosen', async () => {
     renderScreen([])
 
@@ -310,12 +305,14 @@ describe('the ordering chips', () => {
     expect(pressedChips()).toEqual(['Name'])
   })
 
-  it('draws the newest clip first, before the dancer has chosen anything', () => {
+  it('draws the newest clip first when Recent is chosen', async () => {
     renderScreen([
       getClip({ id: 'middle', added: '2026-08-14' }),
       getClip({ id: 'oldest', added: '2026-07-30' }),
       getClip({ id: 'newest', added: '2026-08-28' }),
     ])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Recent' }))
 
     expect(gridOrder()).toEqual(['newest', 'middle', 'oldest'])
   })
@@ -351,12 +348,14 @@ describe('the ordering chips', () => {
      The names and dates below run counter to arrival order on purpose. A
      secondary sort key — the thing this story decided against — would reorder
      these and fail. */
-  it('leaves clips added on the same day in the order they arrived', () => {
+  it('leaves clips added on the same day in the order they arrived', async () => {
     renderScreen([
       getClip({ id: 'first', added: '2026-08-28', name: 'Camel walk' }),
       getClip({ id: 'second', added: '2026-08-28', name: 'Body roll' }),
       getClip({ id: 'third', added: '2026-08-28', name: 'Arm wave' }),
     ])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Recent' }))
 
     expect(gridOrder()).toEqual(['first', 'second', 'third'])
   })
@@ -1058,7 +1057,7 @@ describe('the grid in the demo', () => {
         <MemoryRouter>
           <ClipsScreen
             library={loaded(LOADING, [getClip({ name: 'Passitos' })])}
-            ordering={orderings[0].id}
+            ordering={OPENING_ORDERING}
             onOrderingChange={() => {}}
             styleFilter={undefined}
             onStyleFilterChange={() => {}}

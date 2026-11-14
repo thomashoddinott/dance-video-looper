@@ -92,9 +92,9 @@ export function ClipsScreen({
   readonly library: Library
   /* Held by the caller rather than here, and that is load-bearing for #16
      rather than tidiness: this screen is unmounted while the player is up, so
-     local state would start over at Recent every time the dancer came back —
-     and **Last opened** is the chip whose whole point is what you see *after* a
-     trip through the player. */
+     local state would start over every time the dancer came back, dropping
+     whichever chip they had chosen before opening the clip. Where it starts
+     is the caller's too (#73). */
   readonly ordering: OrderingId
   readonly onOrderingChange: (id: OrderingId) => void
   /* #43. Which style the grid is narrowed to, or undefined for none — the
