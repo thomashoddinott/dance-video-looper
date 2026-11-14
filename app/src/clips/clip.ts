@@ -33,6 +33,10 @@ export type Clip = {
      of yet — every clip uploaded before the field existed, and every clip
      since until its tile is told. */
   readonly style?: DanceStyle | undefined
+  /* #70. The one group the clip is in, named by the dancer — a lesson, a
+     theme — or undefined for a clip in none. There is no list of groups beside
+     the clips: a group exists while any clip is in it. */
+  readonly group?: string | undefined
   /* #20. Where the clip plays from when it is not a file of the dancer's own:
      a YouTube video, never downloaded, standing in the library as a Drive file
      that holds only its title and id. Undefined for every clip with bytes. */

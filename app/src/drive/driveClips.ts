@@ -31,6 +31,9 @@ export const SECONDS = 'seconds'
    the dancer says what a clip is once it is already in the grid, so this one
    arrives by `setStyle` rather than with the bytes. */
 export const STYLE = 'style'
+/* #70. The fourth, written as the style is: a group is said once the clip is
+   already in the grid. */
+export const GROUP = 'group'
 /* #20. The YouTube video a library entry stands for. Its presence is what
    makes the entry YouTube's rather than a clip with bytes of its own. */
 export const YOUTUBE = 'youtube'
@@ -75,6 +78,11 @@ const secondsFrom = (stored: string | undefined) => {
   return Number.isFinite(seconds) ? seconds : undefined
 }
 
+/* #70. A name of only spaces is no group: there is nothing to draw its chip
+   with. */
+const groupFrom = (stored: string | undefined) =>
+  stored?.trim() ? stored : undefined
+
 /* Spread rather than assigned, so a clip with bytes carries neither key and
    reads exactly as it did before YouTube entries existed. */
 const youTubeFrom = (videoId: string | undefined) =>
@@ -95,6 +103,7 @@ export const clipFromDriveFile = (file: DriveFile): Clip => ({
   seconds: secondsFrom(file.appProperties?.[SECONDS]),
   checksum: file.md5Checksum,
   style: styleFrom(file.appProperties?.[STYLE]),
+  group: groupFrom(file.appProperties?.[GROUP]),
   ...youTubeFrom(file.appProperties?.[YOUTUBE]),
   loops: 0,
 })

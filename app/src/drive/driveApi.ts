@@ -2,6 +2,7 @@ import type { Clip } from '../clips/clip'
 import type { DanceStyle } from '../clips/danceStyle'
 import type { DriveFile, DriveFileMetadata } from './driveClips'
 import {
+  GROUP,
   STYLE,
   clipFromDriveFile,
   driveFileFor,
@@ -523,6 +524,13 @@ export type DriveApi = {
     driveId: string,
     style: DanceStyle | undefined,
   ) => Promise<void>
+  /* #70. Undefined takes the clip out of its group. Answers nothing, for
+     `trash`'s reason. */
+  readonly setGroup: (
+    token: string,
+    driveId: string,
+    group: string | undefined,
+  ) => Promise<void>
   /* #54. `name` is what the tile says, with no extension — the file keeps
      its own. Answers nothing, for `trash`'s reason. */
   readonly rename: (
@@ -640,6 +648,15 @@ export const driveApiOver = (host: DriveHost): DriveApi => ({
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ appProperties: { [STYLE]: style ?? null } }),
+    })
+  },
+
+  /* #70. `setStyle`'s patch, naming the group's key alone. */
+  setGroup: async (token, driveId, group) => {
+    await driveFetch(host, token, `${API}/files/${driveId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appProperties: { [GROUP]: group ?? null } }),
     })
   },
 

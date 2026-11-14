@@ -184,6 +184,11 @@ describe('the demo library', () => {
     ).rejects.toThrow()
   })
 
+  /* #70. Nor a group: the grid offers the demo no group label. */
+  it('keeps no group', async () => {
+    await expect(aDemoApi().setGroup(A_TOKEN, 'demo-clip', 'Shines')).rejects.toThrow()
+  })
+
   it('keeps no YouTube video', async () => {
     await expect(
       aDemoApi().addYouTube(A_TOKEN, { folderId: 'f', videoId: 'EuT94T544Mg', title: 'T' }),
