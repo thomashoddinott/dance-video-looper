@@ -22,6 +22,10 @@ export const opening: Playback = { kind: 'opening' }
 
 export const undecodable: Playback = { kind: 'undecodable' }
 
+/* BR-01's span, A at the start and B at the end. Written once, because a clip
+   opens on it and every write that lands goes back to it (#71). */
+export const wholeClip = (seconds: number): Loop => ({ a: 0, b: seconds })
+
 /* BR-01: the player opens ready to loop. A and B span the whole clip and looping
    is already on, so pressing play immediately does the thing the app is for.
    Nothing has to be armed first. */
@@ -30,7 +34,7 @@ export const decoded = (seconds: number): Playback =>
     ? {
         kind: 'ready',
         duration: seconds,
-        loop: { a: 0, b: seconds },
+        loop: wholeClip(seconds),
         looping: true,
       }
     : undecodable

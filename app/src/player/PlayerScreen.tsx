@@ -21,6 +21,7 @@ import {
   opening,
   type Playback,
   undecodable,
+  wholeClip,
 } from './playback'
 import { beingEdited, nameToKeep, unwritten } from './savedLoops'
 import { SavedLoopsPanel } from './SavedLoopsPanel'
@@ -674,7 +675,7 @@ function OpenedClip({
 
       setPlayback((held) =>
         held.kind === 'ready'
-          ? { ...held, loop: { a: 0, b: held.duration } }
+          ? { ...held, loop: wholeClip(held.duration) }
           : held,
       )
       setNextPoint('a')
