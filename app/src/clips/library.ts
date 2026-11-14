@@ -105,6 +105,17 @@ export const restyled = (
   clips: library.clips.map((clip) => (clip.id === id ? { ...clip, style } : clip)),
 })
 
+/* #70. After the patch, for `restyled`'s reason: a group on a tile is always
+   a group Drive holds. */
+export const regrouped = (
+  library: Library,
+  id: string,
+  group: string | undefined,
+): Library => ({
+  ...library,
+  clips: library.clips.map((clip) => (clip.id === id ? { ...clip, group } : clip)),
+})
+
 /* #20. A YouTube entry, at the front for `adding`'s reason — but only once
    Drive has it, since there is no upload to run behind the tile. */
 export const arrived = (library: Library, clip: Clip): Library => ({
