@@ -93,7 +93,7 @@ export const beingEdited = (
 
    Its own name, not the next free number, when there is. Clearing the field is
    not a request to rename `chasse` to `Loop 4` — and the field *is* cleared
-   after every write, so an update made straight after a save would otherwise
+   when a loop is opened, so an update with nothing typed would otherwise
    rename the loop it was correcting. */
 export const nameToKeep = ({
   typed,
