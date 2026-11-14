@@ -1851,6 +1851,7 @@ describe('the line beneath the name field', () => {
 
     await userEvent.type(nameField(), 'chasse')
     await userEvent.click(saveControl())
+    await userEvent.click(savedLoop('chasse'))
     fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
 
     expect(
@@ -1863,6 +1864,7 @@ describe('the line beneath the name field', () => {
 
     await userEvent.type(nameField(), 'chasse')
     await userEvent.click(saveControl())
+    await userEvent.click(savedLoop('chasse'))
     await userEvent.type(nameField(), 'the hard bit')
 
     expect(
@@ -1926,6 +1928,17 @@ describe('a half-set loop', () => {
    here, and asserting the exact concatenation would be pinning that quirk. */
 const savedLoop = (name: string) =>
   panel().getByRole('button', { name: new RegExp(`^${name}`) })
+
+/* A loop is opened by clicking it in the list, so the cases about correcting one
+   keep it and then open it that way — the whole clip, saved as `Loop 1`. */
+const aLoopSavedAndOpened = async () => {
+  const clip = aReadyClip({ seconds: 12 })
+
+  await userEvent.click(saveControl())
+  await userEvent.click(savedLoop('Loop 1'))
+
+  return clip
+}
 
 const speedShown = () => screen.getByLabelText('Playback speed').textContent
 
@@ -2101,18 +2114,16 @@ describe('the loop the player is set to', () => {
   })
 
   it('stays marked while the loop is reframed, because that is what an update writes to', async () => {
-    aReadyClip({ seconds: 12 })
+    await aLoopSavedAndOpened()
 
-    await userEvent.click(saveControl())
     fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
 
     expect(markedEntries()).toEqual(['Loop 10:00 - 0:12 · 1x'])
   })
 
   it('stays marked while the tempo changes', async () => {
-    aReadyClip({ seconds: 12 })
+    await aLoopSavedAndOpened()
 
-    await userEvent.click(saveControl())
     await userEvent.click(screen.getByRole('button', { name: 'Much slower' }))
 
     expect(markedEntries()).toEqual(['Loop 10:00 - 0:12 · 1x'])
@@ -2165,6 +2176,7 @@ describe('correcting the loop the player is set to', () => {
     press('Space')
     await userEvent.type(nameField(), 'chasse')
     await userEvent.click(saveControl())
+    await userEvent.click(savedLoop('chasse'))
 
     fireEvent.keyDown(boundary('Loop start'), { key: 'ArrowLeft' })
 
@@ -2284,9 +2296,8 @@ describe('correcting the loop the player is set to', () => {
    smaller control rather than the default. */
 describe('saving a new loop while one is open', () => {
   it('adds one rather than writing over the open one', async () => {
-    aReadyClip({ seconds: 12 })
+    await aLoopSavedAndOpened()
 
-    await userEvent.click(saveControl())
     fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
     await userEvent.click(saveAsNewControl())
 
@@ -2297,9 +2308,8 @@ describe('saving a new loop while one is open', () => {
   })
 
   it('takes the next number going, rather than the open loop’s name', async () => {
-    aReadyClip({ seconds: 12 })
+    await aLoopSavedAndOpened()
 
-    await userEvent.click(saveControl())
     await userEvent.click(saveAsNewControl())
 
     expect(savedEntries()).toEqual([
@@ -2329,9 +2339,8 @@ describe('saving a new loop while one is open', () => {
   })
 
   it('is refused on a half-set loop, exactly as a save is', async () => {
-    const clip = aReadyClip({ seconds: 12 })
+    const clip = await aLoopSavedAndOpened()
 
-    await userEvent.click(saveControl())
     clip.currentTime = 5
     press('Space')
 
@@ -2348,35 +2357,30 @@ describe('an open loop with changes not written yet', () => {
     panel().getAllByRole('listitem')[0]?.textContent ?? ''
 
   it('says nothing while the entry and the player agree', async () => {
-    aReadyClip({ seconds: 12 })
-
-    await userEvent.click(saveControl())
+    await aLoopSavedAndOpened()
 
     expect(editedEntry()).not.toMatch(/unsaved/i)
   })
 
   it('says so once a boundary moves', async () => {
-    aReadyClip({ seconds: 12 })
+    await aLoopSavedAndOpened()
 
-    await userEvent.click(saveControl())
     fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
 
     expect(editedEntry()).toMatch(/unsaved/i)
   })
 
   it('says so once a different name is typed', async () => {
-    aReadyClip({ seconds: 12 })
+    await aLoopSavedAndOpened()
 
-    await userEvent.click(saveControl())
     await userEvent.type(nameField(), 'the hard bit')
 
     expect(editedEntry()).toMatch(/unsaved/i)
   })
 
   it('stops saying so once the update lands', async () => {
-    aReadyClip({ seconds: 12 })
+    await aLoopSavedAndOpened()
 
-    await userEvent.click(saveControl())
     fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
     await userEvent.click(updateControl())
 
@@ -2456,9 +2460,8 @@ describe('saving with the s key', () => {
    other one, exactly as the smaller control beside it is. */
 describe('correcting and adding with the s key', () => {
   it('writes over the open loop, as the button would', async () => {
-    aReadyClip({ seconds: 12 })
+    await aLoopSavedAndOpened()
 
-    await userEvent.click(saveControl())
     fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
     press('KeyS')
 
@@ -2466,9 +2469,8 @@ describe('correcting and adding with the s key', () => {
   })
 
   it('adds one instead when shift is held', async () => {
-    aReadyClip({ seconds: 12 })
+    await aLoopSavedAndOpened()
 
-    await userEvent.click(saveControl())
     fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
     fireEvent.keyDown(window, { code: 'KeyS', shiftKey: true })
 
@@ -2570,17 +2572,13 @@ describe('the s segment of the hint line', () => {
      button does — and names shift only once there is a loop for it to be an
      alternative to. */
   it('says the key updates while a loop is open', async () => {
-    aReadyClip({ seconds: 12 })
-
-    await userEvent.click(saveControl())
+    await aLoopSavedAndOpened()
 
     expect(hintLine()).toHaveTextContent(/s\s+updates it/i)
   })
 
   it('names shift-s as the way to a new one while a loop is open', async () => {
-    aReadyClip({ seconds: 12 })
-
-    await userEvent.click(saveControl())
+    await aLoopSavedAndOpened()
 
     expect(hintLine()).toHaveTextContent(/s\s+saves a new one/i)
   })
