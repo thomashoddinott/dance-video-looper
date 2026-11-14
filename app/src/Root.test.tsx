@@ -156,6 +156,23 @@ describe('going into the demo', () => {
     ])
   })
 
+  /* #73. The demo starts where the dashboard does. A visit that has just
+     begun has opened nothing, so Last opened ties every clip, and a tie keeps
+     the order they are listed in: all of them are still drawn. */
+  it('starts the gallery on Last opened, drawing every clip though none has been opened', async () => {
+    renderRootAt('/demo')
+    await theDemoTile()
+
+    expect(screen.getByRole('button', { name: 'Last opened' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(tiles().map((tile) => within(tile).getByRole('link').textContent)).toEqual([
+      expect.stringContaining(DEMO_CLIP.name),
+      ...DEMO_YOUTUBE.map(({ name }) => expect.stringContaining(name)),
+    ])
+  })
+
   /* #58. Played from YouTube, so there is nothing to fetch — and nothing to
      fail at fetching, which an entry the player took for a clip would. */
   it('opens a YouTube video in the player, with nothing to fetch', async () => {

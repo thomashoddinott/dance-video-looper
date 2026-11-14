@@ -1575,6 +1575,26 @@ describe('ordering the grid by when each clip was last opened', () => {
     ).not.toBeInTheDocument()
   })
 
+  /* #73. The dashboard opens on this chip rather than on **Recent**: what a
+     dancer coming back is usually after is the clip they were just
+     practising, and Recent would bury it under every clip added since. */
+  it('starts on Last opened, before the dancer has chosen anything', async () => {
+    renderGrid()
+    await screen.findByText('Newest')
+
+    expect(pressedChips()).toEqual(['Last opened'])
+  })
+
+  it('draws the clip opened last first, before the dancer has chosen anything', async () => {
+    const openedStore = localOpenedStore(inMemoryStorage())
+
+    openedStore.stamp('oldest', '2026-09-06T18:04:11.000Z')
+    renderGrid(openedStore)
+    await screen.findByText('Newest')
+
+    expect(gridOrder()).toEqual(['oldest', 'newest', 'middle'])
+  })
+
   /* The whole feature in one case: open a clip, come back, and it is top. */
   it('puts the clip just opened at the front', async () => {
     renderGrid()
@@ -1598,16 +1618,17 @@ describe('ordering the grid by when each clip was last opened', () => {
   })
 
   /* Found by driving the mockup. The grid is unmounted while the player is up,
-     so an ordering held on the screen itself started over at Recent on every
-     return — which is the one moment this chip exists to be looked at. */
+     so an ordering held on the screen itself started over on every return.
+     Since #73 it would start over on this chip, so the one chosen here is a
+     chip that starting over would lose. */
   it('is still the chosen ordering after a trip through the player', async () => {
     renderGrid()
     await screen.findByText('Newest')
-    await userEvent.click(chip())
+    await userEvent.click(screen.getByRole('button', { name: 'Name' }))
 
     await openAndReturn('Oldest')
 
-    expect(chip()).toHaveAttribute('aria-pressed', 'true')
+    expect(pressedChips()).toEqual(['Name'])
   })
 
   it('sorts a clip never opened below every clip that has been, and draws it', async () => {

@@ -12,7 +12,7 @@ import { withLoopCounts, withOpened } from './clips/library'
 import type { OpenedStore } from './clips/openedStore'
 import { browserOpenedStore } from './clips/openedStore'
 import type { OrderingId } from './clips/ordering'
-import { orderings } from './clips/ordering'
+import { OPENING_ORDERING } from './clips/ordering'
 import type { ThumbnailCapture } from './clips/thumbnail'
 import { browserThumbnailCapture } from './clips/thumbnail'
 import { useLibrary } from './clips/useLibrary'
@@ -94,10 +94,10 @@ export function App({
   const loops = useLoops(driveApi, loopsCache, opensNow)
 
   /* Which chip is active, held here rather than on the Clips screen because
-     that screen is unmounted while the player is up — and **Last opened** is
-     the chip you pick before opening a clip and want to still be on when you
-     come back. */
-  const [ordering, setOrdering] = useState<OrderingId>(orderings[0].id)
+     that screen is unmounted while the player is up — and a chip picked
+     before opening a clip is one the dancer wants to still be on when they
+     come back, rather than the one the grid opens on (#73). */
+  const [ordering, setOrdering] = useState<OrderingId>(OPENING_ORDERING)
   /* Which style the grid is narrowed to (#43), up here for the same reason:
      a dancer who narrowed to bachata and opened a clip is still practising
      bachata when they come back. Undefined is the whole library. */
