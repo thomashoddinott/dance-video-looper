@@ -335,6 +335,97 @@ describe('setting a clip’s dance style', () => {
   })
 })
 
+/* #70. `restyle`'s shape, for its reason: Drive first, then the tile, so the
+   grid never shows a group that would be gone on the next reload. */
+describe('putting a clip in a group', () => {
+  const readyWith = async (api: DriveApi) => {
+    const rendered = renderLibrary(api)
+
+    await waitFor(() => {
+      expect(rendered.result.current.library.state).toBe('ready')
+    })
+
+    return rendered
+  }
+
+  const groupOf = (library: { readonly clips: readonly Clip[] }) =>
+    library.clips.find((clip) => clip.id === A_STORED_CLIP.id)?.group
+
+  it('stores the group in Drive, and the tile wears it', async () => {
+    const api = anApi()
+    const { result } = await readyWith(api)
+
+    await act(async () => {
+      await result.current.regroup(A_STORED_CLIP, 'Shines')
+    })
+
+    expect(api.setGroup).toHaveBeenCalledWith(expect.anything(), 'drive-1', 'Shines')
+    expect(groupOf(result.current.library)).toBe('Shines')
+  })
+
+  it('takes the clip out of its group when it is given none', async () => {
+    const grouped = getClip({ ...A_STORED_CLIP, group: 'Shines' })
+    const api = anApi({ listClips: vi.fn(async () => [grouped]) })
+    const { result } = await readyWith(api)
+
+    await act(async () => {
+      await result.current.regroup(grouped, undefined)
+    })
+
+    expect(api.setGroup).toHaveBeenCalledWith(expect.anything(), 'drive-1', undefined)
+    expect(groupOf(result.current.library)).toBeUndefined()
+  })
+
+  it('keeps the group it had when Drive refuses, and says which clip', async () => {
+    const grouped = getClip({ ...A_STORED_CLIP, name: 'Shuffle drill', group: 'Shines' })
+    const { result } = await readyWith(
+      anApi({
+        listClips: vi.fn(async () => [grouped]),
+        setGroup: vi.fn(async () => {
+          throw new DriveError('boom', 500)
+        }),
+      }),
+    )
+
+    await act(async () => {
+      await result.current.regroup(grouped, 'Tuesday class')
+    })
+
+    expect(groupOf(result.current.library)).toBe('Shines')
+    expect(result.current.notice).toContain('Shuffle drill')
+  })
+
+  it('reports a withdrawal when the change is what gets the 401', async () => {
+    const { result } = await readyWith(
+      anApi({
+        setGroup: vi.fn(async () => {
+          throw new DriveError('no', 401)
+        }),
+      }),
+    )
+
+    await act(async () => {
+      await result.current.regroup(A_STORED_CLIP, 'Shines')
+    })
+
+    expect(result.current.status).toBe('consent-withdrawn')
+  })
+
+  it('asks Drive nothing about a clip Drive never stored, and says so', async () => {
+    const halfSent = getClip({ id: 'half-sent', name: 'Half sent' })
+    const api = anApi({ listClips: vi.fn(async () => [halfSent]) })
+    const { result } = await readyWith(api)
+
+    await act(async () => {
+      await result.current.regroup(halfSent, 'Shines')
+    })
+
+    expect(api.setGroup).not.toHaveBeenCalled()
+    expect(result.current.library.clips[0]?.group).toBeUndefined()
+    expect(result.current.notice).toContain('Half sent')
+  })
+})
+
 /* #54. `restyle`'s shape, for the same reason: Drive first, then the tile. */
 describe('renaming a clip', () => {
   const readyWith = async (api: DriveApi) => {

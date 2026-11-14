@@ -71,6 +71,7 @@ function ScreenUnderTest({
 }) {
   const [ordering, setOrdering] = useState<OrderingId>(OPENING_ORDERING)
   const [styleFilter, setStyleFilter] = useState<StyleFilter | undefined>()
+  const [groupFilter, setGroupFilter] = useState<string | undefined>()
 
   return (
     <ClipsScreen
@@ -79,6 +80,8 @@ function ScreenUnderTest({
       onOrderingChange={setOrdering}
       styleFilter={styleFilter}
       onStyleFilterChange={setStyleFilter}
+      groupFilter={groupFilter}
+      onGroupFilterChange={setGroupFilter}
       onAdd={noClipIsAdded}
       onDelete={onDelete}
       onRestyle={onRestyle}
@@ -663,6 +666,166 @@ describe('deleting a clip', () => {
     )
 
     expect(screen.getAllByRole('group', { name: /^Delete/ })).toHaveLength(1)
+  })
+})
+
+/* #70. One row that never wraps, however many groups: the newest that fit
+   on the screen — which is CSS, and the smoke test's to see — then All
+   groups, which lists every one with a field to find it by name. */
+describe('the group row', () => {
+  const groupRow = () => screen.queryByRole('group', { name: 'Filter by group' })
+
+  const chipsInRow = () =>
+    within(groupRow() as HTMLElement)
+      .getAllByRole('button')
+      .filter((button) => button.hasAttribute('aria-pressed'))
+
+  const chip = (name: string) =>
+    chipsInRow().find((button) => button.textContent === name) as HTMLElement
+
+  const allGroups = () =>
+    within(groupRow() as HTMLElement).getByRole('button', { name: /All groups/ })
+
+  const theList = () => screen.queryByRole('dialog', { name: 'All groups' })
+
+  const listed = () =>
+    within(theList() as HTMLElement)
+      .getAllByRole('button')
+      .map((button) => button.textContent)
+
+  const LESSONS = [
+    getClip({ id: 'turn', name: 'Turn', group: 'Tuesday class · 27 Aug', added: '2026-08-28' }),
+    getClip({ id: 'wave', name: 'Wave', group: 'Tuesday class · 27 Aug', added: '2026-08-27' }),
+    getClip({ id: 'shine', name: 'Shine', group: 'Shines', added: '2026-08-25' }),
+    getClip({ id: 'dip', name: 'Dip', group: 'Tuesday class · 20 Aug', added: '2026-08-21' }),
+    getClip({ id: 'loose', name: 'Loose', added: '2026-08-29' }),
+  ]
+
+  const shownIds = () =>
+    within(screen.getByRole('list', { name: 'Clips' }))
+      .queryAllByRole('link')
+      .map((link) => link.getAttribute('href')?.replace('/clip/', ''))
+
+  it('is not there while no clip is in a group', () => {
+    renderScreen([getClip({ id: 'loose', name: 'Loose' })])
+
+    expect(groupRow()).not.toBeInTheDocument()
+  })
+
+  it('offers the groups newest first, with none picked', () => {
+    renderScreen(LESSONS)
+
+    expect(
+      chipsInRow().map((button) => [button.textContent, button.getAttribute('aria-pressed')]),
+    ).toEqual([
+      ['Tuesday class · 27 Aug', 'false'],
+      ['Shines', 'false'],
+      ['Tuesday class · 20 Aug', 'false'],
+    ])
+  })
+
+  it('narrows the grid to the group picked', async () => {
+    renderScreen(LESSONS)
+
+    await userEvent.click(chip('Tuesday class · 27 Aug'))
+
+    expect(shownIds()).toEqual(['turn', 'wave'])
+  })
+
+  it('gives the whole library back when the picked group is picked again', async () => {
+    renderScreen(LESSONS)
+
+    await userEvent.click(chip('Shines'))
+    await userEvent.click(chip('Shines'))
+
+    expect(shownIds()).toHaveLength(LESSONS.length)
+  })
+
+  /* So the row says what the grid is narrowed to, even when the group picked
+     is an old one that would not otherwise fit. */
+  it('pins the picked group to the front of the row', async () => {
+    renderScreen(LESSONS)
+
+    await userEvent.click(chip('Tuesday class · 20 Aug'))
+
+    expect(chipsInRow().map((button) => button.textContent)).toEqual([
+      'Tuesday class · 20 Aug',
+      'Tuesday class · 27 Aug',
+      'Shines',
+    ])
+    expect(chip('Tuesday class · 20 Aug')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('lists every group under All groups, with how many clips each holds', async () => {
+    renderScreen(LESSONS)
+
+    await userEvent.click(allGroups())
+
+    expect(listed()).toEqual(['Tuesday class · 27 Aug2', 'Shines1', 'Tuesday class · 20 Aug1'])
+  })
+
+  it('finds a group in the list by its name', async () => {
+    renderScreen(LESSONS)
+
+    await userEvent.click(allGroups())
+    await userEvent.type(
+      within(theList() as HTMLElement).getByRole('searchbox', { name: 'Find a group' }),
+      '20 aug',
+    )
+
+    expect(listed()).toEqual(['Tuesday class · 20 Aug1'])
+  })
+
+  it('says so when no group in the list has the name', async () => {
+    renderScreen(LESSONS)
+
+    await userEvent.click(allGroups())
+    await userEvent.type(
+      within(theList() as HTMLElement).getByRole('searchbox', { name: 'Find a group' }),
+      'kizomba',
+    )
+
+    expect(theList()).toHaveTextContent('No group matches “kizomba”.')
+  })
+
+  it('narrows the grid to a group picked from the list, and closes it', async () => {
+    renderScreen(LESSONS)
+
+    await userEvent.click(allGroups())
+    await userEvent.click(within(theList() as HTMLElement).getByRole('button', { name: /^Shines/ }))
+
+    expect(theList()).not.toBeInTheDocument()
+    expect(shownIds()).toEqual(['shine'])
+    expect(chip('Shines')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('closes the list on Escape', async () => {
+    renderScreen(LESSONS)
+
+    await userEvent.click(allGroups())
+    await userEvent.keyboard('{Escape}')
+
+    expect(theList()).not.toBeInTheDocument()
+  })
+
+  /* A group and a style narrow together, and the line under them names both
+     when between them they leave nothing. */
+  it('says which group and style left the grid empty', async () => {
+    renderScreen([
+      getClip({ id: 'shine', name: 'Shine', group: 'Shines', style: 'bachata' }),
+      getClip({ id: 'turn', name: 'Turn', style: 'salsa' }),
+    ])
+
+    await userEvent.click(chip('Shines'))
+    await userEvent.click(
+      within(screen.getByRole('group', { name: 'Filter by style' })).getByRole('button', {
+        name: 'Salsa',
+      }),
+    )
+
+    expect(screen.getByRole('status', { name: 'Filter by style' })).toHaveTextContent(
+      'No Salsa clips in Shines.',
+    )
   })
 })
 

@@ -128,6 +128,28 @@ describe('reading a clip off a file stored in Drive', () => {
 
     expect(clip.style).toBeUndefined()
   })
+
+  /* #70. The group lives on the clip's own file too, for the style's reason. */
+  it('reads the group stored on the file', () => {
+    const clip = clipFromDriveFile(
+      aDriveFile({ appProperties: { group: 'Tuesday class · 27 Aug' } }),
+    )
+
+    expect(clip.group).toBe('Tuesday class · 27 Aug')
+  })
+
+  it('reads a file that names no group as a clip in none', () => {
+    const clip = clipFromDriveFile(aDriveFile())
+
+    expect(clip.group).toBeUndefined()
+  })
+
+  /* A group with no name is not one a chip could be drawn for. */
+  it('reads an empty group as no group', () => {
+    const clip = clipFromDriveFile(aDriveFile({ appProperties: { group: '  ' } }))
+
+    expect(clip.group).toBeUndefined()
+  })
 })
 
 /* The folder holds more than clips, and always has — `loops.json` has lived

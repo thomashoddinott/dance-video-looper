@@ -132,6 +132,8 @@ export const demoDriveApi = ({
     /* The grid offers the demo no style control (#43), so this is only the
        answer to a call nothing should make. */
     setStyle: () => refuse('keeps no styles'),
+    /* #70. Nor a group, for the style's reason. */
+    setGroup: () => refuse('keeps no groups'),
     /* Nor a rename (#54): the clip is the demo's, not the visitor's. */
     rename: () => refuse('renames nothing'),
     /* #20. The demo keeps no library, YouTube's or otherwise. */

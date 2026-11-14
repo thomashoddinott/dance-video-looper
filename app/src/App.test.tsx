@@ -1036,6 +1036,36 @@ describe('narrowing the grid to one style', () => {
   })
 })
 
+/* #70. For the style's reason: training one lesson's clips, a dancer who
+   opens one and comes back is still on that lesson. */
+describe('narrowing the grid to one group', () => {
+  it('is still the group picked after a trip through the player', async () => {
+    renderAppAt('/', sourceGranting(), null, {
+      tokenStore: aConnectedStore(),
+      driveApi: driveHolding([
+        getClip({ id: 'turn', name: 'Turn', group: 'Tuesday class' }),
+        getClip({ id: 'shine', name: 'Shine', group: 'Shines' }),
+      ]),
+    })
+    await screen.findByText('Turn')
+
+    await userEvent.click(
+      within(screen.getByRole('group', { name: 'Filter by group' })).getByRole('button', {
+        name: 'Shines',
+      }),
+    )
+    await userEvent.click(screen.getByText('Shine'))
+    await userEvent.click(await screen.findByRole('link', { name: 'Back to clips' }))
+
+    expect(
+      within(await screen.findByRole('group', { name: 'Filter by group' })).getByRole('button', {
+        name: 'Shines',
+      }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByText('Turn')).not.toBeInTheDocument()
+  })
+})
+
 /* #50. With Untagged picked, the grid is the queue a dancer tagging by hand
    works through: a clip tagged from its tile is no longer untagged, so it
    leaves — which takes the tile, the library and the filter together. */
@@ -1132,6 +1162,76 @@ describe('setting a clip’s style', () => {
         name: 'Style of Shuffle drill: none',
       }),
     ).toBeInTheDocument()
+  })
+})
+
+/* #70. The tile asks, the library stores — joined here, as the style is. */
+describe('putting a clip in a group', () => {
+  const A_CLIP_IN_DRIVE = getClip({
+    id: 'shuffle-drill',
+    name: 'Shuffle drill',
+    driveId: 'drive-shuffle',
+  })
+
+  const theGroupLabel = (name: string) =>
+    within(tileFor(name)).getByRole('button', { name: new RegExp(`^Group of ${name}`) })
+
+  it('stores a new group in Drive, and the tile wears it', async () => {
+    const driveApi = driveHolding([A_CLIP_IN_DRIVE])
+    await renderLibraryWith(probeReading(26), driveApi)
+
+    await userEvent.click(theGroupLabel('Shuffle drill'))
+    await userEvent.type(
+      within(tileFor('Shuffle drill')).getByRole('textbox', { name: 'New group' }),
+      'Tuesday class{Enter}',
+    )
+
+    expect(
+      await within(tileFor('Shuffle drill')).findByRole('button', {
+        name: 'Group of Shuffle drill: Tuesday class',
+      }),
+    ).toBeInTheDocument()
+    expect(driveApi.setGroup).toHaveBeenCalledWith(
+      expect.anything(),
+      'drive-shuffle',
+      'Tuesday class',
+    )
+  })
+
+  it('offers the groups other clips are already in', async () => {
+    const driveApi = driveHolding([
+      A_CLIP_IN_DRIVE,
+      getClip({ id: 'body-roll', name: 'Body roll', driveId: 'drive-roll', group: 'Shines' }),
+    ])
+    await renderLibraryWith(probeReading(26), driveApi)
+
+    await userEvent.click(theGroupLabel('Shuffle drill'))
+    await userEvent.click(
+      within(tileFor('Shuffle drill')).getByRole('button', { name: 'Shines' }),
+    )
+
+    expect(driveApi.setGroup).toHaveBeenCalledWith(expect.anything(), 'drive-shuffle', 'Shines')
+  })
+
+  it('says which clip kept its group when Drive refuses', async () => {
+    await renderLibraryWith(
+      probeReading(26),
+      aDriveApi({
+        listClips: async () => [A_CLIP_IN_DRIVE],
+        setGroup: vi.fn(async () => {
+          throw new Error('Drive said no')
+        }),
+      }),
+    )
+
+    await userEvent.click(theGroupLabel('Shuffle drill'))
+    await userEvent.type(
+      within(tileFor('Shuffle drill')).getByRole('textbox', { name: 'New group' }),
+      'Shines{Enter}',
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Shuffle drill')
+    expect(theGroupLabel('Shuffle drill')).toHaveAccessibleName('Group of Shuffle drill: none')
   })
 })
 

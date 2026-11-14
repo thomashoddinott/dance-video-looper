@@ -20,6 +20,7 @@ import {
   LOADING,
   loaded,
   progressed,
+  regrouped,
   renamed,
   restyled,
   stored,
@@ -42,6 +43,9 @@ export type LibraryHandle = {
      reason: the `driveId` to patch, the `id` to find the tile by, and the
      `name` for the sentence if Drive says no. */
   readonly restyle: (clip: Clip, style: DanceStyle | undefined) => Promise<void>
+  /* #70. Undefined takes the clip out of its group. The whole clip for
+     `restyle`'s reason. */
+  readonly regroup: (clip: Clip, group: string | undefined) => Promise<void>
   /* #54. `name` is what the tile will say, already trimmed. Resolves to
      whether Drive took it, which `restyle` has no need to: the player renames
      too, and the notice above is the grid's, so the player has to hear how it
@@ -247,6 +251,33 @@ export const useLibrary = (
     [api, folderToken, reportIfWithdrawn],
   )
 
+  /* #70. `restyle`'s ordering, for its reason. */
+  const regroup = useCallback(
+    async (clip: Clip, group: string | undefined) => {
+      setNotice(null)
+
+      try {
+        /* `restyle`'s guard: a clip whose upload never landed has no file. */
+        if (clip.driveId === undefined) throw new Error('no Drive file to group')
+
+        const reached = await folderToken()
+
+        if (reached === null) throw new Error('no Drive to group in')
+
+        await api.setGroup(reached.token, clip.driveId, group)
+
+        setLibrary((held) => regrouped(held, clip.id, group))
+      } catch (error) {
+        reportIfWithdrawn(error)
+
+        setNotice(
+          `The group of ${clip.name} could not be saved to Drive, so it is unchanged.`,
+        )
+      }
+    },
+    [api, folderToken, reportIfWithdrawn],
+  )
+
   /* #54. `restyle`'s ordering, for its reason. Two metadata calls rather than
      one (`DriveApi.rename`), still a fraction of a second with the field
      already closed. */
@@ -305,5 +336,5 @@ export const useLibrary = (
     [api, folderToken, reportIfWithdrawn],
   )
 
-  return { library, notice, status, add, remove, restyle, rename, addYouTube }
+  return { library, notice, status, add, remove, restyle, regroup, rename, addYouTube }
 }

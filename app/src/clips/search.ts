@@ -1,6 +1,7 @@
 import type { Clip } from './clip'
 
-/* The clips whose name contains `query`, in the order they came in.
+/* The clips whose name — or group's name (#70) — contains `query`, in the
+   order they came in.
 
    Order in, order out, deliberately: the ordering chips (US-01-03) sort whatever
    this leaves, so search narrows the set and the chosen chip decides the order.
@@ -15,5 +16,9 @@ export const matching = (clips: readonly Clip[], query: string): readonly Clip[]
 
   if (wanted === '') return clips
 
-  return clips.filter((clip) => clip.name.toLowerCase().includes(wanted))
+  return clips.filter(
+    (clip) =>
+      clip.name.toLowerCase().includes(wanted) ||
+      (clip.group?.toLowerCase().includes(wanted) ?? false),
+  )
 }

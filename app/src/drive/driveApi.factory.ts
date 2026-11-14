@@ -27,6 +27,7 @@ export const aDriveApi = (overrides: Partial<DriveApi> = {}): DriveApi => ({
   })),
   trash: vi.fn(async () => {}),
   setStyle: vi.fn(async () => {}),
+  setGroup: vi.fn(async () => {}),
   rename: vi.fn(async () => {}),
   addYouTube: vi.fn(async (_token, { videoId, title }) => ({
     id: `drive-yt-${videoId}`,

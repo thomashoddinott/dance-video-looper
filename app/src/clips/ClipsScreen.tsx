@@ -5,6 +5,8 @@ import { DemoInvite } from '../demo/DemoInvite'
 import { DemoStatus } from '../demo/DemoStatus'
 import { DriveStatus } from '../drive/DriveStatus'
 import type { Clip } from './clip'
+import { groupsOf } from './clipGroups'
+import { GroupFilter } from './GroupFilter'
 import type { ClipProbe } from './clipProbe'
 import { ClipTile } from './ClipTile'
 import type { DanceStyle, StyleFilter } from './danceStyle'
@@ -73,11 +75,14 @@ export function ClipsScreen({
   onOrderingChange: setChosen,
   styleFilter: picked,
   onStyleFilterChange: pick,
+  groupFilter,
+  onGroupFilterChange,
   thumbnails = {},
   onAdd,
   onDelete,
   onRestyle,
   onRename,
+  onRegroup,
   onAddYouTube,
   lookUp = lookUpYouTube,
   probe,
@@ -98,6 +103,11 @@ export function ClipsScreen({
      they come back. */
   readonly styleFilter: StyleFilter | undefined
   readonly onStyleFilterChange: (filter: StyleFilter | undefined) => void
+  /* #70. The group the grid is narrowed to, or undefined for none. Held by
+     the caller for the style's reason. Absent, the screen offers no group
+     row — the demo's case, whose clips are in none. */
+  readonly groupFilter?: string | undefined
+  readonly onGroupFilterChange?: ((group: string | undefined) => void) | undefined
   /* A url per clip that has a still (#77). Absent entries are clips with
      none, which paint the placeholder they always did. */
   readonly thumbnails?: Readonly<Record<string, string>>
@@ -110,6 +120,9 @@ export function ClipsScreen({
   readonly onRestyle: (clip: Clip, style: DanceStyle | undefined) => void
   /* #54. Straight through to the library too. */
   readonly onRename: (clip: Clip, name: string) => void
+  /* #70. Straight through to the library too. Absent, no tile offers a
+     group. */
+  readonly onRegroup?: ((clip: Clip, group: string | undefined) => void) | undefined
   /* #20. A YouTube video by its id and title, once this screen has made sure
      it is new and that YouTube knows it. */
   readonly onAddYouTube: (videoId: string, title: string) => void
@@ -258,10 +271,19 @@ export function ClipsScreen({
   }
 
   const ordering = orderings.find(({ id }) => id === chosen) ?? orderings[0]
+  /* #70. Read off the whole library, not the narrowed grid: a tile's chooser
+     offers every group, whatever the grid is showing. */
+  const groups = groupsOf(clips)
+  const groupNames = groups.map(({ name }) => name)
+  /* A group whose last clip has left it is no longer one to be narrowed to,
+     so it reads as nothing picked rather than as an empty grid. */
+  const pickedGroup = groups.some(({ name }) => name === groupFilter) ? groupFilter : undefined
   /* Narrow, then order — never the other way about. The style and the search
      both narrow the set and the chosen chip decides the order of what is left,
      so the controls compose instead of competing for the same result. */
-  const ordered = [...matching(ofStyle(clips, picked), query)].sort(ordering.compare)
+  const inGroup = (held: readonly Clip[]) =>
+    pickedGroup === undefined ? held : held.filter((clip) => clip.group === pickedGroup)
+  const ordered = [...matching(inGroup(ofStyle(clips, picked)), query)].sort(ordering.compare)
   /* Trimmed, to agree with `matching` about what an empty box is: a query of
      nothing but spaces is no search at all, so it must not be able to produce a
      "nothing matches" line over a grid that is showing everything. */
@@ -274,7 +296,12 @@ export function ClipsScreen({
      same lie the bare empty grid was not allowed to tell, one state along. A
      picked style is the same case one control over (#43). */
   const excludedEverything =
-    (searching || picked !== undefined) && clips.length > 0 && ordered.length === 0
+    (searching || picked !== undefined || pickedGroup !== undefined) &&
+    clips.length > 0 &&
+    ordered.length === 0
+  /* #70. A group is only ever emptied by a style or a search beside it — it
+     exists while a clip is in it — so the line names the group as well. */
+  const inThatGroup = pickedGroup === undefined ? '' : ` in ${pickedGroup}`
 
   return (
     <div className="min-h-screen bg-shell text-ink">
@@ -397,6 +424,13 @@ export function ClipsScreen({
           className="mt-3 w-full rounded-lg bg-control px-3 py-2 text-sm text-ink placeholder:text-ink/40"
         />
 
+        {/* #70. Its own row under the search, above the ordering: groups are
+            open-ended in number, so they get a line that never wraps rather
+            than a share of the ordering's. */}
+        {!demo && onGroupFilterChange !== undefined && (
+          <GroupFilter groups={groups} picked={pickedGroup} onPick={onGroupFilterChange} />
+        )}
+
         {/* #43. The ordering and the style share a row, the style pushed to
             the right as a group of its own — beside the toolbar rather than in
             it, because picking a style is a second question and not a fifth
@@ -463,8 +497,10 @@ export function ClipsScreen({
             className="mt-4 text-xs text-ink/60"
           >
             {searching
-              ? `No ${pickedChip ? `${pickedChip.noun} ` : ''}clips match “${query.trim()}”.`
-              : pickedChip?.none}
+              ? `No ${pickedChip ? `${pickedChip.noun} ` : ''}clips${inThatGroup} match “${query.trim()}”.`
+              : pickedGroup !== undefined && pickedChip
+                ? `No ${pickedChip.noun} clips${inThatGroup}.`
+                : pickedChip?.none}
           </p>
         )}
 
@@ -483,6 +519,8 @@ export function ClipsScreen({
               onDelete={demo ? undefined : onDelete}
               onRestyle={demo ? undefined : onRestyle}
               onRename={demo ? undefined : onRename}
+              groups={groupNames}
+              onRegroup={demo ? undefined : onRegroup}
             />
           ))}
         </ul>

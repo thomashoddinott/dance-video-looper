@@ -29,6 +29,7 @@ const SEED_CLIPS = [
     loops: 5,
     opened: '2026-08-30T11:20:00.000Z',
     style: 'bachata',
+    group: 'Tuesday class · 27 Aug',
     src: '/sample.mp4',
   },
   {
@@ -39,6 +40,7 @@ const SEED_CLIPS = [
     loops: 2,
     opened: '2026-09-06T18:04:11.000Z',
     style: 'salsa',
+    group: 'Tuesday class · 27 Aug',
   },
   /* #20 spike. A YouTube entry, never downloaded: an id, a title, and the
      loops saved against it. The example from the ticket — the link it came from
@@ -52,8 +54,17 @@ const SEED_CLIPS = [
     seconds: 712,
     loops: 0,
     style: 'salsa',
+    group: 'Shines',
   },
-  { id: 3, name: 'Clip 3', added: '2026-08-24', seconds: 41, loops: 0, style: 'bachata' },
+  {
+    id: 3,
+    name: 'Clip 3',
+    added: '2026-08-24',
+    seconds: 41,
+    loops: 0,
+    style: 'bachata',
+    group: 'Tuesday class · 20 Aug',
+  },
   {
     id: 4,
     name: 'Clip 4',
@@ -62,6 +73,7 @@ const SEED_CLIPS = [
     loops: 3,
     opened: '2026-09-05T20:00:00.000Z',
     style: 'salsa',
+    group: 'Tuesday class · 13 Aug',
   },
   {
     id: 5,
@@ -70,8 +82,17 @@ const SEED_CLIPS = [
     seconds: 33,
     loops: 1,
     opened: '2026-08-12T09:15:00.000Z',
+    group: 'Workshop — Dubai',
   },
-  { id: 6, name: 'Clip 6', added: '2026-08-04', seconds: 24, loops: 0, style: 'bachata' },
+  {
+    id: 6,
+    name: 'Clip 6',
+    added: '2026-08-04',
+    seconds: 24,
+    loops: 0,
+    style: 'bachata',
+    group: 'Tuesday class · 6 Aug',
+  },
 ]
 
 /* Two screens, switched by state rather than a router — the mockup has no URLs
@@ -88,6 +109,9 @@ function App() {
   /* Up here for the same reason as `sort` (#43): a dancer who narrowed the
      grid to bachata, opened a clip and came back is still practising bachata. */
   const [filter, setFilter] = useState('all')
+  /* #70. Up here for the same reason: a dancer training one lesson's clips
+     who opens one and comes back is still on that lesson. */
+  const [group, setGroup] = useState(null)
 
   const addClip = (added) => setClips([added, ...clips])
 
@@ -100,6 +124,11 @@ function App() {
      this trashes the Drive file first and only then drops the tile (UC-01
      Q-08) — the clip stays recoverable from Drive's own bin. */
   const deleteClip = (gone) => setClips(clips.filter((clip) => clip.id !== gone.id))
+
+  /* #70. `undefined` takes the clip out of its group. In the product this is
+     the clip's own Drive file being patched, as a style is. */
+  const groupClip = (grouped, into) =>
+    setClips(clips.map((clip) => (clip.id === grouped.id ? { ...clip, group: into } : clip)))
 
   if (clip) {
     return (
@@ -131,6 +160,9 @@ function App() {
       onAdd={addClip}
       onDelete={deleteClip}
       onStyle={styleClip}
+      onGroup={groupClip}
+      group={group}
+      onPickGroup={setGroup}
       /* Stamped on the way in, which is the whole of the feature (#16): open a
          clip, go back, and it is top of the grid under **Last opened**. In the
          product the stamp goes to this device's own storage and rides the next

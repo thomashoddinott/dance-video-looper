@@ -78,3 +78,21 @@ describe('searching the clips by name', () => {
     expect(matching([clip], 'shuffle')).toEqual([clip])
   })
 })
+
+/* #70. A group is a name the dancer chose too, so the box finds it. */
+describe('searching the clips by group', () => {
+  it('keeps a clip whose group contains the text', () => {
+    const clips = [
+      getClip({ id: 'a', name: 'Clip 1', group: 'Tuesday class · 27 Aug' }),
+      getClip({ id: 'b', name: 'Clip 2', group: 'Shines' }),
+    ]
+
+    expect(namesOf(matching(clips, 'tuesday'))).toEqual(['Clip 1'])
+  })
+
+  it('still keeps a clip by its own name when its group does not match', () => {
+    const clips = [getClip({ id: 'a', name: 'Tuesday drill', group: 'Shines' })]
+
+    expect(namesOf(matching(clips, 'tuesday'))).toEqual(['Tuesday drill'])
+  })
+})

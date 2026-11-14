@@ -453,6 +453,215 @@ describe('the style a tile wears', () => {
   })
 })
 
+/* #70. Under the name and date rather than on the poster, whose four corners
+   are taken. */
+describe('the group a tile is in', () => {
+  const GROUPS = ['Tuesday class · 27 Aug', 'Shines', 'Tuesday class · 20 Aug']
+
+  const renderGroupedTile = ({
+    group,
+    uploading,
+    onRegroup = () => {},
+  }: {
+    readonly group?: string
+    readonly uploading?: number
+    readonly onRegroup?: (clip: Clip, group: string | undefined) => void
+  } = {}) =>
+    render(
+      <MemoryRouter>
+        <ClipTile
+          clip={getClip({ id: 'shuffle-drill', name: 'Shuffle drill', group })}
+          uploading={uploading}
+          onDelete={() => {}}
+          onRestyle={() => {}}
+          groups={GROUPS}
+          onRegroup={onRegroup}
+        />
+      </MemoryRouter>,
+    )
+
+  const theLabel = () =>
+    screen.queryByRole('button', { name: /^Group of Shuffle drill/ })
+
+  const theChooser = () =>
+    screen.queryByRole('group', { name: 'Choose a group for Shuffle drill' })
+
+  const inTheChooser = () => within(theChooser() as HTMLElement)
+
+  const open = async () => {
+    await userEvent.click(theLabel() as HTMLElement)
+  }
+
+  const theNewGroupField = () => inTheChooser().getByRole('textbox', { name: 'New group' })
+
+  const theAddControl = () => inTheChooser().getByRole('button', { name: 'Add' })
+
+  it('names the group of a clip in one', () => {
+    renderGroupedTile({ group: 'Shines' })
+
+    expect(theLabel()).toHaveTextContent('Shines')
+    expect(theLabel()).toHaveAccessibleName('Group of Shuffle drill: Shines')
+  })
+
+  it('invites a group on a clip in none', () => {
+    renderGroupedTile()
+
+    expect(theLabel()).toHaveTextContent('+ Group')
+    expect(theLabel()).toHaveAccessibleName('Group of Shuffle drill: none')
+  })
+
+  it('offers every group, in the order it was given them, once the label is tapped', async () => {
+    renderGroupedTile()
+
+    await open()
+
+    expect(
+      GROUPS.map((name) => inTheChooser().getByRole('button', { name })),
+    ).toHaveLength(3)
+    expect(
+      inTheChooser()
+        .getAllByRole('button')
+        .map((button) => button.textContent)
+        .filter((text) => text !== null && GROUPS.includes(text)),
+    ).toEqual(GROUPS)
+  })
+
+  it('marks the group the clip is already in', async () => {
+    renderGroupedTile({ group: 'Shines' })
+
+    await open()
+
+    expect(inTheChooser().getByRole('button', { pressed: true })).toHaveTextContent('Shines')
+  })
+
+  it('puts the clip in the group picked', async () => {
+    const onRegroup = vi.fn()
+    renderGroupedTile({ onRegroup })
+
+    await open()
+    await userEvent.click(inTheChooser().getByRole('button', { name: 'Shines' }))
+
+    expect(onRegroup).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'shuffle-drill' }),
+      'Shines',
+    )
+    expect(theChooser()).not.toBeInTheDocument()
+  })
+
+  it('puts the clip in a new group, named there and then', async () => {
+    const onRegroup = vi.fn()
+    renderGroupedTile({ onRegroup })
+
+    await open()
+    await userEvent.type(theNewGroupField(), '  Workshop — Dubai  ')
+    await userEvent.click(theAddControl())
+
+    expect(onRegroup).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'shuffle-drill' }),
+      'Workshop — Dubai',
+    )
+  })
+
+  it('adds the new group on Enter too', async () => {
+    const onRegroup = vi.fn()
+    renderGroupedTile({ onRegroup })
+
+    await open()
+    await userEvent.type(theNewGroupField(), 'Shines 2{Enter}')
+
+    expect(onRegroup).toHaveBeenCalledWith(expect.anything(), 'Shines 2')
+  })
+
+  it('will not add a group with no name', async () => {
+    renderGroupedTile()
+
+    await open()
+    await userEvent.type(theNewGroupField(), '   ')
+
+    expect(theAddControl()).toBeDisabled()
+  })
+
+  /* Drive keeps a property of at most 124 bytes, its key included, and a
+     name like "Tuesday class · 27 Aug" is more bytes than characters. A name
+     Drive would refuse is refused here instead, where it can be shortened. */
+  it('will not add a name too long for Drive to keep', async () => {
+    renderGroupedTile()
+
+    await open()
+    fireEvent.change(theNewGroupField(), { target: { value: '·'.repeat(60) } })
+
+    expect(theAddControl()).toBeDisabled()
+  })
+
+  it('takes the clip out of its group', async () => {
+    const onRegroup = vi.fn()
+    renderGroupedTile({ group: 'Shines', onRegroup })
+
+    await open()
+    await userEvent.click(inTheChooser().getByRole('button', { name: 'Take out of group' }))
+
+    expect(onRegroup).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'shuffle-drill' }),
+      undefined,
+    )
+  })
+
+  it('offers nothing to take out of when the clip is in no group', async () => {
+    renderGroupedTile()
+
+    await open()
+
+    expect(
+      inTheChooser().queryByRole('button', { name: 'Take out of group' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('changes nothing when the question is cancelled', async () => {
+    const onRegroup = vi.fn()
+    renderGroupedTile({ group: 'Shines', onRegroup })
+
+    await open()
+    await userEvent.click(inTheChooser().getByRole('button', { name: 'Cancel' }))
+
+    expect(theChooser()).not.toBeInTheDocument()
+    expect(onRegroup).not.toHaveBeenCalled()
+  })
+
+  it('asks one question at a time, whichever was asked last', async () => {
+    renderGroupedTile()
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /^Style of Shuffle drill/ }),
+    )
+    await open()
+
+    expect(
+      screen.queryByRole('group', { name: 'Choose a style for Shuffle drill' }),
+    ).not.toBeInTheDocument()
+    expect(theChooser()).toBeInTheDocument()
+  })
+
+  it('says nothing about a group while the clip is still going up', () => {
+    renderGroupedTile({ uploading: 0.38 })
+
+    expect(theLabel()).not.toBeInTheDocument()
+  })
+
+  it('offers no group where the clip’s group cannot be changed', () => {
+    renderTile()
+
+    expect(theLabel()).not.toBeInTheDocument()
+  })
+
+  it('does not take the tile’s place as the way into the player', async () => {
+    renderGroupedTile()
+
+    await open()
+
+    expect(screen.getAllByRole('link')).toHaveLength(1)
+  })
+})
+
 /* #54. The pencil sits in the corner the style label and the ✕ left free, and
    fades in as the ✕ does — which is CSS, and the smoke test's to see. */
 describe('renaming a clip from its tile', () => {
