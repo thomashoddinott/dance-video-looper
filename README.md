@@ -2,7 +2,7 @@
 
 Personal software project. Also wanted to test my agentic workflow on something public facing.
 
-React, responsive design so I can use it when I go dancing. Google Drive as a basic persistence layer.
+React, responsive design so I can use it on my phone when I go dancing. Google Drive as a basic persistence layer.
 
 Inspired by [LoopTube](https://looptube.io).
 
