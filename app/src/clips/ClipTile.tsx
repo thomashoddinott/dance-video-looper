@@ -166,17 +166,6 @@ export function ClipTile({
         </button>
       )}
 
-      {asked === 'group' && (
-        <GroupQuestion
-          clip={clip}
-          groups={groups}
-          onChoose={(group) => {
-            answered()
-            onRegroup?.(clip, group)
-          }}
-          onCancel={answered}
-        />
-      )}
 
       {/* A sibling of the link, never a child of it: a button inside an anchor
           is invalid markup, and the router would swallow the click besides. The
@@ -257,6 +246,20 @@ export function ClipTile({
             onRename?.(clip, name)
           }}
           onCancel={renamed}
+        />
+      )}
+
+      {/* #70. After the poster's own controls, as the style chooser is, so it
+          covers them rather than being drawn under them. */}
+      {asked === 'group' && (
+        <GroupQuestion
+          clip={clip}
+          groups={groups}
+          onChoose={(group) => {
+            answered()
+            onRegroup?.(clip, group)
+          }}
+          onCancel={answered}
         />
       )}
 

@@ -102,6 +102,9 @@ export function App({
      a dancer who narrowed to bachata and opened a clip is still practising
      bachata when they come back. Undefined is the whole library. */
   const [styleFilter, setStyleFilter] = useState<StyleFilter | undefined>()
+  /* #70. Up here for the style's reason: a dancer training one lesson's clips
+     who opens one and comes back is still on that lesson. */
+  const [groupFilter, setGroupFilter] = useState<string | undefined>()
   /* The clips as the grid draws them: counts, and when each was last opened
      (#12). All of it arrives separately — Drive's file listing knows nothing
      about loops, and `loops.json` is fetched on its own — so this is where they
@@ -171,6 +174,8 @@ export function App({
             onOrderingChange={setOrdering}
             styleFilter={styleFilter}
             onStyleFilterChange={setStyleFilter}
+            groupFilter={groupFilter}
+            onGroupFilterChange={setGroupFilter}
             thumbnails={stills}
             onAdd={onAdd}
             onDelete={onDelete}

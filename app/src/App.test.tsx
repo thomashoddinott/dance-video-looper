@@ -1036,6 +1036,36 @@ describe('narrowing the grid to one style', () => {
   })
 })
 
+/* #70. For the style's reason: training one lesson's clips, a dancer who
+   opens one and comes back is still on that lesson. */
+describe('narrowing the grid to one group', () => {
+  it('is still the group picked after a trip through the player', async () => {
+    renderAppAt('/', sourceGranting(), null, {
+      tokenStore: aConnectedStore(),
+      driveApi: driveHolding([
+        getClip({ id: 'turn', name: 'Turn', group: 'Tuesday class' }),
+        getClip({ id: 'shine', name: 'Shine', group: 'Shines' }),
+      ]),
+    })
+    await screen.findByText('Turn')
+
+    await userEvent.click(
+      within(screen.getByRole('group', { name: 'Filter by group' })).getByRole('button', {
+        name: 'Shines',
+      }),
+    )
+    await userEvent.click(screen.getByText('Shine'))
+    await userEvent.click(await screen.findByRole('link', { name: 'Back to clips' }))
+
+    expect(
+      within(await screen.findByRole('group', { name: 'Filter by group' })).getByRole('button', {
+        name: 'Shines',
+      }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByText('Turn')).not.toBeInTheDocument()
+  })
+})
+
 /* #50. With Untagged picked, the grid is the queue a dancer tagging by hand
    works through: a clip tagged from its tile is no longer untagged, so it
    leaves — which takes the tile, the library and the filter together. */
