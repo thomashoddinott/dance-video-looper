@@ -437,6 +437,27 @@ const SHOWCASE = [
     loops: 11,
     style: 'bachata',
   },
+  /* #79. The old demo's picks, so the showcase holds at least four. */
+  {
+    id: 'yt:CkZO6nyJwjw',
+    source: 'youtube',
+    videoId: 'CkZO6nyJwjw',
+    name: 'Cuban Salsa — Class 10',
+    added: '2026-09-23',
+    seconds: 767,
+    loops: 1,
+    style: 'salsa',
+  },
+  {
+    id: 'yt:mBHXNXJOF84',
+    source: 'youtube',
+    videoId: 'mBHXNXJOF84',
+    name: 'Elena & Derek — Ultima llamada',
+    added: '2026-09-22',
+    seconds: 224,
+    loops: 1,
+    style: 'bachata',
+  },
 ]
 
 function Library({
