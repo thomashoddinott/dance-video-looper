@@ -13,6 +13,7 @@ import { useDriveSession } from '../drive/driveSession'
 import { isConnected } from '../drive/session'
 import { LOOPS_FILE } from '../loops/driveLoops'
 import { localLoopsCache } from '../loops/loopsCache'
+import type { MountYouTube } from '../player/youtubeMount'
 import { DEMO_CLIP, DEMO_YOUTUBE } from './demoClip'
 import { demoDriveApi } from './demoDriveApi'
 import demoLoops from './demoLoops.json'
@@ -23,6 +24,8 @@ export type DemoProps = {
   readonly fetchBytes?: (url: string) => Promise<Blob>
   readonly capture?: ThumbnailCapture
   readonly urls?: Pick<DriveApi, 'toUrl' | 'releaseUrl'>
+  /* #77. Straight through to the player, for `App`'s reason. */
+  readonly mountYouTube?: MountYouTube | undefined
 }
 
 const fetchOverNetwork = async (url: string) => {
@@ -75,6 +78,7 @@ export function DemoApp({
   fetchBytes = fetchOverNetwork,
   capture = browserThumbnailCapture,
   urls = browserDriveApi,
+  mountYouTube,
 }: DemoProps) {
   const { status } = useDriveSession()
   /* One per visit to the demo: made when it mounts, gone when it unmounts. */
@@ -108,7 +112,13 @@ export function DemoApp({
 
   return (
     <DemoSession>
-      <App {...seams} clipCache={noClipCache} capture={capture} demo />
+      <App
+        {...seams}
+        clipCache={noClipCache}
+        capture={capture}
+        mountYouTube={mountYouTube}
+        demo
+      />
     </DemoSession>
   )
 }
