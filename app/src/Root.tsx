@@ -1,13 +1,19 @@
-import { Route, Routes } from 'react-router'
+import { Navigate, Route, Routes } from 'react-router'
 
 import type { AppProps } from './App'
 import { App } from './App'
 import type { DemoProps } from './demo/DemoApp'
 import { DemoApp } from './demo/DemoApp'
+import { useDriveSession } from './drive/driveSession'
+import { isConnected } from './drive/session'
 
-/* Two mounts of one app. `/demo` is its own address rather than a flag held in
-   state, so a reload stays in the demo and a CV can link straight to it; the
-   app underneath links relatively, so neither mount knows where it is. */
+/* Two apps at one address (#77): a visitor who is not signed in lands on the
+   showcase, and the dancer, once connected, on their own library. Which is
+   which is the session's to say, so signing in swaps one for the other where
+   the dancer is standing. Both link relatively, so neither knows where it is.
+
+   `/demo` was demo mode's address (#33), which a CV could point at; it now
+   lands on `/` and finds the showcase there. */
 export function Root({
   live = {},
   demo = {},
@@ -15,10 +21,15 @@ export function Root({
   readonly live?: AppProps
   readonly demo?: DemoProps
 }) {
+  const { status } = useDriveSession()
+
   return (
     <Routes>
-      <Route path="/demo/*" element={<DemoApp {...demo} />} />
-      <Route path="/*" element={<App {...live} />} />
+      <Route path="/demo/*" element={<Navigate to="/" replace />} />
+      <Route
+        path="/*"
+        element={isConnected(status) ? <App {...live} /> : <DemoApp {...demo} />}
+      />
     </Routes>
   )
 }

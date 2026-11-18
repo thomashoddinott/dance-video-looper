@@ -1,52 +1,35 @@
 import { useMemo, useState } from 'react'
-import { Navigate } from 'react-router'
 
 import { App } from '../App'
 import type { ClipCache, ThumbnailStore } from '../clips/clipCache'
 import { thumbnailCacheOver } from '../clips/clipCache'
 import { localOpenedStore } from '../clips/openedStore'
-import type { ThumbnailCapture } from '../clips/thumbnail'
-import { browserThumbnailCapture } from '../clips/thumbnail'
 import type { DriveApi } from '../drive/driveApi'
 import { browserDriveApi } from '../drive/driveApi'
-import { useDriveSession } from '../drive/driveSession'
-import { isConnected } from '../drive/session'
 import { LOOPS_FILE } from '../loops/driveLoops'
 import { localLoopsCache } from '../loops/loopsCache'
 import type { MountYouTube } from '../player/youtubeMount'
-import { DEMO_CLIP, DEMO_YOUTUBE } from './demoClip'
 import { demoDriveApi } from './demoDriveApi'
 import demoLoops from './demoLoops.json'
 import { DemoSession } from './DemoSession'
+import { DEMO_YOUTUBE } from './demoVideos'
 import { memoryStorage } from './memoryStorage'
 
 export type DemoProps = {
-  readonly fetchBytes?: (url: string) => Promise<Blob>
-  readonly capture?: ThumbnailCapture
   readonly urls?: Pick<DriveApi, 'toUrl' | 'releaseUrl'>
   /* #77. Straight through to the player, for `App`'s reason. */
   readonly mountYouTube?: MountYouTube | undefined
 }
 
-const fetchOverNetwork = async (url: string) => {
-  const response = await fetch(url)
-
-  if (!response.ok) throw new Error(`the demo clip did not load: ${response.status}`)
-
-  return response.blob()
-}
-
-/* The clip is same-origin and a megabyte, so the browser's own HTTP cache is
-   all the caching it needs — and the real clip cache is the dancer's, which
-   a visitor's bytes have no business taking budget from. */
+/* Nothing in the showcase has bytes to cache: YouTube plays every video. */
 const noClipCache: ClipCache = {
   get: async () => null,
   put: async () => {},
   forget: async () => {},
 }
 
-/* The still lasts the visit. It is captured from the clip in a moment, so
-   keeping it any longer would be storage spent to save a local decode. */
+/* Nor stills of its own — the tile shows YouTube's picture — but the grid
+   asks for somewhere to keep them, and a visit is as long as it should last. */
 const stillsInMemory = (): ThumbnailStore => {
   const held = new Map<string, Blob>()
 
@@ -61,43 +44,33 @@ const stillsInMemory = (): ThumbnailStore => {
   }
 }
 
-/* #33. The whole app, at `/demo`, over seams that need no Google account: one
-   bundled clip and a few YouTube videos, the loops they ship with, and a
-   session that always has a token without asking Google for one. Nothing in
-   the player knows the difference, which is the point — it is the player a
-   visitor has come to try.
+/* #77. What a visitor who is not signed in lands on: the whole app over seams
+   that need no Google account — a snapshot of Thomas's YouTube entries with
+   their loops (`demoVideos.ts`, `demoLoops.json`), and a session that always
+   has a token without asking Google for one. Nothing in the player knows the
+   difference, which is the point: it is the player a visitor has come to try.
 
-   Exit demo is how a visitor leaves (#61). And the moment the real session
-   is connected — signed in from the dashboard, or in another tab — this
-   hands over to the dancer's own library.
+   Once demo mode (#33), a page of its own behind a button; now it is what the
+   site opens on. `Root` swaps it for the dancer's own library the moment the
+   real session is connected.
 
    Not persistent (#66): what a visitor does here lasts while they stay, and
-   is gone the next time they come — a reload, a new tab, or Exit demo and
-   back — so every visit opens on the loops it ships with. */
-export function DemoApp({
-  fetchBytes = fetchOverNetwork,
-  capture = browserThumbnailCapture,
-  urls = browserDriveApi,
-  mountYouTube,
-}: DemoProps) {
-  const { status } = useDriveSession()
-  /* One per visit to the demo: made when it mounts, gone when it unmounts. */
+   is gone the next time they come, so every visit opens on the loops it ships
+   with. */
+export function DemoApp({ urls = browserDriveApi, mountYouTube }: DemoProps) {
+  /* One per visit: made when it mounts, gone when it unmounts. */
   const [kept] = useState(memoryStorage)
 
   /* Built once. Every hook in the app keys an effect on these, and a fresh
-     api each render would re-list the library and re-fetch the clip on every
-     one of them. */
+     api each render would re-list the library on every one of them. */
   const seams = useMemo(
     () => ({
       driveApi: demoDriveApi({
-        clip: DEMO_CLIP,
         youtube: DEMO_YOUTUBE,
         /* #63. The loops a visitor opens onto. Edit `demoLoops.json` to change
            them; it is `loops.json`'s own shape. */
         bundled: { [LOOPS_FILE]: JSON.stringify(demoLoops) },
         storage: kept,
-        fetchBytes,
-        capture,
         toUrl: urls.toUrl,
         releaseUrl: urls.releaseUrl,
       }),
@@ -105,20 +78,12 @@ export function DemoApp({
       openedStore: localOpenedStore(kept),
       thumbnailCache: thumbnailCacheOver(stillsInMemory()),
     }),
-    [kept, fetchBytes, capture, urls],
+    [kept, urls],
   )
-
-  if (isConnected(status)) return <Navigate to="/" replace />
 
   return (
     <DemoSession>
-      <App
-        {...seams}
-        clipCache={noClipCache}
-        capture={capture}
-        mountYouTube={mountYouTube}
-        demo
-      />
+      <App {...seams} clipCache={noClipCache} mountYouTube={mountYouTube} demo />
     </DemoSession>
   )
 }

@@ -17,6 +17,7 @@ import type { Library } from './library'
 import { LOADING, failed, loaded } from './library'
 import type { OrderingId } from './ordering'
 import { OPENING_ORDERING } from './ordering'
+import { inDocumentOrder } from '../test/documentOrder'
 
 /* The screen carries the Drive status footer (US-01-13), and the session
    deliberately throws rather than degrading when there is no provider above it.
@@ -1134,23 +1135,25 @@ describe('the grid in the demo', () => {
     ).not.toBeInTheDocument()
   })
 
-  /* The connection sentence describes a Drive the demo does not have. */
-  it('says nothing about where clips are kept, or whether Drive is connected', () => {
+  /* #77. The showcase is what a visitor lands on, so the dancer's way in
+     stays below it. */
+  it('offers Connect Google Drive below the grid', () => {
     renderTheDemo()
 
-    expect(screen.queryByText(/clips live in google drive/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/connected to drive/i)).not.toBeInTheDocument()
+    expect(
+      inDocumentOrder({
+        connect: screen.getByRole('button', { name: /connect google drive/i }),
+        clips: screen.getByRole('list', { name: 'Clips' }),
+      }),
+    ).toEqual(['clips', 'connect'])
   })
 
-  /* #61. Exit demo alone: no sentence about the demo, and no sign-in. */
-  it('offers Exit demo and nothing else under the heading', () => {
+  /* #77. There is no demo to say so about, or to leave. */
+  it('offers nothing about a demo under the heading', () => {
     renderTheDemo()
 
-    expect(screen.getByRole('link', { name: 'Exit demo' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Exit demo' })).not.toBeInTheDocument()
     expect(screen.queryByRole('status', { name: 'Demo' })).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: /connect google drive/i }),
-    ).not.toBeInTheDocument()
   })
 
   it('still links to the source code', () => {

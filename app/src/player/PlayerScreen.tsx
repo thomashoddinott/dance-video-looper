@@ -136,8 +136,8 @@ function Downloaded({ fraction }: { readonly fraction: number | undefined }) {
    because the header below is no longer the only place it appears — a clip still
    being opened needs the way out before it has anything else to show.
 
-   Up a route rather than to `/`, so the way back from a clip in the demo is
-   the demo's grid and not a real library the visitor has no account for. */
+   Up a route rather than to `/`, so the player never needs to know which
+   app it is in — the showcase's or the dancer's own (#77). */
 function BackToClips() {
   return (
     <Link
@@ -204,7 +204,8 @@ export function PlayerScreen({
      every direct open straight back to a grid that is also still loading —
      making a stored clip unreachable by its own URL. */
   readonly stillLoading?: boolean
-  /* #33: the player at `/demo`, which says so in its header. */
+  /* #77: the player in the showcase, where a video's name is not the
+     visitor's to change. */
   readonly demo?: boolean
   /* #54. Resolves to whether Drive took the name. Dropped in the demo, whose
      clip is not the visitor's to rename. */
@@ -237,7 +238,6 @@ export function PlayerScreen({
       clipCache={clipCache}
       onBytes={onBytes}
       onOpened={onOpened}
-      demo={demo}
       onRename={demo ? undefined : onRename}
       mountYouTube={mountYouTube}
     />
@@ -251,7 +251,6 @@ function OpenedClip({
   clipCache,
   onBytes,
   onOpened,
-  demo,
   onRename,
   mountYouTube,
 }: {
@@ -261,7 +260,6 @@ function OpenedClip({
   readonly clipCache: ClipCache
   readonly onBytes?: ((clipId: string, bytes: Blob) => void) | undefined
   readonly onOpened: (clipId: string) => void
-  readonly demo: boolean
   readonly onRename: ((clip: Clip, name: string) => Promise<boolean>) | undefined
   readonly mountYouTube: MountYouTube
 }) {
@@ -966,14 +964,6 @@ function OpenedClip({
           clip={clip}
           onRename={clip.driveId === undefined ? undefined : onRename}
         />
-        {/* In the header, so the isolated view hides it along with everything
-            else — a banner above the screen would sit on top of a clip that
-            is meant to fill it. */}
-        {demo && (
-          <span className="ml-auto shrink-0 rounded-full bg-control px-2 py-0.5 text-xs font-semibold text-ink/60">
-            Demo
-          </span>
-        )}
       </header>
 
       {/* The card shrinks to whatever the clip actually is: a portrait clip gets

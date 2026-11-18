@@ -49,9 +49,9 @@ export type AppProps = {
      the browser, a stand-in under test, where every showcase entry is a
      YouTube video. */
   readonly mountYouTube?: MountYouTube | undefined
-  /* #33: the same app, mounted at `/demo` over the demo's seams. The screens
-     need telling only so they can say so, and so the gallery can drop the
-     controls a visitor has no use for. */
+  /* #77: the same app as the showcase a visitor lands on, over seams of its
+     own. The screens need telling only so the grid and the player can drop
+     the controls a visitor has no use for. */
   readonly demo?: boolean
 }
 
