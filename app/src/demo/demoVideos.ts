@@ -12,7 +12,10 @@ import type { DemoYouTube } from './demoDriveApi'
 
    Names, styles and dates are as his library had them. `seconds` is the
    video's length from its watch page where the library had none yet — a
-   cued video reports none until it has played. */
+   cued video reports none until it has played.
+
+   The last two are not in his library (#79): the old demo's picks (#58), with
+   the loops he chose for them (#63), so the showcase holds at least four. */
 export const DEMO_YOUTUBE: readonly DemoYouTube[] = [
   {
     videoId: 'YClbDdg_oFc',
@@ -25,6 +28,20 @@ export const DEMO_YOUTUBE: readonly DemoYouTube[] = [
     name: '20 MOST Important Bachata Sensual Moves You MUST Know! (Part 1)',
     added: '2026-11-09',
     seconds: 345.86,
+    style: 'bachata',
+  },
+  {
+    videoId: 'CkZO6nyJwjw',
+    name: 'Cuban Salsa — Class 10',
+    added: '2026-09-23',
+    seconds: 767,
+    style: 'salsa',
+  },
+  {
+    videoId: 'mBHXNXJOF84',
+    name: 'Elena & Derek — Ultima llamada',
+    added: '2026-09-22',
+    seconds: 224,
     style: 'bachata',
   },
 ]

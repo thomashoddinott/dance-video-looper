@@ -19,6 +19,12 @@ describe('the loops bundled with the showcase', () => {
     expect(held).toEqual(expect.arrayContaining(Object.keys(demoLoops.clips)))
   })
 
+  /* #79. Enough to be worth a look: a visitor should find something to try
+     straight away, so a snapshot that leaves fewer is caught here. */
+  it('hold at least four videos', () => {
+    expect(DEMO_YOUTUBE.length).toBeGreaterThanOrEqual(4)
+  })
+
   /* #77. The showcase is the videos with loops: one without would be a tile
      with nothing to show for itself. */
   it('give every video in the showcase some', () => {
