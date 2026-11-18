@@ -7,13 +7,6 @@ dist/
 # `app/public/` or `mockup/public/` to have something to play against.
 *.mp4
 
-# The one exception (#33): the demo clip is Thomas dancing — his own footage,
-# silent, stripped of location metadata, and published on purpose so a visitor
-# with no Google account can try the player. It lives under `src/`, not
-# `public/`, and is bundled by import. Named exactly: committing is the only
-# way a clip reaches the live site, and no other video gets in this way.
-!app/src/demo/demo-clip.mp4
-
 # The Claude Code working directory. Only its skills and agents are tracked, and
 # they came in from the public snapshot thomashoddinott/claude-code-skills-27092026.
 # Worktrees, local settings, commands and hooks stay out: no earlier version of

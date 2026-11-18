@@ -1,8 +1,6 @@
 import type { ChangeEvent } from 'react'
 import { type FormEvent, useRef, useState } from 'react'
 
-import { DemoInvite } from '../demo/DemoInvite'
-import { DemoStatus } from '../demo/DemoStatus'
 import { DriveStatus } from '../drive/DriveStatus'
 import type { Clip } from './clip'
 import { groupsOf } from './clipGroups'
@@ -134,10 +132,9 @@ export function ClipsScreen({
      upload that failed. The screen's own notices below are the ones it can see
      for itself: a duplicate, and a file that would not decode. */
   readonly notice?: string | null
-  /* #33: the grid a visitor sees at `/demo`. A bundled clip and a few YouTube
-     videos (#58), and nothing to manage — the demo keeps no clip and deletes
-     none, so Add clip and the ✕
-     would be controls that could only fail — and no Drive to talk about. */
+  /* #77: the grid as the showcase — YouTube videos with their loops, and
+     nothing to manage. It keeps no clip and deletes none, so Add clip, the ✕
+     and the rest would be controls that could only fail. */
   readonly demo?: boolean
 }) {
   const { clips } = library
@@ -348,8 +345,6 @@ export function ClipsScreen({
           </div>
         </div>
 
-        {demo && <DemoStatus />}
-
         {/* #20. Under the header rather than in a dialog: a link is pasted
             once and the field goes, so it borrows no more of the screen than
             the alert line below it. 16px on a phone so iOS does not zoom the
@@ -525,13 +520,9 @@ export function ClipsScreen({
           ))}
         </ul>
 
-        {!demo && (
-          <>
-            <DemoInvite />
-
-            <DriveStatus />
-          </>
-        )}
+        {/* #77. Under the showcase as well as under the dancer's own library:
+            it is how the dancer gets from the one to the other. */}
+        <DriveStatus />
       </main>
     </div>
   )

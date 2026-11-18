@@ -345,8 +345,8 @@ const DRIVE_STATES = [
 ]
 
 /* The state is held by `Library` rather than here (#59): signed out, the
-   product's grid is empty — Drive is where the library comes from — and the
-   grid has to know that to draw the demo button in its place. */
+   grid shows the showcase rather than the dancer's library (#77), and it has
+   to know which. */
 function DriveStatus({ state, onNext }) {
   const { notice, connected } = DRIVE_STATES[state]
 
@@ -378,7 +378,7 @@ function DriveStatus({ state, onNext }) {
 }
 
 /* Retrofitted from the product: the dashboard links to the code behind it,
-   signed in, signed out or in the demo. The player leaves it off. */
+   signed in or out. The player leaves it off. */
 function SourceLink() {
   return (
     <a
@@ -412,76 +412,29 @@ const UPLOAD_PLAYS_OUT_OVER = 2500
    The search stays local, and the contrast is the point: it is a question about
    the grid in front of you rather than a setting, so coming back with the whole
    library showing is the honest default. */
-/* Retrofitted from the product (#33), which sits under the heading rather than
-   in the footer, where a visitor looks first. Exit demo and nothing else
-   (#61): the sentence about the demo was helper copy, and signing in is one
-   step away, on the dashboard Exit demo leads to. */
-function DemoStatus({ onLeave }) {
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
-      <button
-        type="button"
-        onClick={onLeave}
-        className="rounded-lg bg-control px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-control-hi"
-      >
-        Exit demo
-      </button>
-    </div>
-  )
-}
-
-/* #59, the mockup gate pass, drawn ahead of the build. The way into the demo
-   is where a signed-out visitor's eye already is — the middle of the empty
-   grid — rather than a pill in the footer beside Connect. One large button
-   and nothing else: two other takes (a card saying what the app is for, and
-   the demo clip playing) were drawn and passed over for this one. */
-function DemoInvite({ onDemo }) {
-  return (
-    <div className="flex min-h-[50vh] items-center justify-center">
-      <button
-        type="button"
-        onClick={onDemo}
-        className="rounded-2xl bg-accent px-8 py-4 text-lg font-semibold text-on-accent shadow-lg shadow-accent/25 hover:bg-accent-2"
-      >
-        Demo mode
-      </button>
-    </div>
-  )
-}
-
-/* #58, retrofitted from the build (`app/src/demo/demoClip.ts`): the demo's
-   YouTube videos, after the bundled clip. The counts are the loops the demo
-   ships with (#63, `app/src/demo/demoLoops.json`); the mockup's player has
-   no loops to open onto, so only the tiles show them. */
-const DEMO_YOUTUBE = [
+/* #77, retrofitted from the build (`app/src/demo/demoVideos.ts`): what a
+   visitor who is not signed in lands on — a snapshot of the YouTube entries in
+   Thomas's library that have loops. The counts are the loops it ships with
+   (`app/src/demo/demoLoops.json`); the mockup's player has no loops to open
+   onto, so only the tiles show them. */
+const SHOWCASE = [
+  {
+    id: 'yt:YClbDdg_oFc',
+    source: 'youtube',
+    videoId: 'YClbDdg_oFc',
+    name: '➡️Las Mejores 50 Figuras de SALSA CUBANA 2020 (¡100 RECOMENDADO!)',
+    added: '2026-11-17',
+    seconds: 731,
+    loops: 47,
+  },
   {
     id: 'yt:l-H1OAu9N28',
     source: 'youtube',
     videoId: 'l-H1OAu9N28',
-    name: 'Bachata Sensual — 20 moves, Part 1',
-    added: '2026-09-24',
+    name: '20 MOST Important Bachata Sensual Moves You MUST Know! (Part 1)',
+    added: '2026-11-09',
     seconds: 346,
     loops: 11,
-    style: 'bachata',
-  },
-  {
-    id: 'yt:CkZO6nyJwjw',
-    source: 'youtube',
-    videoId: 'CkZO6nyJwjw',
-    name: 'Cuban Salsa — Class 10',
-    added: '2026-09-23',
-    seconds: 767,
-    loops: 1,
-    style: 'salsa',
-  },
-  {
-    id: 'yt:mBHXNXJOF84',
-    source: 'youtube',
-    videoId: 'mBHXNXJOF84',
-    name: 'Elena & Derek — Ultima llamada',
-    added: '2026-09-22',
-    seconds: 224,
-    loops: 1,
     style: 'bachata',
   },
 ]
@@ -500,22 +453,17 @@ function Library({
   group,
   onPickGroup,
 }) {
-  /* #33. The product's demo is one bundled clip with nothing to manage — no
-     Add clip, no ✕, no Drive footer. The first entry is the mockup's only real
-     clip, so it stands in for the bundled one. The player's own "Demo" label
-     is in the product only.
-
-     #58, retrofitted from the build: three YouTube videos follow it. */
-  const [demo, setDemo] = useState(false)
-  /* #59. Opens signed out, as the product does for a first visit: an empty
-     grid with the demo in it. Connect walks the Drive states from there. */
+  /* #77. Opens signed out, as the product does for a visitor: on the
+     showcase, read-only — no Add clip, no ✕, no style, rename or group — with
+     Connect in the footer. Connect walks the Drive states from there, and a
+     connected one shows the library. */
   const [drive, setDrive] = useState(0)
   const nextDriveState = () => setDrive((at) => (at + 1) % DRIVE_STATES.length)
-  const signedOut = !DRIVE_STATES[drive].connected && !demo
-  const shown = demo ? [clips[0], ...DEMO_YOUTUBE] : signedOut ? [] : clips
-  /* #70. Groups are read off the clips, newest first; the demo has none. A
-     picked group whose last clip has left it is no longer picked. */
-  const groups = demo ? [] : groupsOf(shown)
+  const signedOut = !DRIVE_STATES[drive].connected
+  const shown = signedOut ? SHOWCASE : clips
+  /* #70. Groups are read off the clips, newest first; the showcase has none.
+     A picked group whose last clip has left it is no longer picked. */
+  const groups = signedOut ? [] : groupsOf(shown)
   const pickedGroup = groups.some(({ name }) => name === group) ? group : null
   const [query, setQuery] = useState('')
   const [notice, setNotice] = useState(null)
@@ -710,7 +658,7 @@ function Library({
           <h1 className="text-lg font-semibold tracking-tight">Clips</h1>
           <div className="flex items-center gap-4">
             <SourceLink />
-            {!demo && (
+            {!signedOut && (
               <>
                 <button
                   type="button"
@@ -742,9 +690,8 @@ function Library({
           </div>
         </div>
 
-        {demo && <DemoStatus onLeave={() => setDemo(false)} />}
 
-        {linking && !demo && (
+        {linking && !signedOut && (
           <form onSubmit={addLink} className="mt-3 flex gap-2">
             <input
               autoFocus
@@ -821,7 +768,7 @@ function Library({
               filled chip is also one a hover cannot pass for, which the
               ordering chips' grey-on-grey could.
 
-              In the demo too (#58), which holds salsa and bachata. */}
+              In the showcase too (#58, #77). */}
           <div role="group" aria-label="Filter by style" className="ml-auto flex gap-1.5">
             {FILTER_CHIPS.map((option) => (
               <button
@@ -865,22 +812,16 @@ function Library({
               key={clip.id}
               clip={clip}
               onOpen={onOpen}
-              onDelete={demo ? undefined : onDelete}
-              onStyle={demo ? undefined : onStyle}
-              onGroup={demo ? undefined : onGroup}
+              onDelete={signedOut ? undefined : onDelete}
+              onStyle={signedOut ? undefined : onStyle}
+              onGroup={signedOut ? undefined : onGroup}
               groups={groups}
               uploading={uploading[clip.id]}
             />
           ))}
         </ul>
 
-        {signedOut && <DemoInvite onDemo={() => setDemo(true)} />}
-
-        {!demo && (
-          <>
-            <DriveStatus state={drive} onNext={nextDriveState} />
-          </>
-        )}
+        <DriveStatus state={drive} onNext={nextDriveState} />
       </main>
     </div>
   )

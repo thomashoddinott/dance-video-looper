@@ -25,6 +25,7 @@ import type { LoopsCache } from './loops/loopsCache'
 import { browserLoopsCache } from './loops/loopsCache'
 import { useLoops } from './loops/useLoops'
 import { PlayerScreen } from './player/PlayerScreen'
+import type { MountYouTube } from './player/youtubeMount'
 
 /* The library lives above the routes rather than beside either of them. Both
    screens read the same list, so a clip added on one is openable on the other
@@ -44,9 +45,13 @@ export type AppProps = {
   readonly capture?: ThumbnailCapture
   /* #20. Where a YouTube video's title comes from. */
   readonly lookUp?: ((videoId: string) => Promise<YouTubeLookUp>) | undefined
-  /* #33: the same app, mounted at `/demo` over the demo's seams. The screens
-     need telling only so they can say so, and so the gallery can drop the
-     controls a visitor has no use for. */
+  /* #77. How the player puts YouTube's player on the page — the IFrame API in
+     the browser, a stand-in under test, where every showcase entry is a
+     YouTube video. */
+  readonly mountYouTube?: MountYouTube | undefined
+  /* #77: the same app as the showcase a visitor lands on, over seams of its
+     own. The screens need telling only so the grid and the player can drop
+     the controls a visitor has no use for. */
   readonly demo?: boolean
 }
 
@@ -59,6 +64,7 @@ export function App({
   thumbnailCache = browserThumbnailCache,
   capture = browserThumbnailCapture,
   lookUp,
+  mountYouTube,
   demo = false,
 }: AppProps = {}) {
   /* The cache goes in as well as down to the player: a deleted clip's bytes are
@@ -211,6 +217,7 @@ export function App({
             stillLoading={library.state === 'loading'}
             demo={demo}
             onRename={rename}
+            mountYouTube={mountYouTube}
           />
         }
       />
