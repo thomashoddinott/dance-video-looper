@@ -750,10 +750,10 @@ describe('the new layout, on trial', () => {
   })
 })
 
-/* #94. In the new layout the A/B slider is only out while a loop is being
-   picked — from space setting A to space setting B — and the clip has its
-   room the rest of the time. A Slider checkbox beside the toggle shows the
-   same state and overrides it by hand, while the behaviour is on trial. */
+/* #94, #96. In the new layout the A/B slider is put away to begin with, so the
+   clip has its room, and a Slider checkbox beside the toggle brings it out and
+   puts it away by hand. Space did both for a while (#94); it no longer does,
+   until the keyboard's part in it is worked out. */
 describe('the slider in the new layout', () => {
   const sliderOnOffer = () => screen.queryByRole('group', { name: 'Loop range' })
   const sliderBox = () => screen.queryByRole('checkbox', { name: 'Slider' })
@@ -773,25 +773,29 @@ describe('the slider in the new layout', () => {
     return { container, clip }
   }
 
-  it('is put away until a loop is being picked', async () => {
+  it('is put away to begin with', async () => {
     await inTheNewLayout()
 
     expect(sliderOnOffer()).not.toBeInTheDocument()
     expect(sliderBox()).not.toBeChecked()
   })
 
-  it('comes out when space sets A, and goes when space sets B', async () => {
+  /* #96. Space frames the loop and leaves the slider where it is. */
+  it('stays where it is when space sets A and B', async () => {
     await inTheNewLayout()
 
     pressSpace()
-
-    expect(sliderOnOffer()).toBeInTheDocument()
-    expect(sliderBox()).toBeChecked()
-
     pressSpace()
 
     expect(sliderOnOffer()).not.toBeInTheDocument()
     expect(sliderBox()).not.toBeChecked()
+
+    await userEvent.click(sliderBox()!)
+    pressSpace()
+    pressSpace()
+
+    expect(sliderOnOffer()).toBeInTheDocument()
+    expect(sliderBox()).toBeChecked()
   })
 
   it('comes out and goes by hand from the Slider checkbox', async () => {
@@ -800,16 +804,6 @@ describe('the slider in the new layout', () => {
     await userEvent.click(sliderBox()!)
 
     expect(sliderOnOffer()).toBeInTheDocument()
-
-    await userEvent.click(sliderBox()!)
-
-    expect(sliderOnOffer()).not.toBeInTheDocument()
-  })
-
-  /* The override is the point of the box: whatever space last did. */
-  it('goes by hand even while a loop is half picked', async () => {
-    await inTheNewLayout()
-    pressSpace()
 
     await userEvent.click(sliderBox()!)
 

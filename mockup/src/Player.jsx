@@ -569,8 +569,8 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
   const [editingId, setEditingId] = useState(null)
   const [nextPoint, setNextPoint] = useState('a')
   const [zen, setZen] = useState(false)
-  /* #94, on trial: whether the new layout has the A/B slider out — from space
-     setting A to space setting B, and whenever the Slider checkbox says so. */
+  /* #94, #96, on trial: whether the new layout has the A/B slider out. Put
+     away to begin with, and brought out by the Slider checkbox alone. */
   const [sliderOut, setSliderOut] = useState(false)
 
   /* #86, on trial. With **Try new UI** on, a wide screen puts the controls and
@@ -707,7 +707,6 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
         // B parks at the end of the clip, so the loop stays valid until B is set
         setLoop({ a: t, b: video.duration })
         setNextPoint('b')
-        setSliderOut(true)
         return
       }
       setLoop((current) => ({
@@ -715,7 +714,6 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
         b: clamp(t, current.a + MIN_LOOP, video.duration),
       }))
       setNextPoint('a')
-      setSliderOut(false)
     }
 
     window.addEventListener('keydown', onKeyDown)
@@ -1227,7 +1225,7 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
             anything */}
         {wide && (
           <div className="ml-auto flex shrink-0 items-center gap-3">
-            {/* #94, on trial: the slider by hand, to check space against */}
+            {/* #94, #96, on trial: the slider out or away, by hand */}
             {columns && (
               <label className="flex items-center gap-1.5 text-xs font-semibold text-ink/70">
                 <input
