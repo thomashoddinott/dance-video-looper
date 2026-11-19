@@ -1,9 +1,22 @@
-/* #20. YouTube's own picture of a video, which it serves for every public one.
-   `mqdefault` is the 16:9 one with no letterbox bars, so it crops into a tile
-   the way a clip's frame does. Served with `access-control-allow-origin: *`,
-   so its bytes could be kept in Drive for an offline grid later. */
-export const thumbnailFor = (videoId: string) =>
-  `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`
+/* #20, #92. YouTube's own pictures of a video, sharpest first. Both are 16:9
+   with no letterbox bars, so they crop into a tile the way a clip's frame does;
+   a Short's is the portrait video centred on a blur, so the tile's centre crop
+   is the Short itself. Served with `access-control-allow-origin: *`, so their
+   bytes could be kept in Drive for an offline grid later.
+
+   `hq720` (1280×720) fills a portrait tile's height at a phone's 2x without
+   stretching; `mqdefault` (320×180) is there for a video YouTube has no
+   larger picture of, and was all a tile had before #92. */
+export const thumbnailsFor = (videoId: string) =>
+  [
+    `https://i.ytimg.com/vi/${videoId}/hq720.jpg`,
+    `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+  ] as const
+
+/* What YouTube answers for a picture it does not have: a 120×90 placeholder
+   with a 404, which a browser draws rather than reporting an error. Nothing
+   real is this narrow. */
+export const NO_SUCH_PICTURE_WIDTH = 120
 
 /* The id a YouTube entry is known by in the library and in `loops.json`:
    namespaced, so it can never collide with a clip's. */

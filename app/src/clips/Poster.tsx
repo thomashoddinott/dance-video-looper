@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 import type { Clip } from './clip'
 import { POSTER_AT_SECONDS } from './thumbnail'
-import { thumbnailFor } from './youtube'
+import { NO_SUCH_PICTURE_WIDTH, thumbnailsFor } from './youtube'
 
 /* Three ways to fill a tile, in the order they cost:
 
@@ -24,23 +24,39 @@ export function Poster({
   readonly clip: Clip
   readonly thumbnail?: string | undefined
 }) {
-  /* Two flags rather than one, because a still that will not render must fall
-     through to the local file rather than skip it. Sharing them would let a
-     broken still blank a tile that had a perfectly good clip behind it. */
-  const [stillFailed, setStillFailed] = useState(false)
-  const [failed, setFailed] = useState(false)
-
   /* #20. A YouTube entry has no bytes and no still of its own, but YouTube
-     publishes a picture of every video, so that is its still. */
-  const still =
-    thumbnail ?? (clip.videoId === undefined ? undefined : thumbnailFor(clip.videoId))
+     publishes pictures of every video, so those are its stills, sharpest
+     first (#92). */
+  const youtube = thumbnail === undefined && clip.videoId !== undefined
+  const stills: readonly string[] =
+    thumbnail !== undefined
+      ? [thumbnail]
+      : clip.videoId === undefined
+        ? []
+        : thumbnailsFor(clip.videoId)
 
-  if (still !== undefined && !stillFailed) {
+  /* How far down the stills a tile has had to go, and separately whether the
+     local file failed: a still that will not render must fall through to the
+     local file rather than skip it, or a broken still would blank a tile that
+     had a perfectly good clip behind it. */
+  const [tried, setTried] = useState(0)
+  const [failed, setFailed] = useState(false)
+  const still = stills[tried]
+  const tryTheNext = () => setTried((at) => at + 1)
+
+  if (still !== undefined) {
     return (
       <img
         src={still}
         alt=""
-        onError={() => setStillFailed(true)}
+        onError={tryTheNext}
+        /* YouTube's answer for a picture it does not have draws rather than
+           failing, so it is caught by its size. */
+        onLoad={(event) => {
+          if (youtube && event.currentTarget.naturalWidth <= NO_SUCH_PICTURE_WIDTH) {
+            tryTheNext()
+          }
+        }}
         className="aspect-[9/16] w-full object-cover"
       />
     )

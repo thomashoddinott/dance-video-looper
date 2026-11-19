@@ -273,12 +273,68 @@ describe('a tile for a YouTube video', () => {
       </MemoryRouter>,
     )
 
-  it('shows YouTube’s own picture of the video', () => {
+  /* The still as the browser drew it: jsdom loads no images, so a case says
+     how wide the picture turned out to be. */
+  const stillLoads = (naturalWidth: number) => {
+    const still = theStill()
+
+    if (!still) throw new Error('The tile drew no still')
+
+    Object.defineProperty(still, 'naturalWidth', { value: naturalWidth })
+    fireEvent.load(still)
+  }
+
+  const stillFails = () => {
+    const still = theStill()
+
+    if (!still) throw new Error('The tile drew no still')
+
+    fireEvent.error(still)
+  }
+
+  /* #92. The 1280×720 one: the tile crops a portrait slice out of it at full
+     height, and the 320×180 one stretched to a tile's height is a blur. */
+  it('shows YouTube’s own picture of the video, at 1280×720', () => {
     renderYouTubeTile()
 
     expect(theStill()).toHaveAttribute(
       'src',
+      `https://i.ytimg.com/vi/${A_VIDEO}/hq720.jpg`,
+    )
+  })
+
+  /* YouTube answers a picture it does not have with a 120×90 placeholder and a
+     404, which a browser draws rather than reporting an error. */
+  it('falls back to the 320×180 picture when YouTube has no larger one', () => {
+    renderYouTubeTile()
+
+    stillLoads(120)
+
+    expect(theStill()).toHaveAttribute(
+      'src',
       `https://i.ytimg.com/vi/${A_VIDEO}/mqdefault.jpg`,
+    )
+  })
+
+  it('falls back to the 320×180 picture when the larger one will not load', () => {
+    renderYouTubeTile()
+
+    stillFails()
+
+    expect(theStill()).toHaveAttribute(
+      'src',
+      `https://i.ytimg.com/vi/${A_VIDEO}/mqdefault.jpg`,
+    )
+  })
+
+  it('keeps the 1280×720 picture once it has loaded', () => {
+    renderYouTubeTile()
+
+    stillLoads(1280)
+
+    expect(theStill()).toHaveAttribute(
+      'src',
+      `https://i.ytimg.com/vi/${A_VIDEO}/hq720.jpg`,
     )
   })
 
