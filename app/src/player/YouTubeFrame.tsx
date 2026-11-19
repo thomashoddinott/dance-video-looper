@@ -12,14 +12,16 @@ const LENGTH_POLL = 200
    surface (`youtubeSurface`) once it has a length to give — which on a cued
    video can trail `onReady` by a moment.
 
-   Sized for 16:9, which is what YouTube serves even for a portrait upload — it
-   letterboxes inside its own frame — and capped by width and by height the way
-   the <video> is, so a phone in portrait keeps room for the controls. */
+   Sized to the video's own shape: 16:9, or 9:16 for a Short (#90), which
+   YouTube would otherwise fit inside a 16:9 frame as a strip with black either
+   side. Capped by width and by height the way the <video> is, so a phone in
+   portrait keeps room for the controls. */
 export function YouTubeFrame({
   videoId,
   mount,
   isolated,
   column,
+  portrait = false,
   knownLength,
   onReady,
   onState,
@@ -33,6 +35,9 @@ export function YouTubeFrame({
   /* #81. Beside the loops column, where the width to fill is the player's
      column rather than the window. */
   readonly column: boolean
+  /* #90. Taller than it is wide — a Short. Changes the frame's shape only, so
+     YouTube's player inside it is never made again. */
+  readonly portrait?: boolean
   /* The length the entry already carries, if it does. A cued video can report
      none until it has been played once, and without a length the player has no
      loop to lay out — so this stands in until YouTube gives one. */
@@ -101,19 +106,24 @@ export function YouTubeFrame({
     }
   }, [mount, videoId])
 
+  /* Width over height, as CSS reads it: every cap below is a height turned into
+     the width that gives it. */
+  const ratio = portrait ? '9 / 16' : '16 / 9'
+  const shape = portrait ? 'aspect-[9/16]' : 'aspect-video'
+
   return (
     <div
       ref={host}
-      className={isolated ? 'aspect-video' : 'aspect-video overflow-hidden rounded-lg bg-black'}
+      className={isolated ? shape : `${shape} overflow-hidden rounded-lg bg-black`}
       /* In a column, `cqw` is the card's own width inside its padding (the card
          is a size container there), and the height is capped as the <video>'s
          is, by what the controls leave. */
       style={{
         width: isolated
-          ? 'min(100vw, 100dvh * 16 / 9)'
+          ? `min(100vw, 100dvh * ${ratio})`
           : column
-            ? 'min(100cqw, 1100px, (100dvh - var(--player-controls)) * 16 / 9)'
-            : 'min(100vw - 4rem, 1100px, 55vh * 16 / 9)',
+            ? `min(100cqw, 1100px, (100dvh - var(--player-controls)) * ${ratio})`
+            : `min(100vw - 4rem, 1100px, 55vh * ${ratio})`,
       }}
     />
   )

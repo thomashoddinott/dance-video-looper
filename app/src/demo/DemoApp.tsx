@@ -4,6 +4,7 @@ import { App } from '../App'
 import type { ClipCache, ThumbnailStore } from '../clips/clipCache'
 import { thumbnailCacheOver } from '../clips/clipCache'
 import { localOpenedStore } from '../clips/openedStore'
+import type { ShapeYouTube } from '../clips/youtube'
 import type { DriveApi } from '../drive/driveApi'
 import { browserDriveApi } from '../drive/driveApi'
 import { LOOPS_FILE } from '../loops/driveLoops'
@@ -17,8 +18,9 @@ import { memoryStorage } from './memoryStorage'
 
 export type DemoProps = {
   readonly urls?: Pick<DriveApi, 'toUrl' | 'releaseUrl'>
-  /* #77. Straight through to the player, for `App`'s reason. */
+  /* #77, #90. Straight through to the player, for `App`'s reason. */
   readonly mountYouTube?: MountYouTube | undefined
+  readonly shapeYouTube?: ShapeYouTube | undefined
 }
 
 /* Nothing in the showcase has bytes to cache: YouTube plays every video. */
@@ -57,7 +59,11 @@ const stillsInMemory = (): ThumbnailStore => {
    Not persistent (#66): what a visitor does here lasts while they stay, and
    is gone the next time they come, so every visit opens on the loops it ships
    with. */
-export function DemoApp({ urls = browserDriveApi, mountYouTube }: DemoProps) {
+export function DemoApp({
+  urls = browserDriveApi,
+  mountYouTube,
+  shapeYouTube,
+}: DemoProps) {
   /* One per visit: made when it mounts, gone when it unmounts. */
   const [kept] = useState(memoryStorage)
 
@@ -83,7 +89,13 @@ export function DemoApp({ urls = browserDriveApi, mountYouTube }: DemoProps) {
 
   return (
     <DemoSession>
-      <App {...seams} clipCache={noClipCache} mountYouTube={mountYouTube} demo />
+      <App
+        {...seams}
+        clipCache={noClipCache}
+        mountYouTube={mountYouTube}
+        shapeYouTube={shapeYouTube}
+        demo
+      />
     </DemoSession>
   )
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { lookUpYouTube, videoIdFrom } from './youtube'
+import { lookUpYouTube, shapeOfYouTube, videoIdFrom } from './youtube'
 
 const A_VIDEO = 'EuT94T544Mg'
 
@@ -93,5 +93,43 @@ describe('looking a video up on YouTube', () => {
       found: false,
       because: 'unreachable',
     })
+  })
+})
+
+/* #90. Whether a video is taller than it is wide, which decides the shape of
+   its frame. oEmbed only tells when asked with the Shorts form of the link: a
+   Short answers 113×200, any other video 200×113. */
+describe('reading which way a video faces', () => {
+  it('asks oEmbed about the video by the Shorts form of its link', async () => {
+    const fetch = answering(200, { width: 113, height: 200 })
+
+    await shapeOfYouTube(A_VIDEO, fetch)
+
+    expect(decodeURIComponent(String(fetch.mock.calls[0]?.[0]))).toContain(
+      `https://www.youtube.com/oembed?url=https://www.youtube.com/shorts/${A_VIDEO}`,
+    )
+  })
+
+  it('reads a Short as portrait', async () => {
+    await expect(
+      shapeOfYouTube(A_VIDEO, answering(200, { width: 113, height: 200 })),
+    ).resolves.toBe('portrait')
+  })
+
+  it('reads any other video as landscape', async () => {
+    await expect(
+      shapeOfYouTube(A_VIDEO, answering(200, { width: 200, height: 113 })),
+    ).resolves.toBe('landscape')
+  })
+
+  /* The shape the frame always had, so no answer changes nothing. */
+  it('falls back to landscape when YouTube will not say', async () => {
+    const unreachable = vi.fn(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+
+    await expect(shapeOfYouTube(A_VIDEO, answering(401))).resolves.toBe('landscape')
+    await expect(shapeOfYouTube(A_VIDEO, answering(200, {}))).resolves.toBe('landscape')
+    await expect(shapeOfYouTube(A_VIDEO, unreachable)).resolves.toBe('landscape')
   })
 })

@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
 import type { Clip } from '../clips/clip'
+import type { VideoShape } from '../clips/youtube'
 import type { DriveApi } from '../drive/driveApi'
 import { aDriveApi } from '../drive/driveApi.factory'
 import { DriveSessionProvider } from '../drive/DriveSessionProvider'
@@ -92,6 +93,7 @@ const Player = ({
   onRename,
   demo = false,
   mountYouTube,
+  shapeYouTube = aLandscapeVideo,
   ...loops
 }: {
   readonly clip: Clip
@@ -101,6 +103,7 @@ const Player = ({
   readonly onRename?: (clip: Clip, name: string) => Promise<boolean>
   readonly demo?: boolean
   readonly mountYouTube?: MountYouTube
+  readonly shapeYouTube?: ((videoId: string) => Promise<VideoShape>) | undefined
 } & LoopOptions) => {
   const store = useFakeLoops(loops)
 
@@ -115,9 +118,14 @@ const Player = ({
       onRename={onRename}
       demo={demo}
       mountYouTube={mountYouTube}
+      shapeYouTube={shapeYouTube}
     />
   )
 }
+
+/* #90. Which way a YouTube video faces is oEmbed's to say; nothing here asks
+   the network, and a video is landscape unless a case says otherwise. */
+const aLandscapeVideo = async (): Promise<VideoShape> => 'landscape'
 
 /* #16 stamps the clip on open; nothing in this file is about that. */
 const noOpenIsRecorded = () => {}
@@ -3896,7 +3904,10 @@ describe('a YouTube video in the player', () => {
     src: undefined,
   })
 
-  const renderYouTube = (youtube = aYouTube()) => {
+  const renderYouTube = (
+    youtube = aYouTube(),
+    shapeYouTube?: (videoId: string) => Promise<VideoShape>,
+  ) => {
     const driveApi = aDriveApi()
     const rendered = render(
       inASession(
@@ -3909,6 +3920,7 @@ describe('a YouTube video in the player', () => {
                   clip={A_YOUTUBE_CLIP}
                   driveApi={driveApi}
                   mountYouTube={youtube.mount}
+                  shapeYouTube={shapeYouTube}
                 />
               }
             />
@@ -3951,6 +3963,34 @@ describe('a YouTube video in the player', () => {
     })
     expect(container.querySelector('video')).toBeNull()
     expect(driveApi.download).not.toHaveBeenCalled()
+  })
+
+  /* #90. A Short is 9:16, and YouTube fits it inside whatever frame it is
+     given: a 16:9 frame plays it as a strip with black either side, which on a
+     phone is a third of the screen's width. Its shape arrives after the frame
+     is up, and the frame changes shape around YouTube rather than YouTube being
+     mounted again (BR-08). */
+  it('gives a Short a portrait frame, without mounting YouTube a second time', async () => {
+    const youtube = aYouTube()
+    const shapeYouTube = vi.fn(async (): Promise<VideoShape> => 'portrait')
+    renderYouTube(youtube, shapeYouTube)
+
+    await waitFor(() => {
+      expect(youtube.host()).toHaveClass('aspect-[9/16]')
+    })
+    expect(shapeYouTube).toHaveBeenCalledWith(A_VIDEO)
+    expect(youtube.mount).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps any other video in a 16:9 frame', async () => {
+    const youtube = aYouTube()
+    renderYouTube(youtube)
+
+    await waitFor(() => {
+      expect(youtube.mount).toHaveBeenCalled()
+    })
+
+    expect(youtube.host()).toHaveClass('aspect-video')
   })
 
   it('lays the loop over the whole video once YouTube knows its length', async () => {
