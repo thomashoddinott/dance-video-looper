@@ -669,17 +669,34 @@ describe('the Drive session on the Clips screen', () => {
     expect(await screen.findByText(/drive is connected/i)).toBeInTheDocument()
   })
 
-  it('says what is unavailable and why when the dancer declines', async () => {
+  /* #83. Declining leaves the dancer where they were before they asked, and
+     the screen says no more than it did then: they know what they just
+     clicked, and Connect is still at the top for when they change their mind. */
+  it('says only that Drive is not connected when the dancer declines', async () => {
     renderAppAt('/', sourceRefusing())
 
     await userEvent.click(
       screen.getByRole('button', { name: /connect google drive/i }),
     )
 
-    const notice = await screen.findByRole('status')
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(
+        /^Not connected to Drive\.$/,
+      )
+    })
+  })
 
-    expect(notice).toHaveTextContent(/you declined/i)
-    expect(notice).toHaveTextContent(/clips and saved loops/i)
+  it('stops offering to connect once Drive is connected', async () => {
+    renderAppAt('/')
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /connect google drive/i }),
+    )
+    await screen.findByText(/drive is connected/i)
+
+    expect(
+      screen.queryByRole('button', { name: /connect google drive/i }),
+    ).not.toBeInTheDocument()
   })
 
   it('offers sign-in again after the dancer declined, since they can change their mind', async () => {
