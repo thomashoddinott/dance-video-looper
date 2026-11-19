@@ -474,13 +474,13 @@ const median = (values) => {
   return sorted[Math.floor(sorted.length / 2)]
 }
 
-function SpikeReadings({ rates, speed, actualRate, readings, onCheckSeeks }) {
+function SpikeReadings({ open, rates, speed, actualRate, readings, onCheckSeeks }) {
   const ms = (value) => (value === null ? '—' : `${Math.round(value)} ms`)
   const cadence = median(readings.cadence)
   const overshoot = readings.overshoot.map((past) => past * 1000)
 
   return (
-    <details open className="mt-4 rounded-xl bg-shell/60 p-4 text-xs text-ink/70">
+    <details open={open} className="mt-4 rounded-xl bg-shell/60 p-4 text-xs text-ink/70">
       <summary className="cursor-pointer text-xs font-bold tracking-widest text-ink/50">
         SPIKE READINGS
       </summary>
@@ -513,6 +513,23 @@ function SpikeReadings({ rates, speed, actualRate, readings, onCheckSeeks }) {
   )
 }
 
+/* #81. Tailwind's `lg` (1024px), read in script rather than CSS because the
+   loops panel moves to another place in the tree, which a class cannot do. */
+const WIDE = '(min-width: 64rem)'
+
+function useWide() {
+  const [wide, setWide] = useState(() => window.matchMedia(WIDE).matches)
+
+  useEffect(() => {
+    const query = window.matchMedia(WIDE)
+    const update = () => setWide(query.matches)
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
+
+  return wide
+}
+
 function Player({ clip, onBack, onDuration }) {
   /* #20 spike: a YouTube entry plays in the IFrame player, which hands back a
      surface shaped like the <video> this ref otherwise holds. Nothing below the
@@ -538,10 +555,11 @@ function Player({ clip, onBack, onDuration }) {
   const [looping, setLooping] = useState(true)
   const [loop, setLoop] = useState({ a: 0, b: 0 })
   const [speed, setSpeed] = useState(1)
-  const [saved, setSaved] = useState([])
+  /* #81: an entry can arrive with loops already saved against it */
+  const [saved, setSaved] = useState(clip.savedLoops ?? [])
   const [chain, setChain] = useState([])
   const [name, setName] = useState('')
-  const [nextId, setNextId] = useState(1)
+  const [nextId, setNextId] = useState((clip.savedLoops?.length ?? 0) + 1)
   /* Which saved loop the controls are currently *on*. Set only by opening one
      from the list, and let go by every write (#71). Saving used to set it too,
      so the next section framed and saved went over the loop just kept. Once a
@@ -550,6 +568,10 @@ function Player({ clip, onBack, onDuration }) {
   const [editingId, setEditingId] = useState(null)
   const [nextPoint, setNextPoint] = useState('a')
   const [zen, setZen] = useState(false)
+
+  /* #81. On a wide screen the loops leave the card for a column of their own,
+     to the left of the player rather than below the fold. */
+  const columns = useWide()
 
   // the rAF loop and the key handler read these, so neither needs re-subscribing
   const loopRef = useRef(loop)
@@ -939,10 +961,158 @@ function Player({ clip, onBack, onDuration }) {
     playRun(saved.filter((item) => next.includes(item.id)))
   }
 
+  /* #81. One panel, drawn in one of two places: inside the card under the
+     controls, as it always was, or as a column of its own beside the card. In
+     the column it is a card itself, the field stays put and the list scrolls. */
+  const savedLoopsPanel = (
+    <div
+      className={
+        columns
+          ? `order-first flex min-h-0 flex-col rounded-2xl bg-panel p-4 lg:p-6 ${
+              zen ? 'hidden' : ''
+            }`
+          : 'mt-6 rounded-xl bg-shell/60 p-4'
+      }
+    >
+      <h2 className="text-xs font-bold tracking-widest text-ink/50">
+        SAVED LOOPS
+      </h2>
+
+      <div className="mt-2 flex gap-2">
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder={editing ? editing.name : `Loop ${saved.length + 1}`}
+          aria-label="Loop name"
+          className="min-w-0 flex-1 rounded-lg bg-ink/10 px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink/40"
+        />
+        {/* The one button, and it means whichever of the two things you
+            are actually doing. Two side by side would put "make another
+            one" under the thumb at exactly the moment it is wrong. */}
+        <button
+          type="button"
+          onClick={saveLoop}
+          disabled={halfSet}
+          className={`rounded-lg px-4 py-2.5 text-sm font-semibold active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${
+            editing && dirty
+              ? 'bg-gradient-to-br from-accent to-accent-2 text-on-accent shadow'
+              : CONTROL
+          }`}
+        >
+          {editing ? 'Update' : 'Save'}
+        </button>
+      </div>
+
+      {/* Says which loop is about to be written over, by the name it is
+          still stored under — the field above may already be showing a
+          new one, and "updates Loop 3" is the fact you need to not lose
+          Loop 3 by accident. */}
+      <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 text-xs tabular-nums text-ink/40">
+        <span className={halfSet ? 'tracking-wide' : undefined}>
+          {halfSet
+            ? 'set B to finish the loop'
+            : editing
+              ? `updates ${editing.name} to ${summarise(loop, speed)}`
+              : `saves ${summarise(loop, speed)}`}
+        </span>
+        {/* Stays put and greys while the loop is half-set rather than
+            leaving with the line beside it — a control that vanishes on a
+            press of space is a worse answer to "why can I not save" than
+            one that is visibly refusing. */}
+        {editing && (
+          <button
+            type="button"
+            onClick={saveAsNew}
+            disabled={halfSet}
+            className="font-medium text-accent hover:underline disabled:pointer-events-none disabled:opacity-40"
+          >
+            Save as new
+          </button>
+        )}
+      </p>
+
+      {/* Ordered by where they start, not by when they were saved or what
+          they were called: a chain is a run through the clip, so the rows
+          you tick have to be the rows next to each other. Sorted any other
+          way, ticking two segments that follow each other lights up two
+          rows with something unrelated sitting between them, and the span
+          it plays stops looking like the rows it came from. */}
+      <ul
+        className={`mt-3 flex flex-col gap-1.5 ${
+          columns ? '-mx-1 min-h-0 flex-1 overflow-y-auto px-1 py-1' : ''
+        }`}
+      >
+        {inTimeOrder(saved).map((item) => (
+          <li
+            key={item.id}
+            /* Held by id now, not by whether the numbers happen to match.
+               The value match let go the instant you nudged A — which is
+               the moment the highlight is doing its only real job:
+               showing which row the next Save lands on. */
+            className={`flex items-center gap-1 rounded-lg pr-1 ${
+              item.id === editing?.id
+                ? 'bg-accent/25 ring-1 ring-accent/60'
+                : 'bg-control/50'
+            }`}
+          >
+            {/* Nothing to chain a lone loop to, so the column only appears
+                once there are two — no box, no gutter, nothing to explain. */}
+            {saved.length > 1 && (
+              <input
+                type="checkbox"
+                checked={chain.includes(item.id)}
+                onChange={() => toggleChain(item.id)}
+                aria-label={`Chain ${item.name}`}
+                className="ml-3 h-4 w-4 shrink-0 accent-accent"
+              />
+            )}
+            <button
+              type="button"
+              onClick={() => loadLoop(item)}
+              className="min-w-0 flex-1 px-3 py-2 text-left"
+            >
+              <span className="block truncate text-sm font-medium">
+                {item.name}
+              </span>
+              <span className="block text-xs tabular-nums text-ink/50">
+                {summarise(item, item.speed)}
+              </span>
+            </button>
+            {/* Still the stored numbers beside it, because they are what
+                you stand to lose — the pending ones are already on the
+                line under the field. Outside the row's own button rather
+                than inside it: the button is named by what the loop *is*,
+                and a word coming and going in there renames the control
+                under anyone listening to the page. */}
+            {dirty && item.id === editing.id && (
+              <span className="shrink-0 px-1 text-[11px] font-medium text-accent">
+                unsaved
+              </span>
+            )}
+            <button
+              type="button"
+              aria-label={`Delete ${item.name}`}
+              onClick={() => removeLoop(item.id)}
+              className="rounded px-2 py-1 text-lg leading-none text-ink/40 hover:text-ink"
+            >
+              &times;
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+
   return (
-    <div className="min-h-screen bg-shell text-ink">
+    <div
+      className={
+        columns ? 'flex h-dvh flex-col bg-shell text-ink' : 'min-h-screen bg-shell text-ink'
+      }
+    >
       <header
-        className={`flex items-center gap-2 px-4 py-3 ${zen ? 'hidden' : ''}`}
+        className={`flex items-center gap-2 px-4 py-3 ${
+          columns ? 'mx-auto w-full max-w-[100rem]' : ''
+        } ${zen ? 'hidden' : ''}`}
       >
         <button
           type="button"
@@ -963,301 +1133,202 @@ function Player({ clip, onBack, onDuration }) {
       {/* Zen mode restyles this tree rather than rendering a second one: moving the
           <video> would remount it, and the clip would reload and lose the loop
           you were watching. Same element, different classes. */}
-      <main className={zen ? undefined : 'px-4 pb-4'}>
-        <div
-          className={
-            zen
-              ? 'fixed inset-0 z-50 flex items-center justify-center bg-black'
-              : 'mx-auto w-fit max-w-full rounded-2xl bg-panel p-4 lg:p-6'
-          }
-        >
-          {/* w-fit so the wrapper hugs the clip — otherwise it spans the card and
-              the expand button lands out in the padding beside the video */}
+      <main
+        className={
+          zen
+            ? undefined
+            : columns
+              ? 'mx-auto grid min-h-0 w-full max-w-[100rem] flex-1 grid-cols-[22rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-4 px-4 pb-4'
+              : 'px-4 pb-4'
+        }
+      >
+        {/* #81. The player's own column. A size container, so the YouTube frame
+            can size itself to the column rather than to the window. Not in zen,
+            where the frame sizes itself to the screen. */}
+        <div className={columns && !zen ? '@container min-h-0 overflow-y-auto' : undefined}>
           <div
-            className={`relative w-fit ${zen ? 'flex max-h-dvh items-center' : 'mx-auto'}`}
+            className={
+              zen
+                ? 'fixed inset-0 z-50 flex items-center justify-center bg-black'
+                : columns
+                  ? /* #81: fills its column, so the loop slider gets the width */
+                    'rounded-2xl bg-panel p-4 lg:p-6'
+                  : 'mx-auto w-fit max-w-full rounded-2xl bg-panel p-4 lg:p-6'
+            }
           >
-            {/* Never upscaled or stretched: the clip renders at its own size and only
-                shrinks to fit the viewport. Which limit binds depends on the clip —
-                height for a portrait one, width for a landscape one. */}
-            {youtube ? (
-              <>
-                <YouTubeFrame
-                  videoId={clip.videoId}
-                  zen={zen}
-                  onReady={youtubeReady}
-                  onState={(state) => {
-                    setPlaying(state === 1 || state === 3)
-                    if (state === 1) setStarted(true)
-                  }}
-                  onRate={setActualRate}
-                  onError={(code) => setYtError(ERRORS[code] ?? `YouTube error ${code}`)}
-                  onSeeked={() => {
-                    seekingRef.current = false
-                    flushSeekRef.current?.()
-                  }}
-                />
-                {started && (
-                  <div className="absolute inset-0" onClick={togglePlay} aria-hidden="true" />
-                )}
-                {ytError && (
-                  <p className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/85 px-6 text-center text-sm text-white">
-                    {ytError}
-                  </p>
-                )}
-              </>
-            ) : (
-            <video
-              ref={videoRef}
-              src={clip.src}
-              className={
-                zen
-                  ? 'max-h-dvh max-w-full object-contain'
-                  : 'mx-auto block max-h-[50vh] max-w-full rounded-lg bg-black lg:max-h-[80vh]'
-              }
-              playsInline
-              /* The default only fetches metadata, so scrubbing past what
-                 happens to have arrived turns every seek into a network fetch
-                 and a decode — which is most of what reads as the clip freezing.
-                 These are ~6MB and the app is cache-first anyway, so there is no
-                 reason not to have the whole thing before the first drag. */
-              preload="auto"
-              onLoadedMetadata={onLoadedMetadata}
-              /* The gate. The next seek goes out when the last one lands, so
-                 there is never a queue to fall behind. */
-              onSeeked={() => {
-                seekingRef.current = false
-                flushSeek()
-              }}
-              onPlay={() => setPlaying(true)}
-              onPause={() => setPlaying(false)}
-              onClick={togglePlay}
-            />
-            )}
-
-            <VideoProgress
-              time={time}
-              duration={duration}
-              loop={loop}
-              looping={looping}
-              onScrub={scrub}
-              onHold={holdScrub}
-              /* Follows the clip's own corners so the scrim doesn't square off a
-                 rounded video. Zen has no rounding to follow. */
-              rounded={zen ? undefined : 'rounded-b-lg'}
-            />
-
-            <button
-              type="button"
-              aria-label={zen ? 'Leave the isolated view' : 'Isolate the video'}
-              onClick={() => setZen(!zen)}
-              className="absolute right-2 top-2 rounded-lg bg-shell/60 p-2 text-ink/60 backdrop-blur transition hover:text-ink active:scale-95"
+            {/* w-fit so the wrapper hugs the clip — otherwise it spans the card and
+                the expand button lands out in the padding beside the video */}
+            <div
+              className={`relative w-fit ${zen ? 'flex max-h-dvh items-center' : 'mx-auto'}`}
             >
-              {zen ? <CloseIcon /> : <ExpandIcon />}
-            </button>
-          </div>
-
-          {/* Hidden rather than unmounted, for the same reason */}
-          <div className={zen ? 'hidden' : undefined}>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 lg:mt-6">
-            <div className="flex gap-1.5">
-              <SeekButton label={`Back ${NUDGE} second`} onClick={nudge(-NUDGE)}>
-                <BackIcon />
-              </SeekButton>
-              <SeekButton label={`Forward ${NUDGE} second`} onClick={nudge(NUDGE)}>
-                <ForwardIcon />
-              </SeekButton>
-            </div>
-            <SpeedStepper speed={speed} onChange={setSpeed} />
-          </div>
-          {/* The speed control does not lie: when YouTube plays at something
-              other than what was asked, the screen says so. */}
-          {youtube && Math.abs(actualRate - speed) > 0.001 && (
-            <p className="mt-1.5 text-right text-xs text-accent">
-              YouTube is playing this at {formatSpeed(actualRate)}x
-            </p>
-          )}
-
-          <LoopSlider
-            duration={duration}
-            time={time}
-            loop={loop}
-            onScrub={scrub}
-            onLoopChange={changeLoop}
-            onHold={holdScrub}
-          />
-
-          {/* Only worth showing where there is a keyboard to press */}
-          <p className="mb-4 hidden text-center text-xs text-ink/40 sm:block">
-            <Key>space</Key> sets{' '}
-            <span className="font-semibold text-ink/70">
-              {nextPoint.toUpperCase()}
-            </span>
-            <span className="px-2">&middot;</span>
-            <span className={halfSet ? 'opacity-40' : undefined}>
-              <Key>s</Key>{' '}
-              {halfSet
-                ? 'saves once B is set'
-                : editing
-                  ? 'updates it'
-                  : 'saves the loop'}
-            </span>
-            {editing && !halfSet && (
-              <>
-                <span className="px-2">&middot;</span>
-                <span>
-                  <Key>&#8679;s</Key> saves a new one
-                </span>
-              </>
-            )}
-            <span className="px-2">&middot;</span>
-            <Key>f</Key> toggles zen mode
-          </p>
-
-          <div className="flex items-start justify-center gap-6">
-            <BigButton label="START" onClick={() => scrub(loop.a)}>
-              <StartIcon />
-            </BigButton>
-            <BigButton
-              label={looping ? 'LOOPING' : 'START LOOP'}
-              active={looping}
-              onClick={() => setLooping(!looping)}
-            >
-              <LoopIcon />
-            </BigButton>
-            <BigButton label={playing ? 'PAUSE' : 'PLAY'} onClick={togglePlay}>
-              {playing ? <PauseIcon /> : <PlayIcon />}
-            </BigButton>
-          </div>
-
-          <div className="mt-6 rounded-xl bg-shell/60 p-4">
-            <h2 className="text-xs font-bold tracking-widest text-ink/50">
-              SAVED LOOPS
-            </h2>
-
-            <div className="mt-2 flex gap-2">
-              <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder={editing ? editing.name : `Loop ${saved.length + 1}`}
-                aria-label="Loop name"
-                className="min-w-0 flex-1 rounded-lg bg-ink/10 px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink/40"
+              {/* Never upscaled or stretched: the clip renders at its own size and only
+                  shrinks to fit the viewport. Which limit binds depends on the clip —
+                  height for a portrait one, width for a landscape one. */}
+              {youtube ? (
+                <>
+                  <YouTubeFrame
+                    videoId={clip.videoId}
+                    zen={zen}
+                    columns={columns}
+                    onReady={youtubeReady}
+                    onState={(state) => {
+                      setPlaying(state === 1 || state === 3)
+                      if (state === 1) setStarted(true)
+                    }}
+                    onRate={setActualRate}
+                    onError={(code) => setYtError(ERRORS[code] ?? `YouTube error ${code}`)}
+                    onSeeked={() => {
+                      seekingRef.current = false
+                      flushSeekRef.current?.()
+                    }}
+                  />
+                  {started && (
+                    <div className="absolute inset-0" onClick={togglePlay} aria-hidden="true" />
+                  )}
+                  {ytError && (
+                    <p className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/85 px-6 text-center text-sm text-white">
+                      {ytError}
+                    </p>
+                  )}
+                </>
+              ) : (
+              <video
+                ref={videoRef}
+                src={clip.src}
+                className={
+                  zen
+                    ? 'max-h-dvh max-w-full object-contain'
+                    : columns
+                      ? /* #81: whatever height the controls leave, so the
+                           whole column fits the screen */
+                        'mx-auto block max-h-[calc(100dvh-26rem)] max-w-full rounded-lg bg-black'
+                      : 'mx-auto block max-h-[50vh] max-w-full rounded-lg bg-black lg:max-h-[80vh]'
+                }
+                playsInline
+                /* The default only fetches metadata, so scrubbing past what
+                   happens to have arrived turns every seek into a network fetch
+                   and a decode — which is most of what reads as the clip freezing.
+                   These are ~6MB and the app is cache-first anyway, so there is no
+                   reason not to have the whole thing before the first drag. */
+                preload="auto"
+                onLoadedMetadata={onLoadedMetadata}
+                /* The gate. The next seek goes out when the last one lands, so
+                   there is never a queue to fall behind. */
+                onSeeked={() => {
+                  seekingRef.current = false
+                  flushSeek()
+                }}
+                onPlay={() => setPlaying(true)}
+                onPause={() => setPlaying(false)}
+                onClick={togglePlay}
               />
-              {/* The one button, and it means whichever of the two things you
-                  are actually doing. Two side by side would put "make another
-                  one" under the thumb at exactly the moment it is wrong. */}
+              )}
+
+              <VideoProgress
+                time={time}
+                duration={duration}
+                loop={loop}
+                looping={looping}
+                onScrub={scrub}
+                onHold={holdScrub}
+                /* Follows the clip's own corners so the scrim doesn't square off a
+                   rounded video. Zen has no rounding to follow. */
+                rounded={zen ? undefined : 'rounded-b-lg'}
+              />
+
               <button
                 type="button"
-                onClick={saveLoop}
-                disabled={halfSet}
-                className={`rounded-lg px-4 py-2.5 text-sm font-semibold active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${
-                  editing && dirty
-                    ? 'bg-gradient-to-br from-accent to-accent-2 text-on-accent shadow'
-                    : CONTROL
-                }`}
+                aria-label={zen ? 'Leave the isolated view' : 'Isolate the video'}
+                onClick={() => setZen(!zen)}
+                className="absolute right-2 top-2 rounded-lg bg-shell/60 p-2 text-ink/60 backdrop-blur transition hover:text-ink active:scale-95"
               >
-                {editing ? 'Update' : 'Save'}
+                {zen ? <CloseIcon /> : <ExpandIcon />}
               </button>
             </div>
 
-            {/* Says which loop is about to be written over, by the name it is
-                still stored under — the field above may already be showing a
-                new one, and "updates Loop 3" is the fact you need to not lose
-                Loop 3 by accident. */}
-            <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 text-xs tabular-nums text-ink/40">
-              <span className={halfSet ? 'tracking-wide' : undefined}>
-                {halfSet
-                  ? 'set B to finish the loop'
-                  : editing
-                    ? `updates ${editing.name} to ${summarise(loop, speed)}`
-                    : `saves ${summarise(loop, speed)}`}
+            {/* Hidden rather than unmounted, for the same reason */}
+            <div className={zen ? 'hidden' : undefined}>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 lg:mt-6">
+              <div className="flex gap-1.5">
+                <SeekButton label={`Back ${NUDGE} second`} onClick={nudge(-NUDGE)}>
+                  <BackIcon />
+                </SeekButton>
+                <SeekButton label={`Forward ${NUDGE} second`} onClick={nudge(NUDGE)}>
+                  <ForwardIcon />
+                </SeekButton>
+              </div>
+              <SpeedStepper speed={speed} onChange={setSpeed} />
+            </div>
+            {/* The speed control does not lie: when YouTube plays at something
+                other than what was asked, the screen says so. */}
+            {youtube && Math.abs(actualRate - speed) > 0.001 && (
+              <p className="mt-1.5 text-right text-xs text-accent">
+                YouTube is playing this at {formatSpeed(actualRate)}x
+              </p>
+            )}
+
+            <LoopSlider
+              duration={duration}
+              time={time}
+              loop={loop}
+              onScrub={scrub}
+              onLoopChange={changeLoop}
+              onHold={holdScrub}
+            />
+
+            {/* Only worth showing where there is a keyboard to press */}
+            <p className="mb-4 hidden text-center text-xs text-ink/40 sm:block">
+              <Key>space</Key> sets{' '}
+              <span className="font-semibold text-ink/70">
+                {nextPoint.toUpperCase()}
               </span>
-              {/* Stays put and greys while the loop is half-set rather than
-                  leaving with the line beside it — a control that vanishes on a
-                  press of space is a worse answer to "why can I not save" than
-                  one that is visibly refusing. */}
-              {editing && (
-                <button
-                  type="button"
-                  onClick={saveAsNew}
-                  disabled={halfSet}
-                  className="font-medium text-accent hover:underline disabled:pointer-events-none disabled:opacity-40"
-                >
-                  Save as new
-                </button>
+              <span className="px-2">&middot;</span>
+              <span className={halfSet ? 'opacity-40' : undefined}>
+                <Key>s</Key>{' '}
+                {halfSet
+                  ? 'saves once B is set'
+                  : editing
+                    ? 'updates it'
+                    : 'saves the loop'}
+              </span>
+              {editing && !halfSet && (
+                <>
+                  <span className="px-2">&middot;</span>
+                  <span>
+                    <Key>&#8679;s</Key> saves a new one
+                  </span>
+                </>
               )}
+              <span className="px-2">&middot;</span>
+              <Key>f</Key> toggles zen mode
             </p>
 
-            {/* Ordered by where they start, not by when they were saved or what
-                they were called: a chain is a run through the clip, so the rows
-                you tick have to be the rows next to each other. Sorted any other
-                way, ticking two segments that follow each other lights up two
-                rows with something unrelated sitting between them, and the span
-                it plays stops looking like the rows it came from. */}
-            <ul className="mt-3 flex flex-col gap-1.5">
-              {inTimeOrder(saved).map((item) => (
-                <li
-                  key={item.id}
-                  /* Held by id now, not by whether the numbers happen to match.
-                     The value match let go the instant you nudged A — which is
-                     the moment the highlight is doing its only real job:
-                     showing which row the next Save lands on. */
-                  className={`flex items-center gap-1 rounded-lg pr-1 ${
-                    item.id === editing?.id
-                      ? 'bg-accent/25 ring-1 ring-accent/60'
-                      : 'bg-control/50'
-                  }`}
-                >
-                  {/* Nothing to chain a lone loop to, so the column only appears
-                      once there are two — no box, no gutter, nothing to explain. */}
-                  {saved.length > 1 && (
-                    <input
-                      type="checkbox"
-                      checked={chain.includes(item.id)}
-                      onChange={() => toggleChain(item.id)}
-                      aria-label={`Chain ${item.name}`}
-                      className="ml-3 h-4 w-4 shrink-0 accent-accent"
-                    />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => loadLoop(item)}
-                    className="min-w-0 flex-1 px-3 py-2 text-left"
-                  >
-                    <span className="block truncate text-sm font-medium">
-                      {item.name}
-                    </span>
-                    <span className="block text-xs tabular-nums text-ink/50">
-                      {summarise(item, item.speed)}
-                    </span>
-                  </button>
-                  {/* Still the stored numbers beside it, because they are what
-                      you stand to lose — the pending ones are already on the
-                      line under the field. Outside the row's own button rather
-                      than inside it: the button is named by what the loop *is*,
-                      and a word coming and going in there renames the control
-                      under anyone listening to the page. */}
-                  {dirty && item.id === editing.id && (
-                    <span className="shrink-0 px-1 text-[11px] font-medium text-accent">
-                      unsaved
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    aria-label={`Delete ${item.name}`}
-                    onClick={() => removeLoop(item.id)}
-                    className="rounded px-2 py-1 text-lg leading-none text-ink/40 hover:text-ink"
-                  >
-                    &times;
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
+            <div className="flex items-start justify-center gap-6">
+              <BigButton label="START" onClick={() => scrub(loop.a)}>
+                <StartIcon />
+              </BigButton>
+              <BigButton
+                label={looping ? 'LOOPING' : 'START LOOP'}
+                active={looping}
+                onClick={() => setLooping(!looping)}
+              >
+                <LoopIcon />
+              </BigButton>
+              <BigButton label={playing ? 'PAUSE' : 'PLAY'} onClick={togglePlay}>
+                {playing ? <PauseIcon /> : <PlayIcon />}
+              </BigButton>
+            </div>
 
-          {youtube && <SpikeReadings rates={rates} speed={speed} actualRate={actualRate} readings={readings} onCheckSeeks={checkSeeks} />}
+            {!columns && savedLoopsPanel}
+
+            {youtube && <SpikeReadings open={!columns} rates={rates} speed={speed} actualRate={actualRate} readings={readings} onCheckSeeks={checkSeeks} />}
+            </div>
           </div>
         </div>
+
+        {columns && savedLoopsPanel}
       </main>
+
     </div>
   )
 }
