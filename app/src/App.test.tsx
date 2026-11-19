@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -650,137 +651,64 @@ describe('the app mounted under a path of its own', () => {
   })
 })
 
+/* #88. Minimal, show don't tell: whether Drive is connected shows in the
+   Connect button at the top (#83) being there or not, and no sentence
+   narrates it — connected, declined, withdrawn, unreachable or renewed. */
 describe('the Drive session on the Clips screen', () => {
-  it('offers to connect Drive to a dancer who has not signed in', () => {
+  const connect = () =>
+    screen.queryByRole('button', { name: /connect google drive/i })
+
+  const driveNotices = () =>
+    screen
+      .queryAllByRole('status')
+      .filter((status) => /drive/i.test(status.textContent ?? ''))
+
+  /* Lets an answer from the token source land before asking what the screen
+     says about it, since a screen that says nothing has nothing to wait for. */
+  const settled = async (source: ReturnType<typeof vi.fn>, calls = 1) => {
+    await waitFor(() => {
+      expect(source.mock.calls.length).toBeGreaterThanOrEqual(calls)
+    })
+    await act(async () => {})
+  }
+
+  it('offers to connect Drive to a dancer who has not signed in, and says nothing about it', () => {
     renderAppAt('/')
 
-    expect(
-      screen.getByRole('button', { name: /connect google drive/i }),
-    ).toBeInTheDocument()
+    expect(connect()).toBeInTheDocument()
+    expect(driveNotices()).toHaveLength(0)
   })
 
-  it('says Drive is connected once the dancer has signed in', async () => {
+  it('stops offering to connect once Drive is connected, and says nothing about it', async () => {
     renderAppAt('/')
 
-    await userEvent.click(
-      screen.getByRole('button', { name: /connect google drive/i }),
-    )
-
-    expect(await screen.findByText(/drive is connected/i)).toBeInTheDocument()
-  })
-
-  /* #83. Declining leaves the dancer where they were before they asked, and
-     the screen says no more than it did then: they know what they just
-     clicked, and Connect is still at the top for when they change their mind. */
-  it('says only that Drive is not connected when the dancer declines', async () => {
-    renderAppAt('/', sourceRefusing())
-
-    await userEvent.click(
-      screen.getByRole('button', { name: /connect google drive/i }),
-    )
+    await userEvent.click(connect()!)
 
     await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent(
-        /^Not connected to Drive\.$/,
-      )
+      expect(connect()).not.toBeInTheDocument()
     })
+    expect(driveNotices()).toHaveLength(0)
   })
 
-  it('stops offering to connect once Drive is connected', async () => {
-    renderAppAt('/')
+  it.each([
+    ['the dancer declines', sourceRefusing],
+    ['Google sign-in never loaded', sourceUnreachable],
+    ['the build has no Client ID', sourceUnconfigured],
+  ])('still offers to connect, and says nothing, when %s', async (_, sourceOf) => {
+    const source = vi.fn(sourceOf())
+    renderAppAt('/', source)
 
-    await userEvent.click(
-      screen.getByRole('button', { name: /connect google drive/i }),
-    )
-    await screen.findByText(/drive is connected/i)
+    await userEvent.click(connect()!)
+    await settled(source)
 
-    expect(
-      screen.queryByRole('button', { name: /connect google drive/i }),
-    ).not.toBeInTheDocument()
+    expect(connect()).toBeInTheDocument()
+    expect(driveNotices()).toHaveLength(0)
   })
 
-  it('offers sign-in again after the dancer declined, since they can change their mind', async () => {
-    renderAppAt('/', sourceRefusing())
-
-    await userEvent.click(
-      screen.getByRole('button', { name: /connect google drive/i }),
-    )
-    await screen.findByRole('status')
-
-    expect(
-      screen.getByRole('button', { name: /connect google drive/i }),
-    ).toBeInTheDocument()
-  })
-
-  it('says access was removed, not declined, when consent is withdrawn from the Google account', async () => {
+  it('offers to connect again, and says nothing, when consent is withdrawn from the Google account', async () => {
     renderAppAt('/', sourceGranting(), <ARefusedDriveCall />)
 
-    await userEvent.click(
-      screen.getByRole('button', { name: /connect google drive/i }),
-    )
-    await userEvent.click(
-      screen.getByRole('button', { name: 'a refused Drive call' }),
-    )
-
-    const notice = await screen.findByRole('status')
-
-    expect(notice).toHaveTextContent(/removed/i)
-    expect(notice).not.toHaveTextContent(/you declined/i)
-  })
-
-  it('blames the sign-in service, not the dancer, when Google never loaded', async () => {
-    renderAppAt('/', sourceUnreachable())
-
-    await userEvent.click(
-      screen.getByRole('button', { name: /connect google drive/i }),
-    )
-
-    const notice = await screen.findByRole('status')
-
-    expect(notice).toHaveTextContent(/google sign-in is not available/i)
-    expect(notice).not.toHaveTextContent(/you declined/i)
-  })
-
-  it('names the missing Client ID rather than implying Google is down', async () => {
-    renderAppAt('/', sourceUnconfigured())
-
-    await userEvent.click(
-      screen.getByRole('button', { name: /connect google drive/i }),
-    )
-
-    const notice = await screen.findByRole('status')
-
-    expect(notice).toHaveTextContent(/client id/i)
-    expect(notice).not.toHaveTextContent(/not available right now/i)
-  })
-
-  it('tells the dancer their session renewed, so the popup that flashed is accounted for', async () => {
-    renderAppAt('/', sourceGrantingThenRenewing(), <ADriveCall />)
-
-    await userEvent.click(
-      screen.getByRole('button', { name: /connect google drive/i }),
-    )
-    await userEvent.click(screen.getByRole('button', { name: 'a Drive call' }))
-
-    expect(await screen.findByRole('status')).toHaveTextContent(/renewed/i)
-  })
-
-  it('does not claim a renewal on a first sign-in, when no popup has flashed yet', async () => {
-    renderAppAt('/')
-
-    await userEvent.click(
-      screen.getByRole('button', { name: /connect google drive/i }),
-    )
-
-    expect(await screen.findByRole('status')).not.toHaveTextContent(/renewed/i)
-  })
-
-  it('offers sign-in again after consent was withdrawn', async () => {
-    renderAppAt('/', sourceGranting(), <ARefusedDriveCall />)
-
-    await userEvent.click(
-      screen.getByRole('button', { name: /connect google drive/i }),
-    )
+    await userEvent.click(connect()!)
     await userEvent.click(
       screen.getByRole('button', { name: 'a refused Drive call' }),
     )
@@ -788,6 +716,18 @@ describe('the Drive session on the Clips screen', () => {
     expect(
       await screen.findByRole('button', { name: /connect google drive/i }),
     ).toBeInTheDocument()
+    expect(driveNotices()).toHaveLength(0)
+  })
+
+  it('says nothing about a session that renewed', async () => {
+    const source = sourceGrantingThenRenewing()
+    renderAppAt('/', source, <ADriveCall />)
+
+    await userEvent.click(connect()!)
+    await userEvent.click(screen.getByRole('button', { name: 'a Drive call' }))
+    await settled(source, 2)
+
+    expect(driveNotices()).toHaveLength(0)
   })
 })
 

@@ -237,8 +237,8 @@ describe('saving a loop', () => {
   })
 
   /* The session retires a token early so an expiry cannot arrive as a 401 —
-     what is left is a grant the dancer revoked, and DriveStatus has a sentence
-     for it. It matters most here: a write that failed on a withdrawn grant
+     what is left is a grant the dancer revoked, which puts Connect Google
+     Drive back (#88). It matters most here: a write that failed on a withdrawn grant
      must not be reported as a saved loop. */
   it('reports a withdrawn grant', async () => {
     const api = holding({})
