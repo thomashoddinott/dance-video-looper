@@ -370,9 +370,10 @@ function OpenedClip({
      itself. */
   const [nextPoint, setNextPoint] = useState<Handle>('a')
   /* #94, on trial. Whether the new layout has the A/B slider out under the
-     clip: from space setting A to space setting B, which is when a loop is
-     being picked, and whenever the Slider checkbox says so. Put away the rest
-     of the time, so the clip has its room. The one-column player ignores it. */
+     clip. Put away to begin with, so the clip has its room, and brought out by
+     the Slider checkbox. Space did it too for a while; #96 took that back, as
+     the slider vanishing at B hid that a loop was waiting to be saved. The
+     one-column player ignores it. */
   const [sliderOut, setSliderOut] = useState(false)
   /* The loops kept against *this* clip, read out of the one file that holds
      every clip's. Not state here any more: US-01-15 made Drive the owner, and
@@ -834,8 +835,6 @@ function OpenedClip({
 
       putLoop(framed.loop)
       setNextPoint(framed.next)
-      /* #94. Out while space waits for B, away once it has it. */
-      setSliderOut(framed.next === 'b')
     }
 
     window.addEventListener('keydown', onKeyDown)
@@ -1169,8 +1168,8 @@ function OpenedClip({
             anything. */}
         {wide && (
           <div className="ml-auto flex shrink-0 items-center gap-3">
-            {/* #94, on trial: the slider by hand, to check space against while
-                it is tried. Shows the same state space sets, and overrides it. */}
+            {/* #94, #96, on trial: the slider out or away, by hand, until the
+                keyboard's part in it is worked out. */}
             {column && (
               <label className="flex items-center gap-1.5 text-xs font-semibold text-ink/70">
                 <input
