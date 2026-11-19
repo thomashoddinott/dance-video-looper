@@ -1352,7 +1352,7 @@ describe('adding a YouTube video by its link', () => {
     expect(within(first).getByRole('img', { name: 'YouTube' })).toBeInTheDocument()
     expect(first.querySelector('img[src*="i.ytimg.com"]')).toHaveAttribute(
       'src',
-      `https://i.ytimg.com/vi/${A_VIDEO}/mqdefault.jpg`,
+      `https://i.ytimg.com/vi/${A_VIDEO}/hq720.jpg`,
     )
     expect(driveApi.addYouTube).toHaveBeenCalledWith(expect.anything(), {
       folderId: expect.any(String),
