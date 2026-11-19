@@ -312,70 +312,18 @@ function ClipTile({ clip, onOpen, onDelete, onStyle, onGroup, groups, uploading 
   )
 }
 
-/* Retrofitted from the built app rather than drawn first — US-01-13 turned out
-   to need a surface, and no mockup existed for it (CLAUDE.md → Process, the
-   mockup gate pass). The wording and classes are the production ones.
-
-   The mockup has no Drive, so the button walks the states instead of signing
-   anything in. That is the point: every sentence the dancer can be shown is
-   reachable here, which a real sign-in button could not manage.
-
-   No sentence for a declined sign-in (#83): it reads as "Not connected to
-   Drive.", the line the dancer saw before asking. */
-const DRIVE_STATES = [
-  { notice: 'Not connected to Drive.', connected: false },
-  { notice: 'Drive is connected.', connected: true },
-  { notice: 'Drive is connected. Your Drive session was renewed.', connected: true },
-  {
-    notice:
-      'Drive is unavailable — access was removed from your Google account, so clips and saved loops will not sync.',
-    connected: false,
-  },
-  {
-    notice:
-      'Drive is unavailable — Google sign-in is not available right now, so clips and saved loops will not sync.',
-    connected: false,
-  },
-  {
-    notice:
-      'Drive is not set up — this build has no Google Client ID. See app/.env.example.',
-    connected: false,
-  },
-]
-
-/* The state is held by `Library` rather than here (#59): signed out, the
-   grid shows the showcase rather than the dancer's library (#77), and it has
-   to know which. */
-function DriveStatus({ state, onNext }) {
-  const { notice, connected } = DRIVE_STATES[state]
-
-  return (
-    <div className="mt-6 flex flex-wrap items-center gap-2">
-      <p className="text-xs text-ink/40">{notice}</p>
-
-      {connected && (
-        <button
-          type="button"
-          onClick={onNext}
-          className="text-xs text-ink/25 underline underline-offset-2"
-        >
-          next state
-        </button>
-      )}
-    </div>
-  )
-}
-
-/* #83, retrofitted from the build: Connect sits at the top beside the source
-   link rather than in the footer under the showcase. Walks the states, as the
-   footer's link does once connected. */
-function ConnectDrive({ state, onNext }) {
-  if (DRIVE_STATES[state].connected) return null
+/* Retrofitted from the built app (US-01-13, #83, #88): the only sign of Drive
+   on the dashboard is Connect Google Drive at the top beside the source link,
+   there while the dancer is not connected and gone once they are. No sentence
+   about Drive anywhere — show, don't tell. The mockup has no Drive, so Connect
+   simply connects. */
+function ConnectDrive({ connected, onConnect }) {
+  if (connected) return null
 
   return (
     <button
       type="button"
-      onClick={onNext}
+      onClick={onConnect}
       className="rounded-lg bg-control px-3 py-2 text-sm font-semibold text-ink/80 hover:bg-control-hi"
     >
       Connect Google Drive
@@ -483,11 +431,9 @@ function Library({
 }) {
   /* #77. Opens signed out, as the product does for a visitor: on the
      showcase, read-only — no Add clip, no ✕, no style, rename or group — with
-     Connect in the footer. Connect walks the Drive states from there, and a
-     connected one shows the library. */
-  const [drive, setDrive] = useState(0)
-  const nextDriveState = () => setDrive((at) => (at + 1) % DRIVE_STATES.length)
-  const signedOut = !DRIVE_STATES[drive].connected
+     Connect at the top (#83). Connecting shows the library. */
+  const [connected, setConnected] = useState(false)
+  const signedOut = !connected
   const shown = signedOut ? SHOWCASE : clips
   /* #70. Groups are read off the clips, newest first; the showcase has none.
      A picked group whose last clip has left it is no longer picked. */
@@ -635,7 +581,7 @@ function Library({
     event.target.value = ''
     if (!file) return
 
-    /* Retrofitted from the built app (US-01-04), like DriveStatus above — the
+    /* Retrofitted from the built app (US-01-04) — the
        mockup had no way to show an add that failed, so it showed nothing at
        all. Two of the three refusals production makes are reachable here; the
        third is its timeout on a file that never answers, which is a deadline
@@ -686,7 +632,7 @@ function Library({
           <h1 className="text-lg font-semibold tracking-tight">Clips</h1>
           <div className="flex items-center gap-4">
             <SourceLink />
-            <ConnectDrive state={drive} onNext={nextDriveState} />
+            <ConnectDrive connected={connected} onConnect={() => setConnected(true)} />
             {!signedOut && (
               <>
                 <button
@@ -849,8 +795,6 @@ function Library({
             />
           ))}
         </ul>
-
-        <DriveStatus state={drive} onNext={nextDriveState} />
       </main>
     </div>
   )
