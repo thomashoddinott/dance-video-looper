@@ -1,8 +1,6 @@
 /* One reason, not several. A decode error, a length that is not a number and a
    file that never answers are the same fact to the dancer — this did not yield
-   a video — and nothing acts on the difference. `DriveStatus` keeps a refusal
-   apart from a withdrawal because the dancer *can* act on that; the same test
-   applied here says one. */
+   a video — and nothing acts on the difference, so it is not kept. */
 export type ProbeResult =
   | { readonly ok: true; readonly seconds: number; readonly src: string }
   | { readonly ok: false }

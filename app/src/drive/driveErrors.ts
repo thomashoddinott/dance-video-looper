@@ -6,7 +6,7 @@ import { DriveError } from './driveApi'
    token that was live when a call started is still live when it lands. An
    expiry therefore does not reach Drive as a 401 — and what is left is the
    dancer having removed access in their Google account, which is a thing they
-   can act on and `DriveStatus` already has a sentence for.
+   can act on: it puts Connect Google Drive back (#88).
 
    Everything else stays a plain failure. A 403 means the grant stands and
    something else refused; a 5xx is Google's bad minute; a dropped connection is

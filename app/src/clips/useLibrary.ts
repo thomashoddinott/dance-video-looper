@@ -84,8 +84,8 @@ export const useLibrary = (
   }, [api, requireToken])
 
   /* A 401 is the dancer having revoked access in their Google account — the
-     session's skew rules out an expiry arriving as one — and `DriveStatus`
-     already has a sentence for it. Anything else is left to the caller. */
+     session's skew rules out an expiry arriving as one — and reporting it puts
+     Connect Google Drive back (#88). Anything else is left to the caller. */
   const reportIfWithdrawn = useCallback(
     (error: unknown) => {
       if (withdrewConsent(error)) reportConsentWithdrawn()

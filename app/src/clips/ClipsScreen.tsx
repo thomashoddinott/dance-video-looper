@@ -1,7 +1,7 @@
 import type { ChangeEvent } from 'react'
 import { type FormEvent, useRef, useState } from 'react'
 
-import { ConnectDrive, DriveStatus } from '../drive/DriveStatus'
+import { ConnectDrive } from '../drive/ConnectDrive'
 import type { Clip } from './clip'
 import { groupsOf } from './clipGroups'
 import { GroupFilter } from './GroupFilter'
@@ -395,9 +395,8 @@ export function ClipsScreen({
           </p>
         )}
 
-        {/* Named, because `DriveStatus` already owns an unnamed `status` on
-            this screen and two of them would be indistinguishable — the same
-            reason the add notice above is an `alert`. */}
+        {/* Named, so it can be told apart from any other `status` on this
+            screen. */}
         {library.state === 'loading' && (
           <p role="status" aria-label="Clips" className="mt-2 text-xs text-ink/40">
             Loading your clips…
@@ -483,9 +482,7 @@ export function ClipsScreen({
             line names the style, and is named for whichever control emptied the
             grid.
 
-            Named, for the reason those two are: `DriveStatus` owns an unnamed
-            `status` on this screen and a second one would be indistinguishable
-            from it. */}
+            Named, for the reason the loading line is. */}
         {excludedEverything && (
           <p
             role="status"
@@ -520,11 +517,6 @@ export function ClipsScreen({
             />
           ))}
         </ul>
-
-        {/* #77. Under the showcase as well as under the dancer's own library.
-            The way from the one to the other is at the top now (#83); this is
-            only what Drive is doing. */}
-        <DriveStatus />
       </main>
     </div>
   )
