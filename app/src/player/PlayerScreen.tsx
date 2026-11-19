@@ -44,6 +44,7 @@ import {
   SEEK_BACKSTOP,
   settled,
 } from './seekGate'
+import { useTryNewUi } from './useTryNewUi'
 import { useWideScreen } from './useWideScreen'
 import { VideoProgress } from './VideoProgress'
 import { YouTubeFrame } from './YouTubeFrame'
@@ -945,14 +946,17 @@ function OpenedClip({
      unreachable, and its test dead on arrival. */
   const isolated = zen && !condemned
 
-  /* #81. On a laptop or a desktop the saved loops get a column of their own,
-     left of the player, so the clip, its controls and the loops are all on one
-     screen rather than the loops waiting below the fold. */
-  const column = useWideScreen()
+  /* #86, on trial. With **Try new UI** on, a laptop or a desktop puts the
+     controls and the loops in a column left of the clip, which gets the rest of
+     the screen with the slider under it. Off, or on a narrower screen, the
+     player is one column, as it was before #81. */
+  const wide = useWideScreen()
+  const [tryNewUi, setTryNewUi] = useTryNewUi()
+  const column = wide && tryNewUi
 
   /* One panel, put in one of two places: under the transport in the card, or
-     ahead of the card in a column. A JSX value rather than two renders, so the
-     two places cannot be wired differently. */
+     under the controls in the column. A JSX value rather than two renders, so
+     the two places cannot be wired differently. */
   const savedLoops = (
     <SavedLoopsPanel
       column={column}
@@ -973,6 +977,127 @@ function OpenedClip({
       onRemove={removeLoop}
       onChain={chainLoop}
     />
+  )
+
+  /* #86. The controls as pieces, because the new layout puts all but the
+     slider in the column beside the clip. None of them is the clip, so moving
+     them costs nothing (BR-08 is about the clip). */
+  const seekAndSpeed = (
+    <>
+      {/* Both halves are here now, so `justify-between` does what the
+          mockup shows: the seek pair hard left, the stepper hard right.
+          US-01-09 held this at `justify-end` while the stepper was the
+          only child, and said US-01-08 would take it back — this is it. */}
+      <div
+        role="toolbar"
+        aria-label="Seek and speed"
+        className={`flex flex-wrap items-center justify-between gap-2 ${
+          column ? '' : 'mt-4 lg:mt-6'
+        }`}
+      >
+        {playback.kind === 'ready' && (
+          <div className="flex gap-1.5">
+            <SeekButton
+              label={`Back ${NUDGE} second`}
+              onClick={nudge(-NUDGE)}
+            >
+              <BackGlyph />
+            </SeekButton>
+            <SeekButton
+              label={`Forward ${NUDGE} second`}
+              onClick={nudge(NUDGE)}
+            >
+              <ForwardGlyph />
+            </SeekButton>
+          </div>
+        )}
+        {/* Gated exactly as the transport is. A rate control on a clip
+            that will not decode has nothing to apply itself to, and would
+            be the dead control US-01-07 already refused to draw. */}
+        {playback.kind === 'ready' && (
+          <SpeedStepper speed={speed} onChange={setSpeed} />
+        )}
+      </div>
+      {/* #20. YouTube will not go below 0.25, and a stepper showing 0.1
+          while the video plays at 0.25 would be a control that lies. */}
+      {youtubeRate !== null && Math.abs(youtubeRate - speed) > 0.001 && (
+        <p
+          role="status"
+          aria-label="YouTube speed"
+          className="mt-1.5 text-right text-xs text-accent"
+        >
+          YouTube plays this at {Math.round(youtubeRate * 100) / 100}x
+        </p>
+      )}
+    </>
+  )
+
+  /* The slider appears once there is a length to lay it out against, for the
+     same reason the transport does: before metadata there is no region to
+     frame, and a track spanning an unknown clip would be inviting the dancer to
+     drag against nothing. */
+  const loopRange = (
+    <div role="group" aria-label="Loop range">
+      {playback.kind === 'ready' && (
+        <LoopSlider
+          duration={playback.duration}
+          loop={playback.loop}
+          time={time}
+          onSeek={seekTo}
+          onLoopChange={changeLoop}
+          onHold={hushWhileHeld}
+        />
+      )}
+    </div>
+  )
+
+  const hint = (
+    <ShortcutHint
+      next={playback.kind === 'ready' ? nextPoint : null}
+      halfSet={halfSet}
+      editing={editing !== null}
+    />
+  )
+
+  /* The transport appears once there is something to control. Before metadata
+     there is no region to loop and no length to return to, and a clip that will
+     not decode has nothing to play — three dead controls would say the
+     opposite. */
+  const transport = (
+    <div
+      role="toolbar"
+      aria-label="Transport"
+      className="flex items-start justify-center gap-6"
+    >
+      {playback.kind === 'ready' && (
+        <>
+          {/* Only the playhead moves. Nothing here touches `looping` or
+              calls play/pause, because restarting the section is what
+              the dancer does *while* it is running — stopping the music
+              or dropping the loop would be a second thing they did not
+              ask for. */}
+          <TransportButton
+            label="START"
+            onClick={() => seekTo(playback.loop.a)}
+          >
+            <StartGlyph />
+          </TransportButton>
+          <TransportButton
+            label={playback.looping ? 'LOOPING' : 'START LOOP'}
+            pressed={playback.looping}
+            onClick={toggleLooping}
+          >
+            <LoopGlyph />
+          </TransportButton>
+          <TransportButton
+            label={playing ? 'PAUSE' : 'PLAY'}
+            onClick={() => togglePlay(surface.current)}
+          >
+            {playing ? <PauseGlyph /> : <PlayGlyph />}
+          </TransportButton>
+        </>
+      )}
+    </div>
   )
 
   return (
@@ -1003,31 +1128,55 @@ function OpenedClip({
           clip={clip}
           onRename={clip.driveId === undefined ? undefined : onRename}
         />
+        {/* #86, on trial: off unless asked for, and only where it changes
+            anything. */}
+        {wide && (
+          <button
+            type="button"
+            aria-pressed={tryNewUi}
+            onClick={() => setTryNewUi(!tryNewUi)}
+            className={`ml-auto shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+              tryNewUi
+                ? 'bg-accent text-on-accent'
+                : 'bg-control text-ink/70 hover:bg-control-hi'
+            }`}
+          >
+            Try new UI
+          </button>
+        )}
       </header>
 
       {/* The card shrinks to whatever the clip actually is: a portrait clip gets
           a narrow card, a landscape one a wide card. Nothing here assumes 9:16
           (BR-16), and the controls below inherit that width by sitting in it.
 
-          Beside the loops column (#81) it fills its column instead, which
-          gives the loop slider the whole width to be dragged across. */}
+          In the new layout (#86) it fills its column instead, which gives the
+          clip and the loop slider under it the whole width. */}
       <main
         className={
           isolated
             ? undefined
             : column
-              ? 'mx-auto grid min-h-0 w-full max-w-[100rem] flex-1 grid-cols-[22rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-4 px-4 pb-4'
+              ? 'mx-auto grid min-h-0 w-full max-w-[100rem] flex-1 grid-cols-[27rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-4 px-4 pb-4'
               : 'px-4 pb-4'
         }
       >
-        {/* First, so the page reads in the order it is laid out: loops, then
-            the player. In the slot before the card's rather than in the card's
-            own, so the card keeps its place whichever way the screen turns —
-            and with it the clip, which would otherwise reload (BR-08). Hidden
-            with the other controls, and stripped of `flex` for the header's
-            reason. */}
+        {/* First, so the page reads in the order it is laid out: the controls
+            and the loops, then the clip. In the slot before the card's rather
+            than in the card's own, so the card keeps its place whichever way it
+            goes — and with it the clip, which would otherwise reload (BR-08).
+            Hidden with the other controls, and stripped of `flex` for the
+            header's reason. */}
         {column && (
-          <div hidden={isolated} className={isolated ? undefined : 'flex min-h-0'}>
+          <div
+            hidden={isolated}
+            className={isolated ? undefined : 'flex min-h-0 flex-col gap-4'}
+          >
+            <div className="rounded-2xl bg-panel p-4">
+              {seekAndSpeed}
+              <div className="mt-4">{hint}</div>
+              {transport}
+            </div>
             {savedLoops}
           </div>
         )}
@@ -1186,115 +1335,14 @@ function OpenedClip({
               can be found at all — an unnamed empty div is invisible to a test
               that asks what the screen offers, which is the only question worth
               asking of a skeleton. One wrapper takes all five out at once,
-              hidden rather than unmounted for the header's reason — four, when
-              the saved loops are in their column (#81), which hides itself. */}
-          <div hidden={isolated}>
-            {/* Both halves are here now, so `justify-between` does what the
-                mockup shows: the seek pair hard left, the stepper hard right.
-                US-01-09 held this at `justify-end` while the stepper was the
-                only child, and said US-01-08 would take it back — this is it. */}
-            <div
-              role="toolbar"
-              aria-label="Seek and speed"
-              className="mt-4 flex flex-wrap items-center justify-between gap-2 lg:mt-6"
-            >
-              {playback.kind === 'ready' && (
-                <div className="flex gap-1.5">
-                  <SeekButton
-                    label={`Back ${NUDGE} second`}
-                    onClick={nudge(-NUDGE)}
-                  >
-                    <BackGlyph />
-                  </SeekButton>
-                  <SeekButton
-                    label={`Forward ${NUDGE} second`}
-                    onClick={nudge(NUDGE)}
-                  >
-                    <ForwardGlyph />
-                  </SeekButton>
-                </div>
-              )}
-              {/* Gated exactly as the transport is. A rate control on a clip
-                  that will not decode has nothing to apply itself to, and would
-                  be the dead control US-01-07 already refused to draw. */}
-              {playback.kind === 'ready' && (
-                <SpeedStepper speed={speed} onChange={setSpeed} />
-              )}
-            </div>
-            {/* #20. YouTube will not go below 0.25, and a stepper showing 0.1
-                while the video plays at 0.25 would be a control that lies. */}
-            {youtubeRate !== null && Math.abs(youtubeRate - speed) > 0.001 && (
-              <p
-                role="status"
-                aria-label="YouTube speed"
-                className="mt-1.5 text-right text-xs text-accent"
-              >
-                YouTube plays this at {Math.round(youtubeRate * 100) / 100}x
-              </p>
-            )}
-
-            {/* The slider appears once there is a length to lay it out against,
-                for the same reason the transport does: before metadata there is
-                no region to frame, and a track spanning an unknown clip would be
-                inviting the dancer to drag against nothing. */}
-            <div role="group" aria-label="Loop range">
-              {playback.kind === 'ready' && (
-                <LoopSlider
-                  duration={playback.duration}
-                  loop={playback.loop}
-                  time={time}
-                  onSeek={seekTo}
-                  onLoopChange={changeLoop}
-                  onHold={hushWhileHeld}
-                />
-              )}
-            </div>
-
-            <ShortcutHint
-              next={playback.kind === 'ready' ? nextPoint : null}
-              halfSet={halfSet}
-              editing={editing !== null}
-            />
-
-            {/* The transport appears once there is something to control. Before
-                metadata there is no region to loop and no length to return to,
-                and a clip that will not decode has nothing to play — three dead
-                controls would say the opposite. */}
-            <div
-              role="toolbar"
-              aria-label="Transport"
-              className="flex items-start justify-center gap-6"
-            >
-              {playback.kind === 'ready' && (
-                <>
-                  {/* Only the playhead moves. Nothing here touches `looping` or
-                      calls play/pause, because restarting the section is what
-                      the dancer does *while* it is running — stopping the music
-                      or dropping the loop would be a second thing they did not
-                      ask for. */}
-                  <TransportButton
-                    label="START"
-                    onClick={() => seekTo(playback.loop.a)}
-                  >
-                    <StartGlyph />
-                  </TransportButton>
-                  <TransportButton
-                    label={playback.looping ? 'LOOPING' : 'START LOOP'}
-                    pressed={playback.looping}
-                    onClick={toggleLooping}
-                  >
-                    <LoopGlyph />
-                  </TransportButton>
-                  <TransportButton
-                    label={playing ? 'PAUSE' : 'PLAY'}
-                    onClick={() => togglePlay(surface.current)}
-                  >
-                    {playing ? <PauseGlyph /> : <PlayGlyph />}
-                  </TransportButton>
-                </>
-              )}
-            </div>
-
+              hidden rather than unmounted for the header's reason — only the
+              slider, when the new layout (#86) has the rest in its column,
+              which hides itself. */}
+          <div hidden={isolated} className={column && !isolated ? 'mt-2' : undefined}>
+            {!column && seekAndSpeed}
+            {loopRange}
+            {!column && hint}
+            {!column && transport}
             {!column && savedLoops}
           </div>
         </div>

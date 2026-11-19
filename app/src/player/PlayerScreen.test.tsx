@@ -609,40 +609,88 @@ describe('the player', () => {
   })
 })
 
-/* #81. From 1024px wide the saved loops leave the card for a column of their
-   own, left of the player, so a laptop shows the clip, its controls and the
-   loops on one screen. jsdom lays nothing out, so where the columns sit is the
-   smoke test's to see; what is asked here is the order they are read in, and
-   what the move does to the clip. */
-describe('on a screen 1024px wide or wider', () => {
-  const savedFirst = (container: HTMLElement) =>
+/* #86, on trial. From 1024px wide the player offers a new layout: the
+   controls and the loops in a column left of the clip, which gets the rest of
+   the screen with the slider under it. Off unless asked for, and the player is
+   one column, as it was before #81. jsdom lays nothing out, so where the
+   columns sit is the smoke test's to see; what is asked here is the order they
+   are read in, and what switching does to the clip. */
+describe('the new layout, on trial', () => {
+  const tryNewUi = () => screen.getByRole('button', { name: 'Try new UI' })
+
+  const runningOrder = (container: HTMLElement) =>
     inDocumentOrder({
-      saved: screen.getByRole('region', { name: 'Saved loops' }),
       clip: clipSurface(container),
       seekAndSpeed: screen.getByRole('toolbar', { name: 'Seek and speed' }),
       loop: screen.getByRole('group', { name: 'Loop range' }),
       hint: screen.getByRole('note', { name: 'Keyboard shortcuts' }),
       transport: screen.getByRole('toolbar', { name: 'Transport' }),
+      saved: screen.getByRole('region', { name: 'Saved loops' }),
     })
 
-  it('puts the saved loops first, ahead of the clip and its controls', () => {
+  const ONE_COLUMN = ['clip', 'seekAndSpeed', 'loop', 'hint', 'transport', 'saved']
+
+  it('is offered on a screen 1024px wide or wider, off, with the player in one column', () => {
     aWindow({ wide: true })
     const { container } = renderPlayer(getClip({ src: '/shuffle-drill.mp4' }))
 
-    expect(savedFirst(container)).toEqual([
-      'saved',
-      'clip',
+    expect(tryNewUi()).toHaveAttribute('aria-pressed', 'false')
+    expect(runningOrder(container)).toEqual(ONE_COLUMN)
+  })
+
+  it('is not offered on a narrower screen, where it would change nothing', () => {
+    renderPlayer(getClip({ src: '/shuffle-drill.mp4' }))
+
+    expect(
+      screen.queryByRole('button', { name: 'Try new UI' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('puts the controls and the loops ahead of the clip, and the slider under it', async () => {
+    aWindow({ wide: true })
+    const { container } = renderPlayer(getClip({ src: '/shuffle-drill.mp4' }))
+
+    await userEvent.click(tryNewUi())
+
+    expect(tryNewUi()).toHaveAttribute('aria-pressed', 'true')
+    expect(runningOrder(container)).toEqual([
       'seekAndSpeed',
-      'loop',
       'hint',
       'transport',
+      'saved',
+      'clip',
+      'loop',
     ])
+  })
+
+  it('goes back to one column when it is turned off again', async () => {
+    aWindow({ wide: true })
+    const { container } = renderPlayer(getClip({ src: '/shuffle-drill.mp4' }))
+
+    await userEvent.click(tryNewUi())
+    await userEvent.click(tryNewUi())
+
+    expect(tryNewUi()).toHaveAttribute('aria-pressed', 'false')
+    expect(runningOrder(container)).toEqual(ONE_COLUMN)
+  })
+
+  /* Turned on for a practice session, not once per clip. */
+  it('stays on from one clip to the next for the rest of the session', async () => {
+    aWindow({ wide: true })
+    const first = renderPlayer(getClip({ src: '/shuffle-drill.mp4' }))
+    await userEvent.click(tryNewUi())
+    first.unmount()
+
+    renderPlayer(getClip({ src: '/wave-practice.mp4' }))
+
+    expect(tryNewUi()).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('still takes everything but the clip off the screen when the video is isolated', async () => {
     aWindow({ wide: true })
     const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
     const clip = clipSurface(container)
+    await userEvent.click(tryNewUi())
 
     await userEvent.click(
       screen.getByRole('button', { name: 'Isolate the video' }),
@@ -653,20 +701,32 @@ describe('on a screen 1024px wide or wider', () => {
     expect(clipSurface(container)).toBe(clip)
   })
 
-  /* BR-08 again, from the other direction: a window dragged across the
-     breakpoint moves the loops, and must not move the clip, or it reloads and
-     the place being watched is gone. */
-  it('keeps the same clip playing when the window is resized across the breakpoint', async () => {
-    const browserWindow = aWindow({ wide: false })
+  /* BR-08 again: switching moves the controls and the loops, and must not move
+     the clip, or it reloads and the place being watched is gone. */
+  it('keeps the same clip playing when it is turned on', async () => {
+    aWindow({ wide: true })
     const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
     const clip = playable(clipSurface(container), { seconds: 12 })
     await userEvent.click(clip)
 
+    await userEvent.click(tryNewUi())
+
+    expect(clipSurface(container)).toBe(clip)
+    expect(clip.paused).toBe(false)
+  })
+
+  it('keeps the same clip playing when the window is resized across the breakpoint', async () => {
+    const browserWindow = aWindow({ wide: true })
+    const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
+    const clip = playable(clipSurface(container), { seconds: 12 })
+    await userEvent.click(tryNewUi())
+    await userEvent.click(clip)
+
     act(() => {
-      browserWindow.resize({ wide: true })
+      browserWindow.resize({ wide: false })
     })
 
-    expect(savedFirst(container)[0]).toBe('saved')
+    expect(runningOrder(container)).toEqual(ONE_COLUMN)
     expect(clipSurface(container)).toBe(clip)
     expect(clip.paused).toBe(false)
   })

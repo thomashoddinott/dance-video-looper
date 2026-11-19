@@ -15,7 +15,7 @@ import { loadYouTubeApi, youtubeSurface } from './youtube.js'
 export default function YouTubeFrame({
   videoId,
   zen,
-  columns,
+  width,
   onReady,
   onState,
   onRate,
@@ -84,15 +84,13 @@ export default function YouTubeFrame({
     <div
       ref={host}
       className={zen ? 'aspect-video' : 'aspect-video overflow-hidden rounded-lg bg-black'}
-      /* #81: in the column layout the width that matters is the column's, read
-         off the player column (a size container) less the card's padding, and
-         the height cap is the one the native clip gets. */
+      /* #81, #86: in a column the player works the width out, because it is the
+         one that knows which option is drawn; the frame only falls back to the
+         window's when it is not told. */
       style={{
         width: zen
           ? 'min(100vw, 100dvh * 16 / 9)'
-          : columns
-            ? 'min(100cqw - 3rem, 1100px, (100dvh - 26rem) * 16 / 9)'
-            : 'min(100vw - 4rem, 1100px, 55vh * 16 / 9)',
+          : (width ?? 'min(100vw - 4rem, 1100px, 55vh * 16 / 9)'),
       }}
     />
   )
