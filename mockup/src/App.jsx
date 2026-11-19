@@ -114,6 +114,9 @@ function App() {
   /* #70. Up here for the same reason: a dancer training one lesson's clips
      who opens one and comes back is still on that lesson. */
   const [group, setGroup] = useState(null)
+  /* #86, on trial: the player's **Try new UI** toggle, off to begin with. Up
+     here so it holds from one clip to the next. */
+  const [tryNewUi, setTryNewUi] = useState(false)
 
   const addClip = (added) => setClips([added, ...clips])
 
@@ -137,6 +140,8 @@ function App() {
       <Player
         clip={clip}
         onBack={() => setClip(null)}
+        tryNewUi={tryNewUi}
+        onTryNewUi={setTryNewUi}
         /* A YouTube entry added by link has no length until the player loads
            it (oEmbed does not give one), so the first open fills it in. */
         onDuration={(seconds) =>

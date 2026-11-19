@@ -514,23 +514,24 @@ function SpikeReadings({ open, rates, speed, actualRate, readings, onCheckSeeks 
 }
 
 /* #81. Tailwind's `lg` (1024px), read in script rather than CSS because the
-   loops panel moves to another place in the tree, which a class cannot do. */
+   controls and the loops move to another place in the tree on a wide screen,
+   which a class cannot do. */
 const WIDE = '(min-width: 64rem)'
 
-function useWide() {
-  const [wide, setWide] = useState(() => window.matchMedia(WIDE).matches)
+function useMedia(media) {
+  const [matches, setMatches] = useState(() => window.matchMedia(media).matches)
 
   useEffect(() => {
-    const query = window.matchMedia(WIDE)
-    const update = () => setWide(query.matches)
+    const query = window.matchMedia(media)
+    const update = () => setMatches(query.matches)
     query.addEventListener('change', update)
     return () => query.removeEventListener('change', update)
-  }, [])
+  }, [media])
 
-  return wide
+  return matches
 }
 
-function Player({ clip, onBack, onDuration }) {
+function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
   /* #20 spike: a YouTube entry plays in the IFrame player, which hands back a
      surface shaped like the <video> this ref otherwise holds. Nothing below the
      render knows which it got. */
@@ -569,9 +570,11 @@ function Player({ clip, onBack, onDuration }) {
   const [nextPoint, setNextPoint] = useState('a')
   const [zen, setZen] = useState(false)
 
-  /* #81. On a wide screen the loops leave the card for a column of their own,
-     to the left of the player rather than below the fold. */
-  const columns = useWide()
+  /* #86, on trial. With **Try new UI** on, a wide screen puts the controls and
+     the loops in a column left of the clip, and the clip has the rest. Off, or
+     on a narrower screen, the player is one column, as it was before #81. */
+  const wide = useMedia(WIDE)
+  const columns = wide && tryNewUi
 
   // the rAF loop and the key handler read these, so neither needs re-subscribing
   const loopRef = useRef(loop)
@@ -968,9 +971,7 @@ function Player({ clip, onBack, onDuration }) {
     <div
       className={
         columns
-          ? `order-first flex min-h-0 flex-col rounded-2xl bg-panel p-4 lg:p-6 ${
-              zen ? 'hidden' : ''
-            }`
+          ? 'flex min-h-0 flex-1 flex-col rounded-2xl bg-panel p-6'
           : 'mt-6 rounded-xl bg-shell/60 p-4'
       }
     >
@@ -1103,6 +1104,97 @@ function Player({ clip, onBack, onDuration }) {
     </div>
   )
 
+  /* #86. The controls as pieces, because the options put them in different
+     places: under the clip, beside it, or up in the loops column. None of them
+     is the clip, so moving them costs nothing. */
+  const seekAndSpeed = (
+    <>
+      <div
+        className={`flex flex-wrap items-center justify-between gap-2 ${
+          columns ? '' : 'mt-4 lg:mt-6'
+        }`}
+      >
+        <div className="flex gap-1.5">
+          <SeekButton label={`Back ${NUDGE} second`} onClick={nudge(-NUDGE)}>
+            <BackIcon />
+          </SeekButton>
+          <SeekButton label={`Forward ${NUDGE} second`} onClick={nudge(NUDGE)}>
+            <ForwardIcon />
+          </SeekButton>
+        </div>
+        <SpeedStepper speed={speed} onChange={setSpeed} />
+      </div>
+      {/* The speed control does not lie: when YouTube plays at something
+          other than what was asked, the screen says so. */}
+      {youtube && Math.abs(actualRate - speed) > 0.001 && (
+        <p className="mt-1.5 text-right text-xs text-accent">
+          YouTube is playing this at {formatSpeed(actualRate)}x
+        </p>
+      )}
+    </>
+  )
+
+  const slider = (
+    <LoopSlider
+      duration={duration}
+      time={time}
+      loop={loop}
+      onScrub={scrub}
+      onLoopChange={changeLoop}
+      onHold={holdScrub}
+    />
+  )
+
+  const hint = (
+    <p className="mb-4 hidden text-center text-xs text-ink/40 sm:block">
+      <Key>space</Key> sets{' '}
+      <span className="font-semibold text-ink/70">
+        {nextPoint.toUpperCase()}
+      </span>
+      <span className="px-2">&middot;</span>
+      <span className={halfSet ? 'opacity-40' : undefined}>
+        <Key>s</Key>{' '}
+        {halfSet
+          ? 'saves once B is set'
+          : editing
+            ? 'updates it'
+            : 'saves the loop'}
+      </span>
+      {editing && !halfSet && (
+        <>
+          <span className="px-2">&middot;</span>
+          <span>
+            <Key>&#8679;s</Key> saves a new one
+          </span>
+        </>
+      )}
+      <span className="px-2">&middot;</span>
+      <Key>f</Key> toggles zen mode
+    </p>
+  )
+
+  const transport = (
+    <div className="flex items-start justify-center gap-6">
+      <BigButton label="START" onClick={() => scrub(loop.a)}>
+        <StartIcon />
+      </BigButton>
+      <BigButton
+        label={looping ? 'LOOPING' : 'START LOOP'}
+        active={looping}
+        onClick={() => setLooping(!looping)}
+      >
+        <LoopIcon />
+      </BigButton>
+      <BigButton label={playing ? 'PAUSE' : 'PLAY'} onClick={togglePlay}>
+        {playing ? <PauseIcon /> : <PlayIcon />}
+      </BigButton>
+    </div>
+  )
+
+  const spike = youtube && (
+    <SpikeReadings open={!columns} rates={rates} speed={speed} actualRate={actualRate} readings={readings} onCheckSeeks={checkSeeks} />
+  )
+
   return (
     <div
       className={
@@ -1126,6 +1218,20 @@ function Player({ clip, onBack, onDuration }) {
           Clips
         </button>
         <span className="truncate text-sm font-semibold">{clip.name}</span>
+        {/* #86, on trial: off unless asked for, and only where it changes
+            anything */}
+        {wide && (
+          <button
+            type="button"
+            aria-pressed={tryNewUi}
+            onClick={() => onTryNewUi?.(!tryNewUi)}
+            className={`ml-auto shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+              tryNewUi ? 'bg-accent text-on-accent' : 'bg-control text-ink/70 hover:bg-control-hi'
+            }`}
+          >
+            Try new UI
+          </button>
+        )}
       </header>
 
       {/* The card shrinks to whatever the clip actually is: a portrait clip gets a
@@ -1138,21 +1244,21 @@ function Player({ clip, onBack, onDuration }) {
           zen
             ? undefined
             : columns
-              ? 'mx-auto grid min-h-0 w-full max-w-[100rem] flex-1 grid-cols-[22rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-4 px-4 pb-4'
+              ? 'mx-auto grid min-h-0 w-full max-w-[100rem] flex-1 grid-cols-[27rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-4 px-4 pb-4'
               : 'px-4 pb-4'
         }
       >
-        {/* #81. The player's own column. A size container, so the YouTube frame
-            can size itself to the column rather than to the window. Not in zen,
-            where the frame sizes itself to the screen. */}
+        {/* The player's own column (#81, #86). A size container, so the YouTube
+            frame can size itself to the column rather than to the window. Not in
+            zen, where the frame sizes itself to the screen. */}
         <div className={columns && !zen ? '@container min-h-0 overflow-y-auto' : undefined}>
           <div
             className={
               zen
                 ? 'fixed inset-0 z-50 flex items-center justify-center bg-black'
                 : columns
-                  ? /* #81: fills its column, so the loop slider gets the width */
-                    'rounded-2xl bg-panel p-4 lg:p-6'
+                  ? /* #86: fills its column, so the clip and the slider get the width */
+                    'rounded-2xl bg-panel p-6'
                   : 'mx-auto w-fit max-w-full rounded-2xl bg-panel p-4 lg:p-6'
             }
           >
@@ -1169,7 +1275,12 @@ function Player({ clip, onBack, onDuration }) {
                   <YouTubeFrame
                     videoId={clip.videoId}
                     zen={zen}
-                    columns={columns}
+                    width={
+                      columns
+                        ? /* #86: the clip has the column to itself, less the slider */
+                          'min(100cqw - 3rem, 1100px, (100dvh - 14.5rem) * 16 / 9)'
+                        : undefined
+                    }
                     onReady={youtubeReady}
                     onState={(state) => {
                       setPlaying(state === 1 || state === 3)
@@ -1199,9 +1310,8 @@ function Player({ clip, onBack, onDuration }) {
                   zen
                     ? 'max-h-dvh max-w-full object-contain'
                     : columns
-                      ? /* #81: whatever height the controls leave, so the
-                           whole column fits the screen */
-                        'mx-auto block max-h-[calc(100dvh-26rem)] max-w-full rounded-lg bg-black'
+                      ? /* #86: the height the slider under it leaves */
+                        'mx-auto block max-h-[calc(100dvh-14.5rem)] max-w-full rounded-lg bg-black'
                       : 'mx-auto block max-h-[50vh] max-w-full rounded-lg bg-black lg:max-h-[80vh]'
                 }
                 playsInline
@@ -1247,88 +1357,31 @@ function Player({ clip, onBack, onDuration }) {
             </div>
 
             {/* Hidden rather than unmounted, for the same reason */}
-            <div className={zen ? 'hidden' : undefined}>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 lg:mt-6">
-              <div className="flex gap-1.5">
-                <SeekButton label={`Back ${NUDGE} second`} onClick={nudge(-NUDGE)}>
-                  <BackIcon />
-                </SeekButton>
-                <SeekButton label={`Forward ${NUDGE} second`} onClick={nudge(NUDGE)}>
-                  <ForwardIcon />
-                </SeekButton>
-              </div>
-              <SpeedStepper speed={speed} onChange={setSpeed} />
-            </div>
-            {/* The speed control does not lie: when YouTube plays at something
-                other than what was asked, the screen says so. */}
-            {youtube && Math.abs(actualRate - speed) > 0.001 && (
-              <p className="mt-1.5 text-right text-xs text-accent">
-                YouTube is playing this at {formatSpeed(actualRate)}x
-              </p>
-            )}
-
-            <LoopSlider
-              duration={duration}
-              time={time}
-              loop={loop}
-              onScrub={scrub}
-              onLoopChange={changeLoop}
-              onHold={holdScrub}
-            />
-
-            {/* Only worth showing where there is a keyboard to press */}
-            <p className="mb-4 hidden text-center text-xs text-ink/40 sm:block">
-              <Key>space</Key> sets{' '}
-              <span className="font-semibold text-ink/70">
-                {nextPoint.toUpperCase()}
-              </span>
-              <span className="px-2">&middot;</span>
-              <span className={halfSet ? 'opacity-40' : undefined}>
-                <Key>s</Key>{' '}
-                {halfSet
-                  ? 'saves once B is set'
-                  : editing
-                    ? 'updates it'
-                    : 'saves the loop'}
-              </span>
-              {editing && !halfSet && (
-                <>
-                  <span className="px-2">&middot;</span>
-                  <span>
-                    <Key>&#8679;s</Key> saves a new one
-                  </span>
-                </>
-              )}
-              <span className="px-2">&middot;</span>
-              <Key>f</Key> toggles zen mode
-            </p>
-
-            <div className="flex items-start justify-center gap-6">
-              <BigButton label="START" onClick={() => scrub(loop.a)}>
-                <StartIcon />
-              </BigButton>
-              <BigButton
-                label={looping ? 'LOOPING' : 'START LOOP'}
-                active={looping}
-                onClick={() => setLooping(!looping)}
-              >
-                <LoopIcon />
-              </BigButton>
-              <BigButton label={playing ? 'PAUSE' : 'PLAY'} onClick={togglePlay}>
-                {playing ? <PauseIcon /> : <PlayIcon />}
-              </BigButton>
-            </div>
-
-            {!columns && savedLoopsPanel}
-
-            {youtube && <SpikeReadings open={!columns} rates={rates} speed={speed} actualRate={actualRate} readings={readings} onCheckSeeks={checkSeeks} />}
+            <div className={zen ? 'hidden' : columns ? 'mt-2' : undefined}>
+              {!columns && seekAndSpeed}
+              {slider}
+              {!columns && hint}
+              {!columns && transport}
+              {!columns && savedLoopsPanel}
+              {!columns && spike}
             </div>
           </div>
         </div>
 
-        {columns && savedLoopsPanel}
+        {/* #86: the controls up top in the loops column, and the loops under
+            them. The clip has the rest of the screen. */}
+        {columns && (
+          <div className={zen ? 'hidden' : 'order-first flex min-h-0 flex-col gap-4'}>
+            <div className="rounded-2xl bg-panel p-4">
+              {seekAndSpeed}
+              <div className="mt-4">{hint}</div>
+              {transport}
+              {spike}
+            </div>
+            {savedLoopsPanel}
+          </div>
+        )}
       </main>
-
     </div>
   )
 }
