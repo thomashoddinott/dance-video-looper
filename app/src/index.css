@@ -23,10 +23,11 @@
   --color-bachata: #b026ff;
 }
 
-/* #81. How much of a wide screen's height the header and the player's controls
-   take, so the clip can have the rest and the player fits without the page
-   scrolling. Measured, not derived: change the controls and this changes too.
+/* #81, #86. How much of a wide screen's height the new layout takes from the
+   clip: the header, the card's padding and the loop slider under the clip, so
+   the clip can have the rest and the player fits without the page scrolling.
+   Measured, not derived: change what sits under the clip and this changes too.
    Read by both the <video> and the YouTube frame, so the two cannot disagree. */
 :root {
-  --player-controls: 26rem;
+  --player-controls: 14.5rem;
 }

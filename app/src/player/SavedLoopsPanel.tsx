@@ -52,9 +52,10 @@ export function SavedLoopsPanel({
   onRemove,
   onChain,
 }: {
-  /* #81. In a column of its own beside the player rather than in the card
-     under the transport: a card itself then, its field staying put while the
-     list scrolls, so a clip with forty loops never moves the player. */
+  /* #81, #86. In the column beside the clip rather than in the card under the
+     transport: a card itself then, taking the height the controls above it
+     leave, its field staying put while the list scrolls, so a clip with forty
+     loops never moves the player. */
   readonly column: boolean
   readonly loop: Loop | null
   readonly speed: number
@@ -97,7 +98,7 @@ export function SavedLoopsPanel({
       aria-label="Saved loops"
       className={
         column
-          ? 'flex min-h-0 w-full flex-col rounded-2xl bg-panel p-6'
+          ? 'flex min-h-0 flex-1 flex-col rounded-2xl bg-panel p-6'
           : 'mt-6 rounded-xl bg-shell/60 p-4'
       }
     >
