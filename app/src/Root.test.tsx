@@ -166,8 +166,9 @@ describe('a visitor who is not signed in', () => {
     expect(screen.queryByRole('link', { name: 'Exit demo' })).not.toBeInTheDocument()
   })
 
-  /* The one way in for the dancer, below everything a visitor came for. */
-  it('is offered Connect Google Drive below the showcase', async () => {
+  /* The one way in for the dancer: at the top beside the source link (#83),
+     rather than below a showcase long enough to hide it. */
+  it('is offered Connect Google Drive above the showcase', async () => {
     renderRootAt('/')
     await theShowcase()
 
@@ -176,7 +177,7 @@ describe('a visitor who is not signed in', () => {
         connect: screen.getByRole('button', { name: /connect google drive/i }),
         clips: screen.getByRole('list', { name: 'Clips' }),
       }),
-    ).toEqual(['clips', 'connect'])
+    ).toEqual(['connect', 'clips'])
   })
 
   /* #73. Nothing has been opened in a visit that has just begun, so Last

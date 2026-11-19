@@ -1135,17 +1135,18 @@ describe('the grid in the demo', () => {
     ).not.toBeInTheDocument()
   })
 
-  /* #77. The showcase is what a visitor lands on, so the dancer's way in
-     stays below it. */
-  it('offers Connect Google Drive below the grid', () => {
+  /* #83. The dancer's way in sits at the top beside the source link, rather
+     than below a showcase long enough to hide it. */
+  it('offers Connect Google Drive beside the source link, above the grid', () => {
     renderTheDemo()
 
     expect(
       inDocumentOrder({
+        source: screen.getByRole('link', { name: /source code/i }),
         connect: screen.getByRole('button', { name: /connect google drive/i }),
         clips: screen.getByRole('list', { name: 'Clips' }),
       }),
-    ).toEqual(['clips', 'connect'])
+    ).toEqual(['source', 'connect', 'clips'])
   })
 
   /* #77. There is no demo to say so about, or to leave. */

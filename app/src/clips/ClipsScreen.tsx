@@ -1,7 +1,7 @@
 import type { ChangeEvent } from 'react'
 import { type FormEvent, useRef, useState } from 'react'
 
-import { DriveStatus } from '../drive/DriveStatus'
+import { ConnectDrive, DriveStatus } from '../drive/DriveStatus'
 import type { Clip } from './clip'
 import { groupsOf } from './clipGroups'
 import { GroupFilter } from './GroupFilter'
@@ -307,6 +307,7 @@ export function ClipsScreen({
           <h1 className="text-lg font-semibold tracking-tight">Clips</h1>
           <div className="flex items-center gap-4">
             <SourceLink />
+            <ConnectDrive />
             {!demo && (
               <>
                 <button
@@ -520,8 +521,9 @@ export function ClipsScreen({
           ))}
         </ul>
 
-        {/* #77. Under the showcase as well as under the dancer's own library:
-            it is how the dancer gets from the one to the other. */}
+        {/* #77. Under the showcase as well as under the dancer's own library.
+            The way from the one to the other is at the top now (#83); this is
+            only what Drive is doing. */}
         <DriveStatus />
       </main>
     </div>
