@@ -44,6 +44,7 @@ import {
   SEEK_BACKSTOP,
   settled,
 } from './seekGate'
+import { useWideScreen } from './useWideScreen'
 import { VideoProgress } from './VideoProgress'
 import { YouTubeFrame } from './YouTubeFrame'
 import { browserMountYouTube, type MountYouTube } from './youtubeMount'
@@ -944,8 +945,42 @@ function OpenedClip({
      unreachable, and its test dead on arrival. */
   const isolated = zen && !condemned
 
+  /* #81. On a laptop or a desktop the saved loops get a column of their own,
+     left of the player, so the clip, its controls and the loops are all on one
+     screen rather than the loops waiting below the fold. */
+  const column = useWideScreen()
+
+  /* One panel, put in one of two places: under the transport in the card, or
+     ahead of the card in a column. A JSX value rather than two renders, so the
+     two places cannot be wired differently. */
+  const savedLoops = (
+    <SavedLoopsPanel
+      column={column}
+      loop={playback.kind === 'ready' ? playback.loop : null}
+      speed={speed}
+      halfSet={halfSet}
+      saved={saved}
+      chain={chain}
+      name={loopName}
+      editing={editing}
+      unwritten={unsaved}
+      writing={loops.writing}
+      notice={loops.notice}
+      onNameChange={setLoopName}
+      onSave={saveLoop}
+      onSaveAsNew={saveAsNew}
+      onRecall={recallLoop}
+      onRemove={removeLoop}
+      onChain={chainLoop}
+    />
+  )
+
   return (
-    <div className="min-h-screen bg-shell text-ink">
+    <div
+      className={
+        column ? 'flex h-dvh flex-col bg-shell text-ink' : 'min-h-screen bg-shell text-ink'
+      }
+    >
       {/* Hidden by the attribute rather than a class, and stripped of `flex`
           while it is: a display utility outranks the `[hidden]` rule, so a
           header that kept its classes would stay on screen. It also makes the
@@ -954,7 +989,11 @@ function OpenedClip({
       <header
         hidden={isolated}
         className={
-          isolated ? undefined : 'flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-3'
+          isolated
+            ? undefined
+            : `flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-3 ${
+                column ? 'mx-auto w-full max-w-[100rem]' : ''
+              }`
         }
       >
         <BackToClips />
@@ -968,16 +1007,44 @@ function OpenedClip({
 
       {/* The card shrinks to whatever the clip actually is: a portrait clip gets
           a narrow card, a landscape one a wide card. Nothing here assumes 9:16
-          (BR-16), and the controls below inherit that width by sitting in it. */}
-      <main className={isolated ? undefined : 'px-4 pb-4'}>
+          (BR-16), and the controls below inherit that width by sitting in it.
+
+          Beside the loops column (#81) it fills its column instead, which
+          gives the loop slider the whole width to be dragged across. */}
+      <main
+        className={
+          isolated
+            ? undefined
+            : column
+              ? 'mx-auto grid min-h-0 w-full max-w-[100rem] flex-1 grid-cols-[22rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-4 px-4 pb-4'
+              : 'px-4 pb-4'
+        }
+      >
+        {/* First, so the page reads in the order it is laid out: loops, then
+            the player. In the slot before the card's rather than in the card's
+            own, so the card keeps its place whichever way the screen turns —
+            and with it the clip, which would otherwise reload (BR-08). Hidden
+            with the other controls, and stripped of `flex` for the header's
+            reason. */}
+        {column && (
+          <div hidden={isolated} className={isolated ? undefined : 'flex min-h-0'}>
+            {savedLoops}
+          </div>
+        )}
         {/* The card becomes the black field the clip sits alone in. Same
             element restyled, not a second one rendered — BR-08 again, and the
-            reason zen mode is one flag rather than a branch. */}
+            reason zen mode is one flag rather than a branch.
+
+            In a column it is a size container, so the YouTube frame can take
+            the column's width rather than the window's, and it scrolls on its
+            own on a screen too short for the controls rather than the page. */}
         <div
           className={
             isolated
               ? 'fixed inset-0 z-50 flex items-center justify-center bg-black'
-              : 'mx-auto w-fit max-w-full rounded-2xl bg-panel p-4 lg:p-6'
+              : column
+                ? '@container min-h-0 overflow-y-auto rounded-2xl bg-panel p-6'
+                : 'mx-auto w-fit max-w-full rounded-2xl bg-panel p-4 lg:p-6'
           }
         >
           {/* Only the clip goes; the header above and the regions below stay put,
@@ -1021,7 +1088,9 @@ function OpenedClip({
                   className={
                     isolated
                       ? 'max-h-dvh max-w-full object-contain'
-                      : 'mx-auto block max-h-[50vh] max-w-full rounded-lg bg-black lg:max-h-[80vh]'
+                      : column
+                        ? 'mx-auto block max-h-[calc(100dvh-var(--player-controls))] max-w-full rounded-lg bg-black'
+                        : 'mx-auto block max-h-[50vh] max-w-full rounded-lg bg-black lg:max-h-[80vh]'
                   }
                   playsInline
                   /* The default fetches metadata and stops, so scrubbing past
@@ -1050,6 +1119,7 @@ function OpenedClip({
                     videoId={youtube}
                     mount={mountYouTube}
                     isolated={isolated}
+                    column={column}
                     knownLength={clip.seconds}
                     onReady={(ready, length) => {
                       surface.current = ready
@@ -1116,7 +1186,8 @@ function OpenedClip({
               can be found at all — an unnamed empty div is invisible to a test
               that asks what the screen offers, which is the only question worth
               asking of a skeleton. One wrapper takes all five out at once,
-              hidden rather than unmounted for the header's reason. */}
+              hidden rather than unmounted for the header's reason — four, when
+              the saved loops are in their column (#81), which hides itself. */}
           <div hidden={isolated}>
             {/* Both halves are here now, so `justify-between` does what the
                 mockup shows: the seek pair hard left, the stepper hard right.
@@ -1224,24 +1295,7 @@ function OpenedClip({
               )}
             </div>
 
-            <SavedLoopsPanel
-              loop={playback.kind === 'ready' ? playback.loop : null}
-              speed={speed}
-              halfSet={halfSet}
-              saved={saved}
-              chain={chain}
-              name={loopName}
-              editing={editing}
-              unwritten={unsaved}
-              writing={loops.writing}
-              notice={loops.notice}
-              onNameChange={setLoopName}
-              onSave={saveLoop}
-              onSaveAsNew={saveAsNew}
-              onRecall={recallLoop}
-              onRemove={removeLoop}
-              onChain={chainLoop}
-            />
+            {!column && savedLoops}
           </div>
         </div>
       </main>

@@ -22,3 +22,11 @@
   --color-salsa: #a3142c;
   --color-bachata: #b026ff;
 }
+
+/* #81. How much of a wide screen's height the header and the player's controls
+   take, so the clip can have the rest and the player fits without the page
+   scrolling. Measured, not derived: change the controls and this changes too.
+   Read by both the <video> and the YouTube frame, so the two cannot disagree. */
+:root {
+  --player-controls: 26rem;
+}

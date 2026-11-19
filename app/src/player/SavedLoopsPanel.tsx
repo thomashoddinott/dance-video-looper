@@ -34,6 +34,7 @@ const AS_NEW_BUTTON =
    import resolved to the pure module and React was handed an undefined component
    with no hint as to why. */
 export function SavedLoopsPanel({
+  column,
   loop,
   speed,
   halfSet,
@@ -51,6 +52,10 @@ export function SavedLoopsPanel({
   onRemove,
   onChain,
 }: {
+  /* #81. In a column of its own beside the player rather than in the card
+     under the transport: a card itself then, its field staying put while the
+     list scrolls, so a clip with forty loops never moves the player. */
+  readonly column: boolean
   readonly loop: Loop | null
   readonly speed: number
   readonly halfSet: boolean
@@ -88,7 +93,14 @@ export function SavedLoopsPanel({
   readonly onChain: (id: string) => void
 }) {
   return (
-    <section aria-label="Saved loops" className="mt-6 rounded-xl bg-shell/60 p-4">
+    <section
+      aria-label="Saved loops"
+      className={
+        column
+          ? 'flex min-h-0 w-full flex-col rounded-2xl bg-panel p-6'
+          : 'mt-6 rounded-xl bg-shell/60 p-4'
+      }
+    >
       <h2 className="text-xs font-bold tracking-widest text-ink/50">
         SAVED LOOPS
       </h2>
@@ -210,7 +222,14 @@ export function SavedLoopsPanel({
               clip, and a run of ticked rows would read as rows with something
               unrelated between them. The ordering is `chain`'s to state, because
               it is the ordering the chain rests on. */}
-          <ul className="mt-3 flex flex-col gap-1.5">
+          {/* In the column, the one part of the panel that scrolls. Padded out
+              by the width of the open row's ring, which a scrolling box would
+              otherwise clip. */}
+          <ul
+            className={`mt-3 flex flex-col gap-1.5 ${
+              column ? '-mx-1 min-h-0 flex-1 overflow-y-auto px-1 py-1' : ''
+            }`}
+          >
             {inStartOrder(saved).map((entry) => (
               <li
                 key={entry.id}
