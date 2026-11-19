@@ -317,16 +317,14 @@ function ClipTile({ clip, onOpen, onDelete, onStyle, onGroup, groups, uploading 
 
    The mockup has no Drive, so the button walks the states instead of signing
    anything in. That is the point: every sentence the dancer can be shown is
-   reachable here, which a real sign-in button could not manage. */
+   reachable here, which a real sign-in button could not manage.
+
+   No sentence for a declined sign-in (#83): it reads as "Not connected to
+   Drive.", the line the dancer saw before asking. */
 const DRIVE_STATES = [
   { notice: 'Not connected to Drive.', connected: false },
   { notice: 'Drive is connected.', connected: true },
   { notice: 'Drive is connected. Your Drive session was renewed.', connected: true },
-  {
-    notice:
-      'Drive is unavailable — you declined access, so clips and saved loops will not sync.',
-    connected: false,
-  },
   {
     notice:
       'Drive is unavailable — access was removed from your Google account, so clips and saved loops will not sync.',
@@ -354,16 +352,6 @@ function DriveStatus({ state, onNext }) {
     <div className="mt-6 flex flex-wrap items-center gap-2">
       <p className="text-xs text-ink/40">{notice}</p>
 
-      {!connected && (
-        <button
-          type="button"
-          onClick={onNext}
-          className="rounded-lg bg-control px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-control-hi"
-        >
-          Connect Google Drive
-        </button>
-      )}
-
       {connected && (
         <button
           type="button"
@@ -374,6 +362,23 @@ function DriveStatus({ state, onNext }) {
         </button>
       )}
     </div>
+  )
+}
+
+/* #83, retrofitted from the build: Connect sits at the top beside the source
+   link rather than in the footer under the showcase. Walks the states, as the
+   footer's link does once connected. */
+function ConnectDrive({ state, onNext }) {
+  if (DRIVE_STATES[state].connected) return null
+
+  return (
+    <button
+      type="button"
+      onClick={onNext}
+      className="rounded-lg bg-control px-3 py-2 text-sm font-semibold text-ink/80 hover:bg-control-hi"
+    >
+      Connect Google Drive
+    </button>
   )
 }
 
@@ -679,6 +684,7 @@ function Library({
           <h1 className="text-lg font-semibold tracking-tight">Clips</h1>
           <div className="flex items-center gap-4">
             <SourceLink />
+            <ConnectDrive state={drive} onNext={nextDriveState} />
             {!signedOut && (
               <>
                 <button
