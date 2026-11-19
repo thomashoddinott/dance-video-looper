@@ -369,6 +369,11 @@ function OpenedClip({
      too, which is why it is state here rather than something the handler keeps to
      itself. */
   const [nextPoint, setNextPoint] = useState<Handle>('a')
+  /* #94, on trial. Whether the new layout has the A/B slider out under the
+     clip: from space setting A to space setting B, which is when a loop is
+     being picked, and whenever the Slider checkbox says so. Put away the rest
+     of the time, so the clip has its room. The one-column player ignores it. */
+  const [sliderOut, setSliderOut] = useState(false)
   /* The loops kept against *this* clip, read out of the one file that holds
      every clip's. Not state here any more: US-01-15 made Drive the owner, and
      what the panel lists is what Drive has taken — which is the whole of "write
@@ -829,6 +834,8 @@ function OpenedClip({
 
       putLoop(framed.loop)
       setNextPoint(framed.next)
+      /* #94. Out while space waits for B, away once it has it. */
+      setSliderOut(framed.next === 'b')
     }
 
     window.addEventListener('keydown', onKeyDown)
@@ -1062,9 +1069,12 @@ function OpenedClip({
   /* The slider appears once there is a length to lay it out against, for the
      same reason the transport does: before metadata there is no region to
      frame, and a track spanning an unknown clip would be inviting the dancer to
-     drag against nothing. */
+     drag against nothing.
+
+     In the new layout it is put away while no loop is being picked (#94):
+     hidden in place rather than unmounted, for the header's reason. */
   const loopRange = (
-    <div role="group" aria-label="Loop range">
+    <div role="group" aria-label="Loop range" hidden={column && !sliderOut}>
       {playback.kind === 'ready' && (
         <LoopSlider
           duration={playback.duration}
@@ -1158,18 +1168,33 @@ function OpenedClip({
         {/* #86, on trial: off unless asked for, and only where it changes
             anything. */}
         {wide && (
-          <button
-            type="button"
-            aria-pressed={tryNewUi}
-            onClick={() => setTryNewUi(!tryNewUi)}
-            className={`ml-auto shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-              tryNewUi
-                ? 'bg-accent text-on-accent'
-                : 'bg-control text-ink/70 hover:bg-control-hi'
-            }`}
-          >
-            Try new UI
-          </button>
+          <div className="ml-auto flex shrink-0 items-center gap-3">
+            {/* #94, on trial: the slider by hand, to check space against while
+                it is tried. Shows the same state space sets, and overrides it. */}
+            {column && (
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-ink/70">
+                <input
+                  type="checkbox"
+                  checked={sliderOut}
+                  onChange={(event) => setSliderOut(event.target.checked)}
+                  className="h-4 w-4 accent-accent"
+                />
+                Slider
+              </label>
+            )}
+            <button
+              type="button"
+              aria-pressed={tryNewUi}
+              onClick={() => setTryNewUi(!tryNewUi)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                tryNewUi
+                  ? 'bg-accent text-on-accent'
+                  : 'bg-control text-ink/70 hover:bg-control-hi'
+              }`}
+            >
+              Try new UI
+            </button>
+          </div>
         )}
       </header>
 
@@ -1213,13 +1238,17 @@ function OpenedClip({
 
             In a column it is a size container, so the YouTube frame can take
             the column's width rather than the window's, and it scrolls on its
-            own on a screen too short for the controls rather than the page. */}
+            own on a screen too short for the controls rather than the page.
+            With the slider put away (#94) the clip's height cap drops to what
+            the header and the padding take, so the clip has the slider's room. */}
         <div
           className={
             isolated
               ? 'fixed inset-0 z-50 flex items-center justify-center bg-black'
               : column
-                ? '@container min-h-0 overflow-y-auto rounded-2xl bg-panel p-6'
+                ? `@container min-h-0 overflow-y-auto rounded-2xl bg-panel p-6 ${
+                    sliderOut ? '' : '[--player-controls:var(--player-chrome)]'
+                  }`
                 : 'mx-auto w-fit max-w-full rounded-2xl bg-panel p-4 lg:p-6'
           }
         >

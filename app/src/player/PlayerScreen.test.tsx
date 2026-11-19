@@ -626,11 +626,21 @@ describe('the player', () => {
 describe('the new layout, on trial', () => {
   const tryNewUi = () => screen.getByRole('button', { name: 'Try new UI' })
 
+  const loopRangeIn = (container: HTMLElement) => {
+    const range = container.querySelector('[aria-label="Loop range"]')
+
+    if (!range) throw new Error('The player drew no loop range')
+
+    return range
+  }
+
   const runningOrder = (container: HTMLElement) =>
     inDocumentOrder({
       clip: clipSurface(container),
       seekAndSpeed: screen.getByRole('toolbar', { name: 'Seek and speed' }),
-      loop: screen.getByRole('group', { name: 'Loop range' }),
+      /* Found as DOM even while it is put away (#94), since this is about where
+         it sits and a hidden element has no accessible name to find it by. */
+      loop: loopRangeIn(container),
       hint: screen.getByRole('note', { name: 'Keyboard shortcuts' }),
       transport: screen.getByRole('toolbar', { name: 'Transport' }),
       saved: screen.getByRole('region', { name: 'Saved loops' }),
@@ -735,6 +745,92 @@ describe('the new layout, on trial', () => {
     })
 
     expect(runningOrder(container)).toEqual(ONE_COLUMN)
+    expect(clipSurface(container)).toBe(clip)
+    expect(clip.paused).toBe(false)
+  })
+})
+
+/* #94. In the new layout the A/B slider is only out while a loop is being
+   picked — from space setting A to space setting B — and the clip has its
+   room the rest of the time. A Slider checkbox beside the toggle shows the
+   same state and overrides it by hand, while the behaviour is on trial. */
+describe('the slider in the new layout', () => {
+  const sliderOnOffer = () => screen.queryByRole('group', { name: 'Loop range' })
+  const sliderBox = () => screen.queryByRole('checkbox', { name: 'Slider' })
+
+  const pressSpace = () => {
+    fireEvent.keyDown(window, { code: 'Space' })
+  }
+
+  /* A decoded clip on a wide screen, with the new layout turned on. */
+  const inTheNewLayout = async () => {
+    aWindow({ wide: true })
+    const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
+    const clip = playable(clipSurface(container), { seconds: 12 })
+    fireEvent.loadedMetadata(clip)
+    await userEvent.click(screen.getByRole('button', { name: 'Try new UI' }))
+
+    return { container, clip }
+  }
+
+  it('is put away until a loop is being picked', async () => {
+    await inTheNewLayout()
+
+    expect(sliderOnOffer()).not.toBeInTheDocument()
+    expect(sliderBox()).not.toBeChecked()
+  })
+
+  it('comes out when space sets A, and goes when space sets B', async () => {
+    await inTheNewLayout()
+
+    pressSpace()
+
+    expect(sliderOnOffer()).toBeInTheDocument()
+    expect(sliderBox()).toBeChecked()
+
+    pressSpace()
+
+    expect(sliderOnOffer()).not.toBeInTheDocument()
+    expect(sliderBox()).not.toBeChecked()
+  })
+
+  it('comes out and goes by hand from the Slider checkbox', async () => {
+    await inTheNewLayout()
+
+    await userEvent.click(sliderBox()!)
+
+    expect(sliderOnOffer()).toBeInTheDocument()
+
+    await userEvent.click(sliderBox()!)
+
+    expect(sliderOnOffer()).not.toBeInTheDocument()
+  })
+
+  /* The override is the point of the box: whatever space last did. */
+  it('goes by hand even while a loop is half picked', async () => {
+    await inTheNewLayout()
+    pressSpace()
+
+    await userEvent.click(sliderBox()!)
+
+    expect(sliderOnOffer()).not.toBeInTheDocument()
+  })
+
+  it('is always out, with no checkbox, when the new layout is off', () => {
+    aWindow({ wide: true })
+    renderPlayer(getClip({ src: '/wave-practice.mp4' }))
+
+    expect(sliderOnOffer()).toBeInTheDocument()
+    expect(sliderBox()).not.toBeInTheDocument()
+  })
+
+  it('keeps the same clip playing as it comes and goes', async () => {
+    const { container, clip } = await inTheNewLayout()
+    await userEvent.click(clip)
+
+    pressSpace()
+    pressSpace()
+
     expect(clipSurface(container)).toBe(clip)
     expect(clip.paused).toBe(false)
   })
