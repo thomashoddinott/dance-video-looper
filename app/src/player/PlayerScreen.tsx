@@ -13,7 +13,7 @@ import type { LoopsHandle } from '../loops/useLoops'
 import { chainedSpan } from './chain'
 import { ClipName } from './ClipName'
 import { useClipSource } from './clipSource'
-import { clamp, type Handle, NUDGE } from './loopRange'
+import { clamp, type Handle, NUDGE, SCRUB_STEP } from './loopRange'
 import { LoopSlider } from './LoopSlider'
 import type { PlaybackSurface } from './playbackSurface'
 import {
@@ -50,7 +50,7 @@ import { useWideScreen } from './useWideScreen'
 import { VideoProgress } from './VideoProgress'
 import { YouTubeFrame } from './YouTubeFrame'
 import { browserMountYouTube, type MountYouTube } from './youtubeMount'
-import { BUFFERING, ENDED, PLAYING } from './youtubeSurface'
+import { ARRIVED, BUFFERING, ENDED, PLAYING } from './youtubeSurface'
 
 /* Asked of the element every time, rather than of a flag the screen keeps.
    Playback stops for reasons the app never hears about — the clip ends, the phone
@@ -753,9 +753,41 @@ function OpenedClip({
   const saveLoopRef = useRef(saveLoop)
   const saveAsNewRef = useRef(saveAsNew)
 
+  /* #98. One arrow-key step of a paused scrub, inside the loop while it is
+     held. Reached through a ref for `saveLoop`'s reason.
+
+     Each step builds on the last one rather than on where the clip says it is,
+     for two reasons that come to the same thing. A held key repeats faster
+     than a seek lands, so the newest target may still be held back in the
+     gate. And YouTube's report of a paused video's place trails a seek and is
+     counted caught up once it is within `ARRIVED` of it (`youtubeSurface`) —
+     a third of a second, wider than a step — so a step from the report would
+     land where the last one did. The last step stands until the clip is
+     somewhere else by more than that: moved by anything but the arrows. */
+  const scrubbedTo = useRef<number | null>(null)
+
+  const scrub = (step: number) => {
+    const clip = surface.current
+
+    if (playback.kind !== 'ready' || !clip) return
+
+    const reported = gate.current.pending ?? clip.currentTime
+    const last = scrubbedTo.current
+    const from =
+      last !== null && Math.abs(reported - last) < ARRIVED ? last : reported
+    const { a, b } = playback.looping ? playback.loop : { a: 0, b: playback.duration }
+    const to = clamp(from + step, a, b)
+
+    scrubbedTo.current = to
+    seekTo(to)
+  }
+
+  const scrubRef = useRef(scrub)
+
   useEffect(() => {
     saveLoopRef.current = saveLoop
     saveAsNewRef.current = saveAsNew
+    scrubRef.current = scrub
   })
 
   /* UC-01 steps 9–10: the section is marked while it goes past, so the shortcut
@@ -773,6 +805,24 @@ function OpenedClip({
     if (playback.kind !== 'ready') return
 
     const onKeyDown = (event: KeyboardEvent) => {
+      /* #98. ← and → step a paused clip a little at a time, inside the loop
+         while it is held, so a move can be studied without the mouse. Ahead of
+         the repeat guard below, because holding the key is how a scrub keeps
+         going. A loop handle with focus has already taken the key for itself
+         (it prevents the default), and a text field's caret keeps it. Playing,
+         they do nothing new. No hint says so: it is there to be found. */
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        const clip = surface.current
+
+        if (event.defaultPrevented || isTyping(event.target)) return
+        if (!clip?.paused) return
+
+        event.preventDefault()
+        scrubRef.current(event.key === 'ArrowLeft' ? -SCRUB_STEP : SCRUB_STEP)
+
+        return
+      }
+
       /* A held key repeats at the operating system's rate and every repeat is
          another keydown. Marking a section is one act however long the thumb stays
          down; without this, a held space flickers A and B against each other tens

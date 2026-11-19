@@ -32,7 +32,7 @@ export const BUFFERING = 3
 const REPORT_CATCHES_UP = 500
 /* Close enough to count as the report having arrived at the seek. Wider than a
    frame because the video has started moving again by the time it is read. */
-const ARRIVED = 0.35
+export const ARRIVED = 0.35
 
 /* #20. A YouTube video made into the surface a <video> already is, so the
    player drives it without knowing which it has.
