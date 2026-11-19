@@ -1221,7 +1221,7 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
           Clips
         </button>
         <span className="truncate text-sm font-semibold">{clip.name}</span>
-        {/* #86, on trial: off unless asked for, and only where it changes
+        {/* #86, #100: on to begin with, and offered only where it changes
             anything */}
         {wide && (
           <div className="ml-auto flex shrink-0 items-center gap-3">

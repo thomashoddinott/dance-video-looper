@@ -1029,10 +1029,10 @@ function OpenedClip({
      unreachable, and its test dead on arrival. */
   const isolated = zen && !condemned
 
-  /* #86, on trial. With **Try new UI** on, a laptop or a desktop puts the
-     controls and the loops in a column left of the clip, which gets the rest of
-     the screen with the slider under it. Off, or on a narrower screen, the
-     player is one column, as it was before #81. */
+  /* #86, #100. With **Try new UI** on, as it opens, a laptop or a desktop
+     puts the controls and the loops in a column left of the clip, which gets
+     the rest of the screen with the slider under it. Off, or on a narrower
+     screen, the player is one column, as it was before #81. */
   const wide = useWideScreen()
   const [tryNewUi, setTryNewUi] = useTryNewUi()
   const column = wide && tryNewUi
@@ -1214,7 +1214,7 @@ function OpenedClip({
           clip={clip}
           onRename={clip.driveId === undefined ? undefined : onRename}
         />
-        {/* #86, on trial: off unless asked for, and only where it changes
+        {/* #86, #100: on to begin with, and offered only where it changes
             anything. */}
         {wide && (
           <div className="ml-auto flex shrink-0 items-center gap-3">
