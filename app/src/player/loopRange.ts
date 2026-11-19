@@ -10,6 +10,11 @@ export const MIN_LOOP = 0.2
    and a second is about the coarseness of a beat. */
 export const NUDGE = 1
 
+/* #98. A tenth of a second, for ← and → on a paused clip with no handle in
+   hand: finer than `NUDGE`, because what it is for is looking at a move a few
+   frames at a time. A first guess, to be tuned in use. */
+export const SCRUB_STEP = 0.1
+
 export type Handle = 'a' | 'b'
 
 /* Only the two fields the arithmetic reads, rather than a whole `DOMRect`. It

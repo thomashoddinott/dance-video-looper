@@ -1439,6 +1439,112 @@ describe('tapping the track', () => {
    handle `role="slider"` and `tabIndex={0}`, promising keyboard operation, and
    implements none — and US-01-10 is about space setting A and B, never about
    adjusting a handle that already has focus. */
+/* #98. ← and → step a paused clip a tenth of a second at a time, inside the
+   loop, so a move can be studied without reaching for the mouse. Nothing on
+   the screen says so: it is there to be found. */
+describe('scrubbing a paused clip with the arrow keys', () => {
+  const press = (key: 'ArrowLeft' | 'ArrowRight', { held = false } = {}) => {
+    fireEvent.keyDown(window, { key, code: key, repeat: held })
+  }
+
+  it('steps a paused clip a tenth of a second forward and back', () => {
+    const clip = aReadyClip({ seconds: 12 })
+    clip.currentTime = 5
+
+    press('ArrowRight')
+
+    expect(clip.currentTime).toBeCloseTo(5.1)
+
+    press('ArrowLeft')
+    press('ArrowLeft')
+
+    expect(clip.currentTime).toBeCloseTo(4.9)
+  })
+
+  /* Holding the key is how a scrub keeps going, so a repeat is not ignored
+     here the way it is for space. */
+  it('keeps stepping while the key is held down', () => {
+    const clip = aReadyClip({ seconds: 12 })
+    clip.currentTime = 5
+
+    press('ArrowRight')
+    press('ArrowRight', { held: true })
+    press('ArrowRight', { held: true })
+
+    expect(clip.currentTime).toBeCloseTo(5.3)
+  })
+
+  /* A held key repeats faster than a seek lands, so each step builds on the
+     last one asked for rather than on where the clip still is. */
+  it('adds the steps up while a seek is still landing', () => {
+    const clip = aReadyClip({ seconds: 12 })
+    clip.currentTime = 5
+    const letThemLand = holdSeeks(clip)
+
+    press('ArrowRight')
+    press('ArrowRight', { held: true })
+    press('ArrowRight', { held: true })
+    letThemLand()
+
+    expect(clip.currentTime).toBeCloseTo(5.3)
+  })
+
+  it('stops at the ends of the loop rather than leaving it', () => {
+    const clip = aReadyClip({ seconds: 12 })
+    clip.currentTime = 2
+    fireEvent.keyDown(window, { code: 'Space' })
+    clip.currentTime = 4
+    fireEvent.keyDown(window, { code: 'Space' })
+
+    clip.currentTime = 3.95
+    press('ArrowRight')
+    press('ArrowRight', { held: true })
+
+    expect(clip.currentTime).toBe(4)
+
+    clip.currentTime = 2.05
+    press('ArrowLeft')
+    press('ArrowLeft', { held: true })
+
+    expect(clip.currentTime).toBe(2)
+  })
+
+  it('does nothing while the clip is playing', async () => {
+    const clip = aReadyClip({ seconds: 12 })
+    await userEvent.click(clip)
+    clip.currentTime = 5
+
+    press('ArrowRight')
+
+    expect(clip.currentTime).toBe(5)
+  })
+
+  /* The handle moves itself and seeks the clip to where it lands; a step on top
+     of that would leave the playhead a tenth of a second off the boundary. */
+  it('leaves the arrows to a loop handle that has focus', () => {
+    const clip = aReadyClip({ seconds: 12 })
+
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Loop start' }), {
+      key: 'ArrowRight',
+      code: 'ArrowRight',
+    })
+
+    expect(clip.currentTime).toBe(1)
+  })
+
+  it('leaves the arrows to the caret in the name field', () => {
+    const clip = aReadyClip({ seconds: 12 })
+    clip.currentTime = 5
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Loop name' }), {
+      key: 'ArrowRight',
+      code: 'ArrowRight',
+    })
+
+    expect(clip.currentTime).toBe(5)
+  })
+})
+
 describe('keying a focused loop boundary', () => {
   const start = () => screen.getByRole('slider', { name: 'Loop start' })
   const end = () => screen.getByRole('slider', { name: 'Loop end' })
@@ -4081,6 +4187,27 @@ describe('a YouTube video in the player', () => {
     })
 
     expect(youtube.host()).toHaveClass('aspect-video')
+  })
+
+  /* #98. YouTube's report of where a paused video is trails a seek, and the
+     surface counts it caught up once it is within a third of a second — wider
+     than an arrow-key step. Stepping from the report would land every step
+     where the last one did; each builds on the last instead. */
+  it('adds arrow-key steps up although YouTube is slow to report them', async () => {
+    const youtube = aYouTube(aYouTubePlayer({ getCurrentTime: vi.fn(() => 5) }))
+    await readyYouTube(youtube)
+
+    for (let step = 0; step < 3; step++) {
+      fireEvent.keyDown(window, { key: 'ArrowRight', code: 'ArrowRight' })
+      await act(async () => {
+        await new Promise((landed) => setTimeout(landed, 0))
+      })
+    }
+
+    expect(youtube.player.seekTo).toHaveBeenLastCalledWith(
+      expect.closeTo(5.3),
+      true,
+    )
   })
 
   it('lays the loop over the whole video once YouTube knows its length', async () => {
