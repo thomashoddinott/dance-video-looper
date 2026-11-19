@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { groupsOf } from './clipGroups.js'
 import { GroupChooser, GroupFilter, GroupLabel } from './Groups.jsx'
+import { FIGURAS_LOOPS } from './seedLoops.js'
 import { lookUp, thumbnailFor, videoIdFrom } from './youtube.js'
 
 /* Recent is the day a clip was uploaded and never changes again, so it cannot
@@ -415,8 +416,8 @@ const UPLOAD_PLAYS_OUT_OVER = 2500
 /* #77, retrofitted from the build (`app/src/demo/demoVideos.ts`): what a
    visitor who is not signed in lands on — a snapshot of the YouTube entries in
    Thomas's library that have loops. The counts are the loops it ships with
-   (`app/src/demo/demoLoops.json`); the mockup's player has no loops to open
-   onto, so only the tiles show them. */
+   (`app/src/demo/demoLoops.json`). Only the first opens onto its loops (#81),
+   so the loops column is seen full; the rest show them only on the tile. */
 const SHOWCASE = [
   {
     id: 'yt:YClbDdg_oFc',
@@ -425,7 +426,8 @@ const SHOWCASE = [
     name: '➡️Las Mejores 50 Figuras de SALSA CUBANA 2020 (¡100 RECOMENDADO!)',
     added: '2026-11-17',
     seconds: 731,
-    loops: 47,
+    loops: FIGURAS_LOOPS.length,
+    savedLoops: FIGURAS_LOOPS,
   },
   {
     id: 'yt:l-H1OAu9N28',

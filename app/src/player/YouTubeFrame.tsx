@@ -19,6 +19,7 @@ export function YouTubeFrame({
   videoId,
   mount,
   isolated,
+  column,
   knownLength,
   onReady,
   onState,
@@ -29,6 +30,9 @@ export function YouTubeFrame({
   readonly videoId: string
   readonly mount: MountYouTube
   readonly isolated: boolean
+  /* #81. Beside the loops column, where the width to fill is the player's
+     column rather than the window. */
+  readonly column: boolean
   /* The length the entry already carries, if it does. A cued video can report
      none until it has been played once, and without a length the player has no
      loop to lay out — so this stands in until YouTube gives one. */
@@ -101,10 +105,15 @@ export function YouTubeFrame({
     <div
       ref={host}
       className={isolated ? 'aspect-video' : 'aspect-video overflow-hidden rounded-lg bg-black'}
+      /* In a column, `cqw` is the card's own width inside its padding (the card
+         is a size container there), and the height is capped as the <video>'s
+         is, by what the controls leave. */
       style={{
         width: isolated
           ? 'min(100vw, 100dvh * 16 / 9)'
-          : 'min(100vw - 4rem, 1100px, 55vh * 16 / 9)',
+          : column
+            ? 'min(100cqw, 1100px, (100dvh - var(--player-controls)) * 16 / 9)'
+            : 'min(100vw - 4rem, 1100px, 55vh * 16 / 9)',
       }}
     />
   )

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Library from './Library.jsx'
 import Player from './Player.jsx'
+import { SAMPLE_CLIP_LOOPS } from './seedLoops.js'
 
 /* Stand-in for what Drive will return. Only the first entry is a real clip —
    the rest are deliberately blank placeholders, so the grid reads as a list of
@@ -26,11 +27,12 @@ const SEED_CLIPS = [
     name: 'Turn combo — Dubai',
     added: '2026-08-29',
     seconds: 26,
-    loops: 5,
+    loops: SAMPLE_CLIP_LOOPS.length,
     opened: '2026-08-30T11:20:00.000Z',
     style: 'bachata',
     group: 'Tuesday class · 27 Aug',
     src: '/sample.mp4',
+    savedLoops: SAMPLE_CLIP_LOOPS,
   },
   {
     id: 2,

@@ -27,6 +27,7 @@ import { NO_LOOPS } from '../loops/loopsFile'
 import { inDocumentOrder } from '../test/documentOrder'
 import { laidOut } from '../test/layout'
 import { holdSeeks, playable, runsOut, seeksSeen } from '../test/media'
+import { aWindow } from '../test/screenWidth'
 import { SEEK_BACKSTOP } from './seekGate'
 import { PlayerScreen } from './PlayerScreen'
 import type { MountYouTube } from './youtubeMount'
@@ -605,6 +606,69 @@ describe('the player', () => {
     expect(
       screen.getByRole('link', { name: 'Back to clips' }),
     ).toBeInTheDocument()
+  })
+})
+
+/* #81. From 1024px wide the saved loops leave the card for a column of their
+   own, left of the player, so a laptop shows the clip, its controls and the
+   loops on one screen. jsdom lays nothing out, so where the columns sit is the
+   smoke test's to see; what is asked here is the order they are read in, and
+   what the move does to the clip. */
+describe('on a screen 1024px wide or wider', () => {
+  const savedFirst = (container: HTMLElement) =>
+    inDocumentOrder({
+      saved: screen.getByRole('region', { name: 'Saved loops' }),
+      clip: clipSurface(container),
+      seekAndSpeed: screen.getByRole('toolbar', { name: 'Seek and speed' }),
+      loop: screen.getByRole('group', { name: 'Loop range' }),
+      hint: screen.getByRole('note', { name: 'Keyboard shortcuts' }),
+      transport: screen.getByRole('toolbar', { name: 'Transport' }),
+    })
+
+  it('puts the saved loops first, ahead of the clip and its controls', () => {
+    aWindow({ wide: true })
+    const { container } = renderPlayer(getClip({ src: '/shuffle-drill.mp4' }))
+
+    expect(savedFirst(container)).toEqual([
+      'saved',
+      'clip',
+      'seekAndSpeed',
+      'loop',
+      'hint',
+      'transport',
+    ])
+  })
+
+  it('still takes everything but the clip off the screen when the video is isolated', async () => {
+    aWindow({ wide: true })
+    const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
+    const clip = clipSurface(container)
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Isolate the video' }),
+    )
+
+    expect(controlsOnOffer()).toHaveLength(0)
+    expect(controlsInPlace(container)).toHaveLength(5)
+    expect(clipSurface(container)).toBe(clip)
+  })
+
+  /* BR-08 again, from the other direction: a window dragged across the
+     breakpoint moves the loops, and must not move the clip, or it reloads and
+     the place being watched is gone. */
+  it('keeps the same clip playing when the window is resized across the breakpoint', async () => {
+    const browserWindow = aWindow({ wide: false })
+    const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
+    const clip = playable(clipSurface(container), { seconds: 12 })
+    await userEvent.click(clip)
+
+    act(() => {
+      browserWindow.resize({ wide: true })
+    })
+
+    expect(savedFirst(container)[0]).toBe('saved')
+    expect(clipSurface(container)).toBe(clip)
+    expect(clip.paused).toBe(false)
   })
 })
 
