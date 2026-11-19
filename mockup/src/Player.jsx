@@ -569,6 +569,9 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
   const [editingId, setEditingId] = useState(null)
   const [nextPoint, setNextPoint] = useState('a')
   const [zen, setZen] = useState(false)
+  /* #94, on trial: whether the new layout has the A/B slider out — from space
+     setting A to space setting B, and whenever the Slider checkbox says so. */
+  const [sliderOut, setSliderOut] = useState(false)
 
   /* #86, on trial. With **Try new UI** on, a wide screen puts the controls and
      the loops in a column left of the clip, and the clip has the rest. Off, or
@@ -704,6 +707,7 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
         // B parks at the end of the clip, so the loop stays valid until B is set
         setLoop({ a: t, b: video.duration })
         setNextPoint('b')
+        setSliderOut(true)
         return
       }
       setLoop((current) => ({
@@ -711,6 +715,7 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
         b: clamp(t, current.a + MIN_LOOP, video.duration),
       }))
       setNextPoint('a')
+      setSliderOut(false)
     }
 
     window.addEventListener('keydown', onKeyDown)
@@ -1221,16 +1226,30 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
         {/* #86, on trial: off unless asked for, and only where it changes
             anything */}
         {wide && (
-          <button
-            type="button"
-            aria-pressed={tryNewUi}
-            onClick={() => onTryNewUi?.(!tryNewUi)}
-            className={`ml-auto shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-              tryNewUi ? 'bg-accent text-on-accent' : 'bg-control text-ink/70 hover:bg-control-hi'
-            }`}
-          >
-            Try new UI
-          </button>
+          <div className="ml-auto flex shrink-0 items-center gap-3">
+            {/* #94, on trial: the slider by hand, to check space against */}
+            {columns && (
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-ink/70">
+                <input
+                  type="checkbox"
+                  checked={sliderOut}
+                  onChange={(event) => setSliderOut(event.target.checked)}
+                  className="h-4 w-4 accent-accent"
+                />
+                Slider
+              </label>
+            )}
+            <button
+              type="button"
+              aria-pressed={tryNewUi}
+              onClick={() => onTryNewUi?.(!tryNewUi)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                tryNewUi ? 'bg-accent text-on-accent' : 'bg-control text-ink/70 hover:bg-control-hi'
+              }`}
+            >
+              Try new UI
+            </button>
+          </div>
         )}
       </header>
 
@@ -1278,7 +1297,7 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
                     width={
                       columns
                         ? /* #86: the clip has the column to itself, less the slider */
-                          'min(100cqw - 3rem, 1100px, (100dvh - 14.5rem) * 16 / 9)'
+                          `min(100cqw - 3rem, 1100px, (100dvh - ${sliderOut ? '14.5rem' : '7.5rem'}) * 16 / 9)`
                         : undefined
                     }
                     onReady={youtubeReady}
@@ -1311,7 +1330,10 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
                     ? 'max-h-dvh max-w-full object-contain'
                     : columns
                       ? /* #86: the height the slider under it leaves */
-                        'mx-auto block max-h-[calc(100dvh-14.5rem)] max-w-full rounded-lg bg-black'
+                        /* #94: the slider's room too, while it is put away */
+                        `mx-auto block max-w-full rounded-lg bg-black ${
+                          sliderOut ? 'max-h-[calc(100dvh-14.5rem)]' : 'max-h-[calc(100dvh-7.5rem)]'
+                        }`
                       : 'mx-auto block max-h-[50vh] max-w-full rounded-lg bg-black lg:max-h-[80vh]'
                 }
                 playsInline
@@ -1359,7 +1381,7 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
             {/* Hidden rather than unmounted, for the same reason */}
             <div className={zen ? 'hidden' : columns ? 'mt-2' : undefined}>
               {!columns && seekAndSpeed}
-              {slider}
+              {(!columns || sliderOut) && slider}
               {!columns && hint}
               {!columns && transport}
               {!columns && savedLoopsPanel}
