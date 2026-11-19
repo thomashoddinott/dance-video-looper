@@ -4,6 +4,7 @@ import { Link, Navigate, useParams } from 'react-router'
 import type { Clip } from '../clips/clip'
 import type { ClipCache } from '../clips/clipCache'
 import { browserClipCache } from '../clips/clipCache'
+import { shapeOfYouTube, type ShapeYouTube, type VideoShape } from '../clips/youtube'
 import type { DriveApi } from '../drive/driveApi'
 import { browserDriveApi } from '../drive/driveApi'
 import type { SavedLoop } from '../loops/loop'
@@ -183,6 +184,7 @@ export function PlayerScreen({
   demo = false,
   onRename,
   mountYouTube = browserMountYouTube,
+  shapeYouTube = shapeOfYouTube,
 }: {
   readonly clips: readonly Clip[]
   /* Fired once the path has resolved to a clip the library holds (#16), which
@@ -215,6 +217,9 @@ export function PlayerScreen({
   /* #20. Where YouTube's player comes from — the IFrame API in the browser, a
      stand-in under test. */
   readonly mountYouTube?: MountYouTube | undefined
+  /* #90. Which way a YouTube video faces — oEmbed in the browser, a stand-in
+     under test. */
+  readonly shapeYouTube?: ShapeYouTube | undefined
 }) {
   const { clipId } = useParams()
   const clip = clips.find((candidate) => candidate.id === clipId)
@@ -242,6 +247,7 @@ export function PlayerScreen({
       onOpened={onOpened}
       onRename={demo ? undefined : onRename}
       mountYouTube={mountYouTube}
+      shapeYouTube={shapeYouTube}
     />
   )
 }
@@ -255,6 +261,7 @@ function OpenedClip({
   onOpened,
   onRename,
   mountYouTube,
+  shapeYouTube,
 }: {
   readonly clip: Clip
   readonly loops: LoopsHandle
@@ -264,6 +271,7 @@ function OpenedClip({
   readonly onOpened: (clipId: string) => void
   readonly onRename: ((clip: Clip, name: string) => Promise<boolean>) | undefined
   readonly mountYouTube: MountYouTube
+  readonly shapeYouTube: ShapeYouTube
 }) {
   /* #16. Here rather than in the parent because this component is keyed on the
      clip and mounted only once the path has resolved to one the library holds —
@@ -328,6 +336,25 @@ function OpenedClip({
   /* What YouTube says it is playing at, which below 0.25 is not what was asked
      for. Null until it has said anything. */
   const [youtubeRate, setYoutubeRate] = useState<number | null>(null)
+  /* #90. Which way the video faces, which decides the frame's shape: a Short
+     in a 16:9 frame plays as a strip with black either side. Landscape until
+     oEmbed says otherwise, and the frame reshapes around YouTube when it does,
+     never remounting it (BR-08). */
+  const [shape, setShape] = useState<VideoShape>('landscape')
+
+  useEffect(() => {
+    if (youtube === undefined) return
+
+    let current = true
+
+    void shapeYouTube(youtube).then((found) => {
+      if (current) setShape(found)
+    })
+
+    return () => {
+      current = false
+    }
+  }, [youtube, shapeYouTube])
   /* Where the marker is drawn. The element's own `currentTime` is the truth, but
      it changes without telling React anything, so the screen needs a copy it can
      re-render from — sampled below at the rate BR-07 sets. */
@@ -1269,6 +1296,7 @@ function OpenedClip({
                     mount={mountYouTube}
                     isolated={isolated}
                     column={column}
+                    portrait={shape === 'portrait'}
                     knownLength={clip.seconds}
                     onReady={(ready, length) => {
                       surface.current = ready

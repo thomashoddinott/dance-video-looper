@@ -82,3 +82,41 @@ export const lookUpYouTube = async (
     return { found: false, because: 'unreachable' }
   }
 }
+
+export type VideoShape = 'landscape' | 'portrait'
+
+export type ShapeYouTube = (videoId: string) => Promise<VideoShape>
+
+/* #90. Which way a video faces, which YouTube's player will not say: it fits a
+   Short inside whatever frame it is given, so a 16:9 frame plays one as a strip
+   with black either side. oEmbed tells, but only when asked with the Shorts
+   form of the link — a Short answers 113×200 and any other video 200×113,
+   where the watch form answers 200×113 for every video.
+
+   Anything short of a clear answer is landscape, the shape the frame always
+   had, so a lookup that fails changes nothing. */
+export const shapeOfYouTube = async (
+  videoId: string,
+  fetchFrom: LookUpFetch = (url) => fetch(url),
+): Promise<VideoShape> => {
+  const short = `https://www.youtube.com/shorts/${videoId}`
+
+  try {
+    const answer = await fetchFrom(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(short)}&format=json`,
+    )
+
+    if (!answer.ok) return 'landscape'
+
+    const { width, height } = (await answer.json()) as {
+      readonly width?: unknown
+      readonly height?: unknown
+    }
+
+    return typeof width === 'number' && typeof height === 'number' && height > width
+      ? 'portrait'
+      : 'landscape'
+  } catch {
+    return 'landscape'
+  }
+}

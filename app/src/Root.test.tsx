@@ -97,6 +97,7 @@ const renderRootAt = (
           demo={{
             urls: { toUrl: () => 'blob:showcase', releaseUrl: () => {} },
             mountYouTube: youtube.mount,
+            shapeYouTube: async () => 'landscape',
           }}
         />
         <Where />

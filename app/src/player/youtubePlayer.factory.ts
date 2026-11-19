@@ -29,9 +29,10 @@ export const aYouTubePlayer = (
    player above and keeps hold of the events, so a case can say "YouTube is
    ready", "it started playing", "it refused" when it chooses to. */
 export const aYouTube = (player: YouTubePlayer = aYouTubePlayer()) => {
-  const held: { events?: YouTubeEvents; videoId?: string } = {}
+  const held: { events?: YouTubeEvents; videoId?: string; host?: HTMLElement } = {}
 
-  const mount: MountYouTube = vi.fn(async (_host, videoId, events) => {
+  const mount: MountYouTube = vi.fn(async (host, videoId, events) => {
+    held.host = host
     held.videoId = videoId
     held.events = events
 
@@ -48,6 +49,8 @@ export const aYouTube = (player: YouTubePlayer = aYouTubePlayer()) => {
     mount,
     player,
     videoId: () => held.videoId,
+    /* The frame YouTube was put in, whose shape is the page's to set (#90). */
+    host: () => held.host,
     ready: () => events().onReady(),
     state: (state: number) => events().onStateChange(state),
     rate: (rate: number) => events().onPlaybackRateChange(rate),

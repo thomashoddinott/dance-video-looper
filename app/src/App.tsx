@@ -17,7 +17,7 @@ import type { ThumbnailCapture } from './clips/thumbnail'
 import { browserThumbnailCapture } from './clips/thumbnail'
 import { useLibrary } from './clips/useLibrary'
 import { useThumbnails } from './clips/useThumbnails'
-import type { YouTubeLookUp } from './clips/youtube'
+import type { ShapeYouTube, YouTubeLookUp } from './clips/youtube'
 import type { DriveApi } from './drive/driveApi'
 import { browserDriveApi } from './drive/driveApi'
 import { countOf, laterOf, openedAt } from './loops/loopsChange'
@@ -49,6 +49,9 @@ export type AppProps = {
      the browser, a stand-in under test, where every showcase entry is a
      YouTube video. */
   readonly mountYouTube?: MountYouTube | undefined
+  /* #90. Which way a YouTube video faces, for the shape of its frame — oEmbed
+     in the browser, a stand-in under test. */
+  readonly shapeYouTube?: ShapeYouTube | undefined
   /* #77: the same app as the showcase a visitor lands on, over seams of its
      own. The screens need telling only so the grid and the player can drop
      the controls a visitor has no use for. */
@@ -65,6 +68,7 @@ export function App({
   capture = browserThumbnailCapture,
   lookUp,
   mountYouTube,
+  shapeYouTube,
   demo = false,
 }: AppProps = {}) {
   /* The cache goes in as well as down to the player: a deleted clip's bytes are
@@ -218,6 +222,7 @@ export function App({
             demo={demo}
             onRename={rename}
             mountYouTube={mountYouTube}
+            shapeYouTube={shapeYouTube}
           />
         }
       />
