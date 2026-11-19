@@ -617,13 +617,13 @@ describe('the player', () => {
   })
 })
 
-/* #86, on trial. From 1024px wide the player offers a new layout: the
+/* #86, #100. From 1024px wide the player opens on the new layout: the
    controls and the loops in a column left of the clip, which gets the rest of
-   the screen with the slider under it. Off unless asked for, and the player is
-   one column, as it was before #81. jsdom lays nothing out, so where the
-   columns sit is the smoke test's to see; what is asked here is the order they
-   are read in, and what switching does to the clip. */
-describe('the new layout, on trial', () => {
+   the screen with the slider under it. Try new UI turns it off for the rest of
+   the session, back to one column as it was before #81. jsdom lays nothing
+   out, so where the columns sit is the smoke test's to see; what is asked here
+   is the order they are read in, and what switching does to the clip. */
+describe('the new layout', () => {
   const tryNewUi = () => screen.getByRole('button', { name: 'Try new UI' })
 
   const loopRangeIn = (container: HTMLElement) => {
@@ -647,53 +647,42 @@ describe('the new layout, on trial', () => {
     })
 
   const ONE_COLUMN = ['clip', 'seekAndSpeed', 'loop', 'hint', 'transport', 'saved']
+  const NEW_LAYOUT = ['seekAndSpeed', 'hint', 'transport', 'saved', 'clip', 'loop']
 
-  it('is offered on a screen 1024px wide or wider, off, with the player in one column', () => {
+  it('is what a screen 1024px wide or wider opens on', () => {
     aWindow({ wide: true })
     const { container } = renderPlayer(getClip({ src: '/shuffle-drill.mp4' }))
 
-    expect(tryNewUi()).toHaveAttribute('aria-pressed', 'false')
-    expect(runningOrder(container)).toEqual(ONE_COLUMN)
+    expect(tryNewUi()).toHaveAttribute('aria-pressed', 'true')
+    expect(runningOrder(container)).toEqual(NEW_LAYOUT)
   })
 
   it('is not offered on a narrower screen, where it would change nothing', () => {
-    renderPlayer(getClip({ src: '/shuffle-drill.mp4' }))
+    const { container } = renderPlayer(getClip({ src: '/shuffle-drill.mp4' }))
 
     expect(
       screen.queryByRole('button', { name: 'Try new UI' }),
     ).not.toBeInTheDocument()
+    expect(runningOrder(container)).toEqual(ONE_COLUMN)
   })
 
-  it('puts the controls and the loops ahead of the clip, and the slider under it', async () => {
+  it('goes back to one column when Try new UI is turned off, and back again', async () => {
     aWindow({ wide: true })
     const { container } = renderPlayer(getClip({ src: '/shuffle-drill.mp4' }))
 
-    await userEvent.click(tryNewUi())
-
-    expect(tryNewUi()).toHaveAttribute('aria-pressed', 'true')
-    expect(runningOrder(container)).toEqual([
-      'seekAndSpeed',
-      'hint',
-      'transport',
-      'saved',
-      'clip',
-      'loop',
-    ])
-  })
-
-  it('goes back to one column when it is turned off again', async () => {
-    aWindow({ wide: true })
-    const { container } = renderPlayer(getClip({ src: '/shuffle-drill.mp4' }))
-
-    await userEvent.click(tryNewUi())
     await userEvent.click(tryNewUi())
 
     expect(tryNewUi()).toHaveAttribute('aria-pressed', 'false')
     expect(runningOrder(container)).toEqual(ONE_COLUMN)
+
+    await userEvent.click(tryNewUi())
+
+    expect(tryNewUi()).toHaveAttribute('aria-pressed', 'true')
+    expect(runningOrder(container)).toEqual(NEW_LAYOUT)
   })
 
-  /* Turned on for a practice session, not once per clip. */
-  it('stays on from one clip to the next for the rest of the session', async () => {
+  /* Turned off for a practice session, not once per clip. */
+  it('stays off from one clip to the next for the rest of the session', async () => {
     aWindow({ wide: true })
     const first = renderPlayer(getClip({ src: '/shuffle-drill.mp4' }))
     await userEvent.click(tryNewUi())
@@ -701,14 +690,13 @@ describe('the new layout, on trial', () => {
 
     renderPlayer(getClip({ src: '/wave-practice.mp4' }))
 
-    expect(tryNewUi()).toHaveAttribute('aria-pressed', 'true')
+    expect(tryNewUi()).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('still takes everything but the clip off the screen when the video is isolated', async () => {
     aWindow({ wide: true })
     const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
     const clip = clipSurface(container)
-    await userEvent.click(tryNewUi())
 
     await userEvent.click(
       screen.getByRole('button', { name: 'Isolate the video' }),
@@ -721,7 +709,7 @@ describe('the new layout, on trial', () => {
 
   /* BR-08 again: switching moves the controls and the loops, and must not move
      the clip, or it reloads and the place being watched is gone. */
-  it('keeps the same clip playing when it is turned on', async () => {
+  it('keeps the same clip playing when it is turned off', async () => {
     aWindow({ wide: true })
     const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
     const clip = playable(clipSurface(container), { seconds: 12 })
@@ -737,7 +725,6 @@ describe('the new layout, on trial', () => {
     const browserWindow = aWindow({ wide: true })
     const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
     const clip = playable(clipSurface(container), { seconds: 12 })
-    await userEvent.click(tryNewUi())
     await userEvent.click(clip)
 
     act(() => {
@@ -762,13 +749,12 @@ describe('the slider in the new layout', () => {
     fireEvent.keyDown(window, { code: 'Space' })
   }
 
-  /* A decoded clip on a wide screen, with the new layout turned on. */
+  /* A decoded clip on a wide screen, which opens on the new layout (#100). */
   const inTheNewLayout = async () => {
     aWindow({ wide: true })
     const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }))
     const clip = playable(clipSurface(container), { seconds: 12 })
     fireEvent.loadedMetadata(clip)
-    await userEvent.click(screen.getByRole('button', { name: 'Try new UI' }))
 
     return { container, clip }
   }
@@ -810,9 +796,11 @@ describe('the slider in the new layout', () => {
     expect(sliderOnOffer()).not.toBeInTheDocument()
   })
 
-  it('is always out, with no checkbox, when the new layout is off', () => {
+  it('is always out, with no checkbox, when the new layout is off', async () => {
     aWindow({ wide: true })
     renderPlayer(getClip({ src: '/wave-practice.mp4' }))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Try new UI' }))
 
     expect(sliderOnOffer()).toBeInTheDocument()
     expect(sliderBox()).not.toBeInTheDocument()
