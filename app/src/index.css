@@ -30,4 +30,8 @@
    Read by both the <video> and the YouTube frame, so the two cannot disagree. */
 :root {
   --player-controls: 14.5rem;
+  /* #94. The same with the slider put away: the header and the card's padding
+     alone. The card swaps it in for `--player-controls` while no loop is
+     being picked. */
+  --player-chrome: 7.5rem;
 }
