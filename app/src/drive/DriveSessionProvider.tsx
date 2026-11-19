@@ -48,7 +48,6 @@ export const DriveSessionProvider = ({
       ? START
       : { session: resume(kept), checkedAt: Date.now() }
   })
-  const [renewed, setRenewed] = useState(false)
 
   const acquire = useCallback(async (): Promise<Session> => {
     const result = await tokenSource()
@@ -73,7 +72,6 @@ export const DriveSessionProvider = ({
   }, [tokenSource, tokenStore])
 
   const signIn = useCallback(async () => {
-    setRenewed(false)
     await acquire()
   }, [acquire])
 
@@ -87,10 +85,6 @@ export const DriveSessionProvider = ({
     if (held.available || held.because !== 'expired') return held
 
     const renewal = await acquire()
-
-    /* Only a renewal that produced a token is worth announcing — a failed one
-       has already changed the status to say what went wrong instead. */
-    setRenewed(renewal.kind === 'holding')
 
     return tokenFor(renewal, Date.now())
   }, [snapshot.session, acquire])
@@ -106,12 +100,11 @@ export const DriveSessionProvider = ({
   const value = useMemo(
     () => ({
       status: statusOf(snapshot.session, snapshot.checkedAt),
-      renewed,
       signIn,
       requireToken,
       reportConsentWithdrawn,
     }),
-    [snapshot, renewed, signIn, requireToken, reportConsentWithdrawn],
+    [snapshot, signIn, requireToken, reportConsentWithdrawn],
   )
 
   return (

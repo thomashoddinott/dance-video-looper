@@ -4,7 +4,6 @@ import type { SessionStatus, TokenLookup } from './session'
 
 export type DriveSession = {
   readonly status: SessionStatus
-  readonly renewed: boolean
   readonly signIn: () => Promise<void>
   readonly requireToken: () => Promise<TokenLookup>
   readonly reportConsentWithdrawn: () => void

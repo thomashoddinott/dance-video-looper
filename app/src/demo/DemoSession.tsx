@@ -25,7 +25,6 @@ export const DemoSession = ({ children }: { readonly children: ReactNode }) => {
   const value = useMemo(
     () => ({
       ...real,
-      renewed: false,
       requireToken: alwaysADemoToken,
       reportConsentWithdrawn: nothingToReport,
     }),
