@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { groupsOf } from './clipGroups.js'
 import { GroupChooser, GroupFilter, GroupLabel } from './Groups.jsx'
-import { FIGURAS_LOOPS } from './seedLoops.js'
 import { lookUp, thumbnailFor, videoIdFrom } from './youtube.js'
 
 /* Recent is the day a clip was uploaded and never changes again, so it cannot
@@ -367,51 +366,66 @@ const UPLOAD_PLAYS_OUT_OVER = 2500
    the grid in front of you rather than a setting, so coming back with the whole
    library showing is the honest default. */
 /* #77, retrofitted from the build (`app/src/demo/demoVideos.ts`): what a
-   visitor who is not signed in lands on — a snapshot of the YouTube entries in
-   Thomas's library that have loops. The counts are the loops it ships with
-   (`app/src/demo/demoLoops.json`). Only the first opens onto its loops (#81),
-   so the loops column is seen full; the rest show them only on the tile. */
+   visitor who is not signed in lands on — a snapshot of four videos Thomas
+   chose from his library (#108), taken 2026-11-20. The counts are the loops
+   it ships with (`app/src/demo/demoLoops.json`), and each entry opens onto
+   them (#81). */
 const SHOWCASE = [
   {
-    id: 'yt:YClbDdg_oFc',
+    id: 'yt:R4qPshBIK7M',
     source: 'youtube',
-    videoId: 'YClbDdg_oFc',
-    name: '➡️Las Mejores 50 Figuras de SALSA CUBANA 2020 (¡100 RECOMENDADO!)',
-    added: '2026-11-17',
-    seconds: 731,
-    loops: FIGURAS_LOOPS.length,
-    savedLoops: FIGURAS_LOOPS,
-  },
-  {
-    id: 'yt:l-H1OAu9N28',
-    source: 'youtube',
-    videoId: 'l-H1OAu9N28',
-    name: '20 MOST Important Bachata Sensual Moves You MUST Know! (Part 1)',
-    added: '2026-11-09',
-    seconds: 346,
-    loops: 11,
-    style: 'bachata',
-  },
-  /* #79. The old demo's picks, so the showcase holds at least four. */
-  {
-    id: 'yt:CkZO6nyJwjw',
-    source: 'youtube',
-    videoId: 'CkZO6nyJwjw',
-    name: 'Cuban Salsa — Class 10',
-    added: '2026-09-23',
-    seconds: 767,
-    loops: 1,
+    videoId: 'R4qPshBIK7M',
+    name: "Nic N'taya Salsa Choreography #salsatechnique #cubansalsa #dancer #learningsalsa  #salsadancing",
+    added: '2026-11-20',
+    seconds: 36,
+    loops: 2,
     style: 'salsa',
+    savedLoops: [
+      { id: 1, name: 'Loop 1', a: 9.13, b: 15.05, speed: 1 },
+      { id: 2, name: 'Loop 2', a: 21.96, b: 30.42, speed: 1 },
+    ],
+  },
+  {
+    id: 'yt:NJxnD75rSAA',
+    source: 'youtube',
+    videoId: 'NJxnD75rSAA',
+    name: '20230225 Igor & Rocio Bachata sensual workshop warm up at Dancelife X Toronto',
+    added: '2026-11-14',
+    seconds: 199,
+    loops: 2,
+    style: 'bachata',
+    savedLoops: [
+      { id: 1, name: 'Loop 1', a: 57.6, b: 75.09, speed: 1 },
+      { id: 2, name: 'Loop 2', a: 91.89, b: 109.58, speed: 1 },
+    ],
+  },
+  {
+    id: 'yt:1hzQRhOxYCg',
+    source: 'youtube',
+    videoId: '1hzQRhOxYCg',
+    name: '#footwork #bachatasensual couple bachata footwork',
+    added: '2026-11-19',
+    seconds: 54,
+    loops: 3,
+    style: 'bachata',
+    savedLoops: [
+      { id: 1, name: 'Loop 1', a: 17.44, b: 26.74, speed: 1 },
+      { id: 2, name: 'Loop 2', a: 24.89, b: 31.06, speed: 1 },
+      { id: 3, name: 'Loop 3', a: 30.02, b: 38.21, speed: 1 },
+    ],
   },
   {
     id: 'yt:mBHXNXJOF84',
     source: 'youtube',
     videoId: 'mBHXNXJOF84',
-    name: 'Elena & Derek — Ultima llamada',
-    added: '2026-09-22',
+    name: 'Elena Khamsi & Derk ❤️  (Ultima llamada) Mickey Then. {📍Valencia, Bachata} (BACHATA PASIÓN❤️‍🔥)',
+    added: '2026-11-20',
     seconds: 224,
     loops: 1,
     style: 'bachata',
+    savedLoops: [
+      { id: 1, name: 'Loop 1', a: 104.6, b: 116.21, speed: 1 },
+    ],
   },
 ]
 
