@@ -434,7 +434,9 @@ function Library({
      Connect at the top (#83). Connecting shows the library. */
   const [connected, setConnected] = useState(false)
   const signedOut = !connected
-  const shown = signedOut ? SHOWCASE : clips
+  /* #102. Marked as the showcase's, so the player opens them on their first
+     loop, playing. */
+  const shown = signedOut ? SHOWCASE.map((entry) => ({ ...entry, showcase: true })) : clips
   /* #70. Groups are read off the clips, newest first; the showcase has none.
      A picked group whose last clip has left it is no longer picked. */
   const groups = signedOut ? [] : groupsOf(shown)

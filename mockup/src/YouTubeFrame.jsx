@@ -56,6 +56,10 @@ export default function YouTubeFrame({
         },
         events: {
           onReady: () => {
+            /* #20 spike only: lets a measurement script read YouTube's own
+               clock. Set here, where the player is made, rather than in the
+               component's handler (#102). */
+            window.spikePlayer = player
             const surface = youtubeSurface(player, {
               onSeeked: () => handlers.current.onSeeked?.(),
             })

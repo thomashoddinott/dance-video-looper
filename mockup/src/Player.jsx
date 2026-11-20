@@ -720,19 +720,36 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
+  /* #102, retrofitted from the build: a showcase video opens on its first loop
+     (the top row, the earliest to start), as if it had been tapped, and
+     playing, so a visitor sees what the app is for. Once per open; a browser
+     that will not start a video by itself still gets the loop. */
+  const openedOnFirstLoop = useRef(false)
+
+  const openOnFirstLoop = (video) => {
+    if (!clip.showcase || openedOnFirstLoop.current) return
+
+    const [first] = inTimeOrder(saved)
+
+    if (!first) return
+
+    openedOnFirstLoop.current = true
+    loadLoop(first)
+    Promise.resolve(video.play()).catch(() => {})
+  }
+
   const loaded = (video) => {
     setDuration(video.duration)
     setLoop({ a: 0, b: video.duration })
     video.playbackRate = speed
     onDuration?.(video.duration)
+    openOnFirstLoop(video)
   }
 
   const onLoadedMetadata = (event) => loaded(event.currentTarget)
 
   const youtubeReady = (surface) => {
     videoRef.current = surface
-    /* Spike only: lets a measurement script read YouTube's own clock. */
-    window.spikePlayer = surface.player
     setRates(surface.player.getAvailablePlaybackRates())
     setActualRate(surface.player.getPlaybackRate())
     loaded(surface)
