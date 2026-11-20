@@ -531,7 +531,15 @@ function useMedia(media) {
   return matches
 }
 
-function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
+function Player({
+  clip,
+  onBack,
+  onDuration,
+  tryNewUi = false,
+  onTryNewUi,
+  countdown = true,
+  onCountdown,
+}) {
   /* #20 spike: a YouTube entry plays in the IFrame player, which hands back a
      surface shaped like the <video> this ref otherwise holds. Nothing below the
      render knows which it got. */
@@ -572,6 +580,10 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
   /* #94, #96, on trial: whether the new layout has the A/B slider out. Put
      away to begin with, and brought out by the Slider checkbox alone. */
   const [sliderOut, setSliderOut] = useState(false)
+  /* #105, retrofitted from the build: a 3, 2, 1 count before the loop comes
+     round, on a wide screen with the Countdown pill on. Null while nothing is
+     counting. */
+  const [count, setCount] = useState(null)
 
   /* #86, on trial. With **Try new UI** on, a wide screen puts the controls and
      the loops in a column left of the clip, and the clip has the rest. Off, or
@@ -583,6 +595,7 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
   const loopRef = useRef(loop)
   const loopingRef = useRef(looping)
   const nextPointRef = useRef(nextPoint)
+  const countingInRef = useRef(false)
   const saveLoopRef = useRef(null)
   const saveAsNewRef = useRef(null)
 
@@ -591,6 +604,28 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
     loopingRef.current = looping
     nextPointRef.current = nextPoint
   }, [loop, looping, nextPoint])
+
+  /* #105. The loop tick subscribes once, so it reads whether to count through
+     a ref; and the count runs a second a number, then plays the clip on. */
+  useEffect(() => {
+    countingInRef.current = wide && countdown
+  }, [wide, countdown])
+
+  useEffect(() => {
+    if (count === null) return
+
+    const next = setTimeout(() => {
+      if (count > 1) {
+        setCount(count - 1)
+        return
+      }
+
+      setCount(null)
+      videoRef.current?.play()
+    }, 1000)
+
+    return () => clearTimeout(next)
+  }, [count])
 
   /* Held while a finger is on the scrub bar. Two things stand down for it, and
      the second is the whole responsiveness fix. */
@@ -628,6 +663,12 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
           const r = readingsRef.current
           r.overshoot = [...r.overshoot.slice(-49), past]
           video.currentTime = a
+
+          /* #105: held at A while the count runs, which plays it on */
+          if (countingInRef.current) {
+            video.pause()
+            setCount(3)
+          }
         }
 
         /* How often YouTube actually tells us where it is. The loop can only be
@@ -1256,6 +1297,16 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
             )}
             <button
               type="button"
+              aria-pressed={countdown}
+              onClick={() => onCountdown?.(!countdown)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                countdown ? 'bg-accent text-on-accent' : 'bg-control text-ink/70 hover:bg-control-hi'
+              }`}
+            >
+              Countdown
+            </button>
+            <button
+              type="button"
               aria-pressed={tryNewUi}
               onClick={() => onTryNewUi?.(!tryNewUi)}
               className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -1318,6 +1369,7 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
                     onReady={youtubeReady}
                     onState={(state) => {
                       setPlaying(state === 1 || state === 3)
+                      if (state === 1) setCount(null)
                       if (state === 1) setStarted(true)
                     }}
                     onRate={setActualRate}
@@ -1365,7 +1417,10 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
                   seekingRef.current = false
                   flushSeek()
                 }}
-                onPlay={() => setPlaying(true)}
+                onPlay={() => {
+                  setPlaying(true)
+                  setCount(null)
+                }}
                 onPause={() => setPlaying(false)}
                 onClick={togglePlay}
               />
@@ -1382,6 +1437,19 @@ function Player({ clip, onBack, onDuration, tryNewUi = false, onTryNewUi }) {
                    rounded video. Zen has no rounding to follow. */
                 rounded={zen ? undefined : 'rounded-b-lg'}
               />
+
+              {/* #105: over the clip, so in zen mode too */}
+              {count !== null && (
+                <div
+                  role="timer"
+                  aria-label="Countdown"
+                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                >
+                  <span className="flex h-28 w-28 items-center justify-center rounded-full bg-black/55 text-6xl font-semibold tabular-nums text-white">
+                    {count}
+                  </span>
+                </div>
+              )}
 
               <button
                 type="button"
