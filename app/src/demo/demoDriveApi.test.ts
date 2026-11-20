@@ -23,7 +23,9 @@ const theBundledLoops = {
   [LOOPS_FILE]: serialiseLoops({
     schema: SCHEMA,
     clips: {
-      'yt:l-H1OAu9N28': [{ id: 'cambre', name: 'Cambré', a: 18.8, b: 45.76, speed: 1 }],
+      'yt:NJxnD75rSAA': [
+        { id: 'bad2c2fa-8498-4c52-9c0c-3ef3c7e4dc35', name: 'Loop 1', a: 57.6, b: 75.09, speed: 1 },
+      ],
     },
     touched: {},
   }),
@@ -50,22 +52,22 @@ const folderOf = (api: ReturnType<typeof aDemoApi>) =>
 describe('the showcase library', () => {
   it('holds the YouTube videos it is given, in that order', async () => {
     const api = aDemoApi({
-      youtube: [aDemoVideo({ videoId: 'YClbDdg_oFc' }), aDemoVideo({ videoId: 'l-H1OAu9N28' })],
+      youtube: [aDemoVideo({ videoId: 'R4qPshBIK7M' }), aDemoVideo({ videoId: 'NJxnD75rSAA' })],
     })
 
     const clips = await api.listClips(A_TOKEN, await folderOf(api))
 
-    expect(clips.map(({ id }) => id)).toEqual(['yt:YClbDdg_oFc', 'yt:l-H1OAu9N28'])
+    expect(clips.map(({ id }) => id)).toEqual(['yt:R4qPshBIK7M', 'yt:NJxnD75rSAA'])
   })
 
   it('lists a YouTube video as a library entry played from YouTube', async () => {
     const api = aDemoApi({
       youtube: [
         aDemoVideo({
-          videoId: 'l-H1OAu9N28',
-          name: 'Bachata Sensual — Part 1',
-          added: '2026-11-09',
-          seconds: 345.86,
+          videoId: 'NJxnD75rSAA',
+          name: '20230225 Igor & Rocio Bachata sensual workshop warm up at Dancelife X Toronto',
+          added: '2026-11-14',
+          seconds: 199,
           style: 'bachata',
         }),
       ],
@@ -74,12 +76,12 @@ describe('the showcase library', () => {
     const [video] = await api.listClips(A_TOKEN, await folderOf(api))
 
     expect(video).toMatchObject({
-      id: 'yt:l-H1OAu9N28',
+      id: 'yt:NJxnD75rSAA',
       source: 'youtube',
-      videoId: 'l-H1OAu9N28',
-      name: 'Bachata Sensual — Part 1',
-      added: '2026-11-09',
-      seconds: 345.86,
+      videoId: 'NJxnD75rSAA',
+      name: '20230225 Igor & Rocio Bachata sensual workshop warm up at Dancelife X Toronto',
+      added: '2026-11-14',
+      seconds: 199,
       style: 'bachata',
       loops: 0,
     })
@@ -100,7 +102,7 @@ describe('the showcase library', () => {
      tiles are told apart by it. */
   it('gives each YouTube video a file id of its own', async () => {
     const api = aDemoApi({
-      youtube: [aDemoVideo({ videoId: 'YClbDdg_oFc' }), aDemoVideo({ videoId: 'l-H1OAu9N28' })],
+      youtube: [aDemoVideo({ videoId: 'R4qPshBIK7M' }), aDemoVideo({ videoId: 'NJxnD75rSAA' })],
     })
 
     const ids = (await api.listClips(A_TOKEN, await folderOf(api))).map(({ driveId }) => driveId)
@@ -137,16 +139,16 @@ describe('the showcase library', () => {
   })
 
   it('deletes nothing', async () => {
-    await expect(aDemoApi().trash(A_TOKEN, 'yt:l-H1OAu9N28')).rejects.toThrow()
+    await expect(aDemoApi().trash(A_TOKEN, 'yt:NJxnD75rSAA')).rejects.toThrow()
   })
 
   it('keeps no dance style', async () => {
-    await expect(aDemoApi().setStyle(A_TOKEN, 'yt:l-H1OAu9N28', 'salsa')).rejects.toThrow()
+    await expect(aDemoApi().setStyle(A_TOKEN, 'yt:NJxnD75rSAA', 'salsa')).rejects.toThrow()
   })
 
   /* #70. Nor a group: the grid offers the showcase no group label. */
   it('keeps no group', async () => {
-    await expect(aDemoApi().setGroup(A_TOKEN, 'yt:l-H1OAu9N28', 'Shines')).rejects.toThrow()
+    await expect(aDemoApi().setGroup(A_TOKEN, 'yt:NJxnD75rSAA', 'Shines')).rejects.toThrow()
   })
 
   it('keeps no YouTube video', async () => {
@@ -156,7 +158,7 @@ describe('the showcase library', () => {
   })
 
   it('renames nothing', async () => {
-    await expect(aDemoApi().rename(A_TOKEN, 'yt:l-H1OAu9N28', 'Mine now')).rejects.toThrow()
+    await expect(aDemoApi().rename(A_TOKEN, 'yt:NJxnD75rSAA', 'Mine now')).rejects.toThrow()
   })
 })
 
@@ -176,7 +178,11 @@ describe('the demo’s saved loops', () => {
     const api = aDemoApi({ bundled: theBundledLoops })
 
     expect(await readLoops(api, A_TOKEN, await folderOf(api))).toMatchObject({
-      loops: { clips: { 'yt:l-H1OAu9N28': [{ id: 'cambre', name: 'Cambré' }] } },
+      loops: {
+        clips: {
+          'yt:NJxnD75rSAA': [{ id: 'bad2c2fa-8498-4c52-9c0c-3ef3c7e4dc35', name: 'Loop 1' }],
+        },
+      },
     })
   })
 
@@ -185,11 +191,15 @@ describe('the demo’s saved loops', () => {
     const folder = await folderOf(api)
 
     await applyToLoops(api, A_TOKEN, folder, (held) =>
-      withLoop(held, 'yt:l-H1OAu9N28', getLoop({ id: 'mine' })),
+      withLoop(held, 'yt:NJxnD75rSAA', getLoop({ id: 'mine' })),
     )
 
     expect(await readLoops(api, A_TOKEN, folder)).toMatchObject({
-      loops: { clips: { 'yt:l-H1OAu9N28': [{ id: 'cambre' }, { id: 'mine' }] } },
+      loops: {
+        clips: {
+          'yt:NJxnD75rSAA': [{ id: 'bad2c2fa-8498-4c52-9c0c-3ef3c7e4dc35' }, { id: 'mine' }],
+        },
+      },
     })
   })
 
@@ -199,13 +209,13 @@ describe('the demo’s saved loops', () => {
     const before = aDemoApi({ bundled: theBundledLoops })
 
     await applyToLoops(before, A_TOKEN, await folderOf(before), (held) =>
-      withLoop(held, 'yt:l-H1OAu9N28', getLoop({ id: 'mine' })),
+      withLoop(held, 'yt:NJxnD75rSAA', getLoop({ id: 'mine' })),
     )
 
     const elsewhere = aDemoApi({ bundled: theBundledLoops, storage: inMemoryStorage() })
 
     expect(await readLoops(elsewhere, A_TOKEN, await folderOf(elsewhere))).toMatchObject({
-      loops: { clips: { 'yt:l-H1OAu9N28': [{ id: 'cambre' }] } },
+      loops: { clips: { 'yt:NJxnD75rSAA': [{ id: 'bad2c2fa-8498-4c52-9c0c-3ef3c7e4dc35' }] } },
     })
   })
 

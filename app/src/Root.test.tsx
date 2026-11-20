@@ -107,9 +107,11 @@ const renderRootAt = (
   youtube,
 })
 
-/* Names carry brackets and punctuation — "(Part 1)" — so they are matched
-   as text, not as patterns. */
-const named = (name: string) => new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+/* Names carry brackets and punctuation — "(Ultima llamada)" — so they are
+   matched as text, not as patterns. Some carry a run of spaces, which an
+   accessible name collapses to one, so any run matches any other. */
+const named = (name: string) =>
+  new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+'))
 
 const tileNames = () =>
   within(screen.getByRole('list', { name: 'Clips' }))
@@ -117,9 +119,9 @@ const tileNames = () =>
     .map((tile) => within(tile).getByRole('link').textContent)
 
 const aShowcaseVideo = () => {
-  const video = DEMO_YOUTUBE.find(({ videoId }) => videoId === 'l-H1OAu9N28')
+  const video = DEMO_YOUTUBE.find(({ videoId }) => videoId === 'NJxnD75rSAA')
 
-  if (video === undefined) throw new Error('the showcase holds no Bachata Sensual video')
+  if (video === undefined) throw new Error('the showcase holds no Igor & Rocio workshop video')
 
   return video
 }
@@ -285,7 +287,7 @@ describe('the loops the showcase ships with', () => {
   /* #102. What a visitor sees first is one of them playing. */
   it('open a video on the first of them, playing', async () => {
     const { youtube } = renderRootAt('/')
-    const [first] = [...demoLoops.clips['yt:l-H1OAu9N28']].sort(
+    const [first] = [...demoLoops.clips['yt:NJxnD75rSAA']].sort(
       (one, other) => one.a - other.a,
     )
 
@@ -374,7 +376,7 @@ describe('loops a visitor saves in the showcase', () => {
     )
 
     renderRootAt('/')
-    const shipped = demoLoops.clips['yt:l-H1OAu9N28']
+    const shipped = demoLoops.clips['yt:NJxnD75rSAA']
 
     await waitFor(async () => {
       expect(await theShowcase()).toHaveTextContent(`(${shipped.length})`)
