@@ -1,5 +1,6 @@
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -976,6 +977,140 @@ describe('the speed stepper', () => {
 /* BR-07: enforced per animation frame rather than on the video's own progress
    events, which fire at about 4 Hz — the spike measured 86 ms of overshoot on a
    two-second loop that way, which is visible. */
+/* #105, desktop-first. A 3, 2, 1 count before the loop comes round, so the
+   dancer has a few seconds to get back into position. `fireEvent` and the fake
+   clock throughout, for the reason the block below gives. */
+describe('the countdown before the loop comes round', () => {
+  const countdownPill = () => screen.queryByRole('button', { name: 'Countdown' })
+  const count = () => screen.queryByRole('timer', { name: 'Countdown' })
+  const play = () =>
+    within(screen.getByRole('toolbar', { name: 'Transport' })).getByRole('button', {
+      name: 'PLAY',
+    })
+
+  const playingOnAWideScreen = () => {
+    vi.useFakeTimers()
+    aWindow({ wide: true })
+    const clip = aReadyClip({ seconds: 12 })
+    fireEvent.play(clip)
+
+    return clip
+  }
+
+  const reachB = (clip: HTMLVideoElement) => {
+    clip.currentTime = 12
+    act(() => {
+      vi.advanceTimersByTime(A_FEW_FRAMES)
+    })
+  }
+
+  const aSecond = () => {
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+  }
+
+  it('is offered on a screen 1024px wide or wider, on', () => {
+    aWindow({ wide: true })
+    aReadyClip()
+
+    expect(countdownPill()).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('is not offered on a narrower screen, where the loop goes straight round', () => {
+    vi.useFakeTimers()
+    const clip = aReadyClip({ seconds: 12 })
+    fireEvent.play(clip)
+
+    reachB(clip)
+
+    expect(countdownPill()).not.toBeInTheDocument()
+    expect(count()).not.toBeInTheDocument()
+    expect(clip.paused).toBe(false)
+  })
+
+  it('sits right of the Slider checkbox and left of Try new UI', () => {
+    aWindow({ wide: true })
+    aReadyClip()
+
+    expect(
+      inDocumentOrder({
+        slider: screen.getByRole('checkbox', { name: 'Slider' }),
+        countdown: screen.getByRole('button', { name: 'Countdown' }),
+        tryNewUi: screen.getByRole('button', { name: 'Try new UI' }),
+      }),
+    ).toEqual(['slider', 'countdown', 'tryNewUi'])
+  })
+
+  it('holds the clip at A, paused, counting 3, 2, 1, and then plays on', () => {
+    const clip = playingOnAWideScreen()
+
+    reachB(clip)
+
+    expect(clip.currentTime).toBe(0)
+    expect(clip.paused).toBe(true)
+    expect(count()).toHaveTextContent('3')
+
+    aSecond()
+    expect(count()).toHaveTextContent('2')
+
+    aSecond()
+    expect(count()).toHaveTextContent('1')
+
+    aSecond()
+    expect(count()).not.toBeInTheDocument()
+    expect(clip.paused).toBe(false)
+  })
+
+  it('counts down when the clip runs out on B, too', () => {
+    const clip = playingOnAWideScreen()
+    clip.currentTime = 12
+
+    act(() => {
+      runsOut(clip)
+    })
+
+    expect(clip.currentTime).toBe(0)
+    expect(count()).toHaveTextContent('3')
+  })
+
+  it('plays on at once when play is pressed during the count', () => {
+    const clip = playingOnAWideScreen()
+    reachB(clip)
+
+    fireEvent.click(play())
+
+    expect(count()).not.toBeInTheDocument()
+    expect(clip.paused).toBe(false)
+  })
+
+  it('shows the count over the clip in zen mode', () => {
+    const clip = playingOnAWideScreen()
+    fireEvent.click(screen.getByRole('button', { name: 'Isolate the video' }))
+
+    reachB(clip)
+
+    expect(count()).toHaveTextContent('3')
+  })
+
+  it('goes straight round once it is turned off, for the rest of the session', () => {
+    const clip = playingOnAWideScreen()
+
+    fireEvent.click(countdownPill()!)
+    reachB(clip)
+
+    expect(countdownPill()).toHaveAttribute('aria-pressed', 'false')
+    expect(clip.currentTime).toBe(0)
+    expect(clip.paused).toBe(false)
+    expect(count()).not.toBeInTheDocument()
+
+    cleanup()
+    aReadyClip()
+
+    expect(countdownPill()).toHaveAttribute('aria-pressed', 'false')
+  })
+})
+
 describe('holding the clip inside the loop', () => {
   it('returns to A when playback reaches B', () => {
     vi.useFakeTimers()

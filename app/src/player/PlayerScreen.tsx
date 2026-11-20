@@ -45,7 +45,7 @@ import {
   SEEK_BACKSTOP,
   settled,
 } from './seekGate'
-import { useTryNewUi } from './useTryNewUi'
+import { COUNTDOWN, TRY_NEW_UI, useSessionSwitch } from './useSessionSwitch'
 import { useWideScreen } from './useWideScreen'
 import { VideoProgress } from './VideoProgress'
 import { YouTubeFrame } from './YouTubeFrame'
@@ -90,6 +90,34 @@ const Glyph = ({
     {children}
   </svg>
 )
+
+/* #105. Where the count before the loop comes round starts: 3, 2, 1. */
+const COUNT_FROM = 3
+
+/* #86, #105. One of the player's experimental switches, in its header: the
+   brand's accent while on, the controls' grey while off. */
+function SwitchPill({
+  on,
+  onToggle,
+  children,
+}: {
+  readonly on: boolean
+  readonly onToggle: (on: boolean) => void
+  readonly children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={() => onToggle(!on)}
+      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+        on ? 'bg-accent text-on-accent' : 'bg-control text-ink/70 hover:bg-control-hi'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
 
 const ExpandIcon = () => (
   <Glyph>
@@ -379,6 +407,17 @@ function OpenedClip({
      the slider vanishing at B hid that a loop was waiting to be saved. The
      one-column player ignores it. */
   const [sliderOut, setSliderOut] = useState(false)
+  /* Whether this is a laptop or a desktop (#81, #86): where the experimental
+     switches are offered, and where they take effect. */
+  const wide = useWideScreen()
+  /* #105, desktop-first. A 3, 2, 1 count before the loop comes round, so the
+     dancer has a few seconds to get back into position: the clip goes back to
+     A and holds there, paused, while `count` runs down, then plays on. Null
+     while nothing is counting. On to begin with; off for the session once
+     turned off. */
+  const [countdownOn, setCountdownOn] = useSessionSwitch(COUNTDOWN)
+  const countingIn = wide && countdownOn
+  const [count, setCount] = useState<number | null>(null)
   /* The loops kept against *this* clip, read out of the one file that holds
      every clip's. Not state here any more: US-01-15 made Drive the owner, and
      what the panel lists is what Drive has taken — which is the whole of "write
@@ -489,8 +528,29 @@ function OpenedClip({
     if (playback.kind !== 'ready' || !playback.looping) return
 
     seekTo(playback.loop.a)
-    void surface.current?.play()
+
+    /* #105: held at A for the count, which plays it on. */
+    if (countingIn) setCount(COUNT_FROM)
+    else void surface.current?.play()
   }
+
+  /* #105. A second a number, and at the end of it the clip plays on. Started
+     by the loop coming round; stopped by anything that plays the clip first. */
+  useEffect(() => {
+    if (count === null) return
+
+    const next = setTimeout(() => {
+      if (count > 1) {
+        setCount(count - 1)
+        return
+      }
+
+      setCount(null)
+      void surface.current?.play()
+    }, 1000)
+
+    return () => clearTimeout(next)
+  }, [count])
 
   /* Whether the clip was already silent when the bar was taken hold of, so
      letting go can put the sound back the way it was rather than switching it
@@ -594,7 +654,16 @@ function OpenedClip({
     const tick = () => {
       const video = surface.current
 
-      if (video && video.currentTime >= b) video.currentTime = a
+      if (video && video.currentTime >= b) {
+        video.currentTime = a
+
+        /* #105: held at A for the count, which plays it on. Pausing stops the
+           clip's frames, and with them this loop, until it does. */
+        if (countingIn) {
+          video.pause()
+          setCount(COUNT_FROM)
+        }
+      }
 
       frame = requestAnimationFrame(tick)
     }
@@ -602,7 +671,7 @@ function OpenedClip({
     frame = requestAnimationFrame(tick)
 
     return () => cancelAnimationFrame(frame)
-  }, [playback, playing, adjusting])
+  }, [playback, playing, adjusting, countingIn])
 
   /* Only a ready clip has a loop to move, and the guard is the type's rather than
      a check: `playback.loop` does not exist on the other two states. */
@@ -1064,8 +1133,7 @@ function OpenedClip({
      puts the controls and the loops in a column left of the clip, which gets
      the rest of the screen with the slider under it. Off, or on a narrower
      screen, the player is one column, as it was before #81. */
-  const wide = useWideScreen()
-  const [tryNewUi, setTryNewUi] = useTryNewUi()
+  const [tryNewUi, setTryNewUi] = useSessionSwitch(TRY_NEW_UI)
   const column = wide && tryNewUi
 
   /* One panel, put in one of two places: under the transport in the card, or
@@ -1262,18 +1330,12 @@ function OpenedClip({
                 Slider
               </label>
             )}
-            <button
-              type="button"
-              aria-pressed={tryNewUi}
-              onClick={() => setTryNewUi(!tryNewUi)}
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                tryNewUi
-                  ? 'bg-accent text-on-accent'
-                  : 'bg-control text-ink/70 hover:bg-control-hi'
-              }`}
-            >
+            <SwitchPill on={countdownOn} onToggle={setCountdownOn}>
+              Countdown
+            </SwitchPill>
+            <SwitchPill on={tryNewUi} onToggle={setTryNewUi}>
               Try new UI
-            </button>
+            </SwitchPill>
           </div>
         )}
       </header>
@@ -1396,7 +1458,11 @@ function OpenedClip({
                   onError={() => setPlayback(undecodable)}
                   onSeeked={seekLanded}
                   onClick={(event) => togglePlay(event.currentTarget)}
-                  onPlay={() => setPlaying(true)}
+                  onPlay={() => {
+                    setPlaying(true)
+                    /* #105: playing ends any count, whoever started it */
+                    setCount(null)
+                  }}
                   onPause={() => setPlaying(false)}
                   onEnded={ended}
                 />
@@ -1421,7 +1487,10 @@ function OpenedClip({
                     }}
                     onState={(state) => {
                       setPlaying(state === PLAYING || state === BUFFERING)
-                      if (state === PLAYING) setStarted(true)
+                      if (state === PLAYING) {
+                        setStarted(true)
+                        setCount(null)
+                      }
                       if (state === ENDED) ended()
                     }}
                     onRate={setYoutubeRate}
@@ -1456,6 +1525,21 @@ function OpenedClip({
                   onHold={hushWhileHeld}
                   rounded={isolated ? undefined : 'rounded-b-lg'}
                 />
+              )}
+
+              {/* #105. Over the clip, where the dancer is looking, and so in
+                  zen mode too. A `timer` because that is what it is: a number
+                  that runs down on its own. */}
+              {count !== null && (
+                <div
+                  role="timer"
+                  aria-label="Countdown"
+                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                >
+                  <span className="flex h-28 w-28 items-center justify-center rounded-full bg-black/55 text-6xl font-semibold tabular-nums text-white">
+                    {count}
+                  </span>
+                </div>
               )}
 
               {/* On the video itself, so a dancer who does not know the
