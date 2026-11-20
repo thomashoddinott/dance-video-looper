@@ -539,6 +539,8 @@ function Player({
   onTryNewUi,
   countdown = true,
   onCountdown,
+  eightCount = true,
+  onEightCount,
 }) {
   /* #20 spike: a YouTube entry plays in the IFrame player, which hands back a
      surface shaped like the <video> this ref otherwise holds. Nothing below the
@@ -584,6 +586,9 @@ function Player({
      round, on a wide screen with the Countdown pill on. Null while nothing is
      counting. */
   const [count, setCount] = useState(null)
+  /* #107 spike, mockup only: the length of one 8-count, set from a framed
+     loop, which Extrapolate repeats from A to the end of the clip. */
+  const [countLength, setCountLength] = useState(null)
 
   /* #86, on trial. With **Try new UI** on, a wide screen puts the controls and
      the loops in a column left of the clip, and the clip has the rest. Off, or
@@ -972,6 +977,36 @@ function Player({
     startAfresh()
   }
 
+  /* #107 spike. One 8-count is the loop as framed: A to B. */
+  const setEightCountFromLoop = () => {
+    if (halfSet || loop.b <= loop.a) return
+    setCountLength(loop.b - loop.a)
+  }
+
+  /* #107 spike. 8-counts laid end to end from A for as long as whole ones fit,
+     added to Saved loops in place of any made before, so it can be re-run
+     after moving A or setting the count again. Loops framed by hand stay. */
+  const extrapolate = () => {
+    if (!countLength) return
+
+    const made = []
+    for (let k = 0; loop.a + (k + 1) * countLength <= duration + 0.01; k++) {
+      made.push({
+        id: nextId + k,
+        name: `8 count ${k + 1}`,
+        a: loop.a + k * countLength,
+        b: loop.a + (k + 1) * countLength,
+        speed,
+        extrapolated: true,
+      })
+    }
+
+    setSaved([...saved.filter((item) => !item.extrapolated), ...made])
+    setNextId(nextId + made.length)
+    setChain([])
+    setEditingId(null)
+  }
+
   // the key handler subscribes once, so it reaches save through a ref
   useEffect(() => {
     saveLoopRef.current = saveLoop
@@ -1305,6 +1340,17 @@ function Player({
             >
               Countdown
             </button>
+            {/* #107 spike */}
+            <button
+              type="button"
+              aria-pressed={eightCount}
+              onClick={() => onEightCount?.(!eightCount)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                eightCount ? 'bg-accent text-on-accent' : 'bg-control text-ink/70 hover:bg-control-hi'
+              }`}
+            >
+              8 Count Finder
+            </button>
             <button
               type="button"
               aria-pressed={tryNewUi}
@@ -1483,6 +1529,35 @@ function Player({
               {transport}
               {spike}
             </div>
+            {/* #107 spike: find one 8-count, then lay it across the clip */}
+            {eightCount && (
+              <div role="group" aria-label="8 count" className="rounded-2xl bg-panel p-4">
+                <h2 className="text-xs font-bold tracking-widest text-ink/50">8 COUNT</h2>
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={setEightCountFromLoop}
+                    disabled={halfSet}
+                    className={`rounded-lg px-3 py-2 text-sm font-semibold active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${CONTROL}`}
+                  >
+                    Set from A–B
+                  </button>
+                  <span className="text-sm tabular-nums text-ink/70">
+                    {countLength
+                      ? `${countLength.toFixed(2)}s · ${Math.round((8 * 60) / countLength)} BPM`
+                      : ''}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={extrapolate}
+                    disabled={!countLength}
+                    className="ml-auto rounded-lg bg-gradient-to-br from-accent to-accent-2 px-3 py-2 text-sm font-semibold text-on-accent shadow active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+                  >
+                    Extrapolate
+                  </button>
+                </div>
+              </div>
+            )}
             {savedLoopsPanel}
           </div>
         )}
