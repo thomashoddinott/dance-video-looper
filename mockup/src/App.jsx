@@ -117,6 +117,8 @@ function App() {
   /* #86, #100: the player's **Try new UI** toggle, on to begin with. Up here
      so it holds from one clip to the next. */
   const [tryNewUi, setTryNewUi] = useState(true)
+  /* #105: the player's **Countdown** pill, on to begin with */
+  const [countdown, setCountdown] = useState(true)
 
   const addClip = (added) => setClips([added, ...clips])
 
@@ -141,6 +143,8 @@ function App() {
         clip={clip}
         onBack={() => setClip(null)}
         tryNewUi={tryNewUi}
+        countdown={countdown}
+        onCountdown={setCountdown}
         onTryNewUi={setTryNewUi}
         /* A YouTube entry added by link has no length until the player loads
            it (oEmbed does not give one), so the first open fills it in. */
