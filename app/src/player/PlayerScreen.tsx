@@ -10,7 +10,7 @@ import { browserDriveApi } from '../drive/driveApi'
 import type { SavedLoop } from '../loops/loop'
 import { loopsFor } from '../loops/loopsChange'
 import type { LoopsHandle } from '../loops/useLoops'
-import { chainedSpan } from './chain'
+import { chainedSpan, inStartOrder } from './chain'
 import { ClipName } from './ClipName'
 import { useClipSource } from './clipSource'
 import { clamp, type Handle, NUDGE, SCRUB_STEP } from './loopRange'
@@ -246,6 +246,7 @@ export function PlayerScreen({
       onBytes={onBytes}
       onOpened={onOpened}
       onRename={demo ? undefined : onRename}
+      showcase={demo}
       mountYouTube={mountYouTube}
       shapeYouTube={shapeYouTube}
     />
@@ -262,6 +263,7 @@ function OpenedClip({
   onRename,
   mountYouTube,
   shapeYouTube,
+  showcase,
 }: {
   readonly clip: Clip
   readonly loops: LoopsHandle
@@ -272,6 +274,8 @@ function OpenedClip({
   readonly onRename: ((clip: Clip, name: string) => Promise<boolean>) | undefined
   readonly mountYouTube: MountYouTube
   readonly shapeYouTube: ShapeYouTube
+  /* #102. Opened from the showcase, by a visitor rather than a dancer. */
+  readonly showcase: boolean
 }) {
   /* #16. Here rather than in the parent because this component is keyed on the
      clip and mounted only once the path has resolved to one the library holds —
@@ -958,6 +962,33 @@ function OpenedClip({
     takeUp({ loop: { a: entry.a, b: entry.b }, speed: entry.speed })
   }
 
+  /* #102. A visitor's first look at the app: in the showcase a video opens on
+     its first loop — the top row, the earliest to start — as if it had been
+     tapped, and playing, so what the app is for shows rather than having to be
+     found. Once per open, because whatever the visitor does next (a pause, a
+     save that changes the list) is theirs. A browser that will not let a video
+     start by itself still gets the loop opened, and one tap plays it.
+
+     Called from the moment the video becomes ready — its metadata arriving, or
+     YouTube saying so — rather than from an effect watching for it: that is
+     the event this answers, and the loop it opens is set in the same batch as
+     the length it is laid out against. */
+  const openedOnFirstLoop = useRef(false)
+
+  const openOnFirstLoop = () => {
+    if (!showcase || openedOnFirstLoop.current) return
+
+    const [first] = inStartOrder(saved)
+
+    if (first === undefined) return
+
+    openedOnFirstLoop.current = true
+    recallLoop(first)
+    surface.current?.play().catch(() => {
+      /* left on the loop, paused, for a tap to start */
+    })
+  }
+
   /* #28. Ticking a loop plays what is ticked: the run from the earliest start to
      the furthest end, at the tempo of the section it opens with. One box or four,
      it is the same act — which is why unticking down to a single loop lands on
@@ -1356,9 +1387,12 @@ function OpenedClip({
                      Clips are ~6MB and the app is cache-first regardless, so there
                      is no version of this where fetching the rest later wins. */
                   preload="auto"
-                  onLoadedMetadata={(event) =>
-                    setPlayback(decoded(event.currentTarget.duration))
-                  }
+                  onLoadedMetadata={(event) => {
+                    const opened = decoded(event.currentTarget.duration)
+
+                    setPlayback(opened)
+                    if (opened.kind === 'ready') openOnFirstLoop()
+                  }}
                   onError={() => setPlayback(undecodable)}
                   onSeeked={seekLanded}
                   onClick={(event) => togglePlay(event.currentTarget)}
@@ -1379,7 +1413,11 @@ function OpenedClip({
                     onReady={(ready, length) => {
                       surface.current = ready
                       ready.playbackRate = speed
-                      setPlayback(decoded(length))
+
+                      const opened = decoded(length)
+
+                      setPlayback(opened)
+                      if (opened.kind === 'ready') openOnFirstLoop()
                     }}
                     onState={(state) => {
                       setPlaying(state === PLAYING || state === BUFFERING)

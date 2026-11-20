@@ -142,9 +142,11 @@ const openTheVideo = async (youtube: ReturnType<typeof aYouTube>) => {
   await screen.findByRole('slider', { name: 'Loop end' })
 }
 
+/* A showcase video opens on its first loop (#102), so a visitor's own loop is
+   the one saved as new beside it rather than over it. */
 const saveALoopNamed = async (name: string) => {
   await userEvent.type(panel().getByRole('textbox', { name: 'Loop name' }), name)
-  await userEvent.click(panel().getByRole('button', { name: 'Save' }))
+  await userEvent.click(panel().getByRole('button', { name: 'Save as new' }))
   await panel().findByRole('button', { name: new RegExp(`^${name}`) })
 }
 
@@ -280,6 +282,26 @@ describe('the dancer', () => {
 
 /* #63. The moves picked out of each video, already looped. */
 describe('the loops the showcase ships with', () => {
+  /* #102. What a visitor sees first is one of them playing. */
+  it('open a video on the first of them, playing', async () => {
+    const { youtube } = renderRootAt('/')
+    const [first] = [...demoLoops.clips['yt:l-H1OAu9N28']].sort(
+      (one, other) => one.a - other.a,
+    )
+
+    await openTheVideo(youtube)
+
+    await waitFor(() => {
+      expect(youtube.player.playVideo).toHaveBeenCalled()
+    })
+    expect(youtube.player.seekTo).toHaveBeenCalledWith(first?.a, true)
+    expect(
+      panel().getByRole('button', {
+        name: new RegExp(`^${named(first?.name ?? '').source}\\d`),
+      }),
+    ).toHaveAttribute('aria-current', 'true')
+  })
+
   it('are counted on each tile they belong to', async () => {
     renderRootAt('/')
     await theShowcase()

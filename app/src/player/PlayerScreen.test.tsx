@@ -3074,6 +3074,118 @@ describe('a loop on its way to Drive', () => {
   })
 })
 
+/* #102. A visitor's first look at the app: a showcase video opens on its first
+   loop, already playing, so what the app is for shows rather than having to be
+   found. Once per open, and only in the showcase. */
+describe('a showcase video opening', () => {
+  const TWO_LOOPS = {
+    ...NO_LOOPS,
+    clips: {
+      'shuffle-drill': [
+        getLoop({ id: 'later', name: 'the turn', a: 6, b: 9 }),
+        getLoop({ id: 'earlier', name: 'the basic', a: 2, b: 4, speed: 0.75 }),
+      ],
+    },
+  }
+
+  const opened = ({
+    demo = true,
+    seed = TWO_LOOPS,
+    autoplayBlocked = false,
+  }: {
+    readonly demo?: boolean
+    readonly seed?: typeof NO_LOOPS
+    readonly autoplayBlocked?: boolean
+  } = {}) => {
+    const { container } = render(
+      inASession(
+        <MemoryRouter initialEntries={['/clip/shuffle-drill']}>
+          <Routes>
+            <Route
+              path="/clip/:clipId"
+              element={
+                <Player
+                  clip={getClip({ src: '/wave-practice.mp4' })}
+                  demo={demo}
+                  seed={seed}
+                />
+              }
+            />
+          </Routes>
+        </MemoryRouter>,
+      ),
+    )
+    const clip = playable(clipSurface(container), { seconds: 12 })
+
+    /* What a browser does with a video that tries to start itself with sound
+       and no tap behind it: an iPhone, or a desktop browser's autoplay rules. */
+    if (autoplayBlocked) {
+      clip.play = () => Promise.reject(new DOMException('blocked', 'NotAllowedError'))
+    }
+
+    fireEvent.loadedMetadata(clip)
+
+    return clip
+  }
+
+  it('opens on its first loop, as if it had been tapped, playing from A', async () => {
+    const clip = opened()
+
+    await waitFor(() => {
+      expect(clip.paused).toBe(false)
+    })
+    expect(clip.currentTime).toBe(2)
+    expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '2')
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '4')
+    expect(screen.getByLabelText('Playback speed')).toHaveTextContent('0.75')
+    expect(screen.getByRole('button', { name: /^the basic/ })).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
+  })
+
+  /* Whatever the visitor does next is theirs: a save changes the loops, and
+     must not send them back to the first one. */
+  it('does it once, so a pause and a save afterwards are left be', async () => {
+    const clip = opened()
+    await waitFor(() => {
+      expect(clip.paused).toBe(false)
+    })
+    fireEvent.pause(clip)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save as new' }))
+    await waitFor(() => {
+      expect(savedEntries()).toHaveLength(3)
+    })
+
+    expect(clip.paused).toBe(true)
+  })
+
+  it('still opens the loop when the browser will not let it play by itself', async () => {
+    const clip = opened({ autoplayBlocked: true })
+
+    await waitFor(() => {
+      expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '2')
+    })
+    expect(clip.paused).toBe(true)
+  })
+
+  it('opens as before, paused on the whole video, when it has no loops', () => {
+    const clip = opened({ seed: NO_LOOPS })
+
+    expect(clip.paused).toBe(true)
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '12')
+  })
+
+  it('opens as before in the dancer’s own library', () => {
+    const clip = opened({ demo: false })
+
+    expect(clip.paused).toBe(true)
+    expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '0')
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '12')
+  })
+})
+
 describe('the loops this clip already had', () => {
   it('lists what Drive was holding for it', () => {
     aReadyClip({
@@ -4091,6 +4203,10 @@ describe('a YouTube video in the player', () => {
   const renderYouTube = (
     youtube = aYouTube(),
     shapeYouTube?: (videoId: string) => Promise<VideoShape>,
+    {
+      demo = false,
+      seed = NO_LOOPS,
+    }: { readonly demo?: boolean; readonly seed?: typeof NO_LOOPS } = {},
   ) => {
     const driveApi = aDriveApi()
     const rendered = render(
@@ -4105,6 +4221,8 @@ describe('a YouTube video in the player', () => {
                   driveApi={driveApi}
                   mountYouTube={youtube.mount}
                   shapeYouTube={shapeYouTube}
+                  demo={demo}
+                  seed={seed}
                 />
               }
             />
@@ -4147,6 +4265,31 @@ describe('a YouTube video in the player', () => {
     })
     expect(container.querySelector('video')).toBeNull()
     expect(driveApi.download).not.toHaveBeenCalled()
+  })
+
+  /* #102. Every showcase video is YouTube's, so this is where a visitor meets
+     the first loop opening by itself. */
+  it('opens a showcase video on its first loop, playing', async () => {
+    const youtube = aYouTube()
+    renderYouTube(youtube, undefined, {
+      demo: true,
+      seed: {
+        ...NO_LOOPS,
+        clips: { [A_YOUTUBE_CLIP.id]: [getLoop({ name: 'Paseala', a: 30, b: 38 })] },
+      },
+    })
+
+    await waitFor(() => {
+      expect(youtube.mount).toHaveBeenCalled()
+    })
+    act(() => {
+      youtube.ready()
+    })
+
+    await waitFor(() => {
+      expect(youtube.player.playVideo).toHaveBeenCalled()
+    })
+    expect(youtube.player.seekTo).toHaveBeenCalledWith(30, true)
   })
 
   /* #90. A Short is 9:16, and YouTube fits it inside whatever frame it is
