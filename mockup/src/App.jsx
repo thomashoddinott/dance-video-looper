@@ -119,6 +119,8 @@ function App() {
   const [tryNewUi, setTryNewUi] = useState(true)
   /* #105: the player's **Countdown** pill, on to begin with */
   const [countdown, setCountdown] = useState(true)
+  /* #107 spike: the player's **8 Count Finder** pill, on to begin with */
+  const [eightCount, setEightCount] = useState(true)
 
   const addClip = (added) => setClips([added, ...clips])
 
@@ -145,6 +147,8 @@ function App() {
         tryNewUi={tryNewUi}
         countdown={countdown}
         onCountdown={setCountdown}
+        eightCount={eightCount}
+        onEightCount={setEightCount}
         onTryNewUi={setTryNewUi}
         /* A YouTube entry added by link has no length until the player loads
            it (oEmbed does not give one), so the first open fills it in. */
