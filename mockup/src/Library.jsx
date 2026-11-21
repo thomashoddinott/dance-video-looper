@@ -323,6 +323,7 @@ function ConnectDrive({ connected, onConnect }) {
     <button
       type="button"
       onClick={onConnect}
+      title="Fork, deploy and follow readme to set up your own Drive."
       className="rounded-lg bg-control px-3 py-2 text-sm font-semibold text-ink/80 hover:bg-control-hi"
     >
       Connect Google Drive
