@@ -1149,6 +1149,16 @@ describe('the grid in the demo', () => {
     ).toEqual(['source', 'connect', 'clips'])
   })
 
+  /* #112. Only the owner's Drive connects; a visitor who reaches for the
+     button learns why on hover, without anything in the way of the click. */
+  it('says on hover how a visitor can have a Drive of their own', () => {
+    renderTheDemo()
+
+    expect(
+      screen.getByRole('button', { name: /connect google drive/i }),
+    ).toHaveAccessibleDescription('Fork, deploy and follow readme to set up your own Drive.')
+  })
+
   /* #77. There is no demo to say so about, or to leave. */
   it('offers nothing about a demo under the heading', () => {
     renderTheDemo()

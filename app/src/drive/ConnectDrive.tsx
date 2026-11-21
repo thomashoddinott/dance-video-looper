@@ -9,7 +9,15 @@ import { isConnected } from './session'
    shows in this being there or not, and no sentence narrates it — not a
    refusal, a withdrawal, Google being unreachable or a renewal. Show, don't
    tell. A withdrawal or a lapse puts it back, which is the whole of what the
-   dancer can do about either. */
+   dancer can do about either.
+
+   #112. The OAuth client is the owner's, so for anyone else the button is a
+   dead end. A tooltip says so, for whoever happens to reach for it: most
+   visitors come from his CV, and the README has the setup for a fork. Out of
+   the way of the owner, who clicks straight through. */
+const ONLY_THE_OWNERS =
+  'Fork, deploy and follow readme to set up your own Drive.'
+
 export function ConnectDrive() {
   const { status, signIn } = useDriveSession()
 
@@ -19,6 +27,7 @@ export function ConnectDrive() {
     <button
       type="button"
       onClick={signIn}
+      title={ONLY_THE_OWNERS}
       className="rounded-lg bg-control px-3 py-2 text-sm font-semibold text-ink/80 hover:bg-control-hi"
     >
       Connect Google Drive
