@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import YouTubeFrame from './YouTubeFrame.jsx'
+import { KEY_DEFAULTS } from './keys.js'
 import { ERRORS } from './youtube.js'
 
 const NUDGE = 1
@@ -18,6 +19,12 @@ function formatTime(seconds) {
   const mins = Math.floor(seconds / 60)
   const secs = Math.floor(seconds % 60)
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
+
+function formatTenths(seconds) {
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds - mins * 60
+  return `${mins}:${secs.toFixed(1).padStart(4, '0')}`
 }
 
 function formatSpeed(speed) {
@@ -595,6 +602,28 @@ function Player({
   const loopRef = useRef(loop)
   const loopingRef = useRef(looping)
   const nextPointRef = useRef(nextPoint)
+  /* #116: what the keys need without re-subscribing — the timings, the speed,
+     the seek, and the held key's timers */
+  const keysRef = useRef(KEY_DEFAULTS)
+  const speedRef = useRef(speed)
+  const scrubRef = useRef(null)
+  const togglePlayRef = useRef(null)
+  const heldRef = useRef(null)
+  const scrubbedToRef = useRef(null)
+  const resumeRef = useRef(null)
+  const pausedByScrubRef = useRef(false)
+  /* #116: what the last key did, shown over the clip for a moment */
+  const [badge, setBadge] = useState(null)
+
+  useEffect(() => {
+    speedRef.current = speed
+  }, [speed])
+
+  useEffect(() => {
+    if (!badge) return
+    const gone = setTimeout(() => setBadge(null), 900)
+    return () => clearTimeout(gone)
+  }, [badge])
   const countingInRef = useRef(false)
   const saveLoopRef = useRef(null)
   const saveAsNewRef = useRef(null)
@@ -714,10 +743,95 @@ function Player({
         target.tagName === 'TEXTAREA' ||
         target.isContentEditable)
 
+    /* #116. A held arrow repeats on its own timer: one step now, then after a
+       pause a step every so often, until the key comes up. */
+    const stopHeld = () => {
+      if (!heldRef.current) return
+      clearTimeout(heldRef.current.wait)
+      clearInterval(heldRef.current.every)
+      heldRef.current = null
+    }
+
+    const hold = (code, step, wait, every) => {
+      stopHeld()
+      step()
+      const held = { code }
+      held.wait = setTimeout(() => {
+        if (heldRef.current === held) held.every = setInterval(step, every)
+      }, wait)
+      heldRef.current = held
+    }
+
+    const nudgeSpeed = (by) => () => {
+      const next =
+        Math.round(clamp(speedRef.current + by, SPEED_MIN, SPEED_MAX) * 100) / 100
+      speedRef.current = next
+      setSpeed(next)
+      setBadge({ text: `${formatSpeed(next)}x` })
+    }
+
+    /* Each step builds on the last while the clip is still near it — YouTube's
+       report of where it is trails a seek (#98) — and stays inside the loop
+       while it is held. */
+    const scrubStep = (direction) => () => {
+      const video = videoRef.current
+      if (!video) return
+
+      const reported = video.currentTime
+      const last = scrubbedToRef.current
+      const from = last !== null && Math.abs(reported - last) < 0.35 ? last : reported
+      const { a, b } = loopingRef.current ? loopRef.current : { a: 0, b: video.duration }
+      const to = clamp(from + direction * keysRef.current.scrubStep, a, b)
+
+      scrubbedToRef.current = to
+      scrubRef.current?.(to)
+      setBadge({ text: formatTenths(to) })
+    }
+
+    const stopResume = () => {
+      clearTimeout(resumeRef.current)
+      resumeRef.current = null
+    }
+
     const onKeyDown = (event) => {
-      if (event.repeat || typing(event.target)) return
+      if (typing(event.target)) return
       const video = videoRef.current
       if (!video || !Number.isFinite(video.duration)) return
+
+      /* ←→ scrub, playing or paused: a press while it plays pauses it first */
+      if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
+        event.preventDefault()
+        if (event.repeat) return
+        stopResume()
+        if (!video.paused) {
+          pausedByScrubRef.current = true
+          video.pause()
+        }
+        const k = keysRef.current
+        hold(
+          event.code,
+          scrubStep(event.code === 'ArrowLeft' ? -1 : 1),
+          k.scrubHoldDelay,
+          youtube ? k.scrubRepeatEveryYouTube : k.scrubRepeatEvery,
+        )
+        return
+      }
+
+      /* ↑↓ speed, 0.05 a step */
+      if (event.code === 'ArrowUp' || event.code === 'ArrowDown') {
+        event.preventDefault()
+        if (event.repeat) return
+        const k = keysRef.current
+        hold(
+          event.code,
+          nudgeSpeed(event.code === 'ArrowUp' ? SPEED_STEP : -SPEED_STEP),
+          k.speedHoldDelay,
+          k.speedRepeatEvery,
+        )
+        return
+      }
+
+      if (event.repeat) return
 
       if (event.code === 'KeyS') {
         event.preventDefault()
@@ -738,9 +852,19 @@ function Player({
         return
       }
 
-      if (event.code !== 'Space') return
+      /* #116: space plays and pauses, as it does everywhere else */
+      if (event.code === 'Space') {
+        event.preventDefault()
+        stopResume()
+        pausedByScrubRef.current = false
+        togglePlayRef.current?.()
+        return
+      }
 
-      // Also stops the page scrolling and stops space activating a focused button
+      /* #116: enter frames the loop — A, then B — which space used to */
+      if (event.code !== 'Enter') return
+
+      // Also stops enter activating a focused button
       event.preventDefault()
 
       const t = video.currentTime
@@ -757,9 +881,36 @@ function Player({
       setNextPoint('a')
     }
 
+    /* The key coming up ends the hold. A scrub begun while the clip was
+       playing plays on by itself a few seconds after the last step; one begun
+       from paused stays paused. */
+    const onKeyUp = (event) => {
+      if (heldRef.current?.code !== event.code) return
+      stopHeld()
+
+      const scrubbing = event.code === 'ArrowLeft' || event.code === 'ArrowRight'
+      const after = keysRef.current.resumeAfter
+      if (scrubbing && pausedByScrubRef.current && after > 0) {
+        resumeRef.current = setTimeout(() => {
+          pausedByScrubRef.current = false
+          videoRef.current?.play()
+        }, after * 1000)
+      }
+    }
+
+    const onBlur = () => stopHeld()
+
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+      stopHeld()
+      stopResume()
+    }
+  }, [youtube])
 
   /* #102, retrofitted from the build: a showcase video opens on its first loop
      (the top row, the earliest to start), as if it had been tapped, and
@@ -975,6 +1126,8 @@ function Player({
   // the key handler subscribes once, so it reaches save through a ref
   useEffect(() => {
     saveLoopRef.current = saveLoop
+    scrubRef.current = scrub
+    togglePlayRef.current = togglePlay
     saveAsNewRef.current = saveAsNew
   })
 
@@ -1208,7 +1361,7 @@ function Player({
 
   const hint = (
     <p className="mb-4 hidden text-center text-xs text-ink/40 sm:block">
-      <Key>space</Key> sets{' '}
+      <Key>enter</Key> sets{' '}
       <span className="font-semibold text-ink/70">
         {nextPoint.toUpperCase()}
       </span>
@@ -1438,6 +1591,15 @@ function Player({
                 rounded={zen ? undefined : 'rounded-b-lg'}
               />
 
+              {/* #116: what the last key did, a moment over the clip */}
+              {badge && (
+                <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
+                  <span className="rounded-full bg-black/60 px-3 py-1 text-sm font-semibold tabular-nums text-white">
+                    {badge.text}
+                  </span>
+                </div>
+              )}
+
               {/* #105: over the clip, so in zen mode too */}
               {count !== null && (
                 <div
@@ -1487,6 +1649,7 @@ function Player({
           </div>
         )}
       </main>
+
     </div>
   )
 }

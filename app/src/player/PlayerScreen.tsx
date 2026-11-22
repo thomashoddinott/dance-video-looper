@@ -2,6 +2,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router'
 
 import type { Clip } from '../clips/clip'
+import { formatTenths } from '../clips/format'
 import type { ClipCache } from '../clips/clipCache'
 import { browserClipCache } from '../clips/clipCache'
 import { shapeOfYouTube, type ShapeYouTube, type VideoShape } from '../clips/youtube'
@@ -13,6 +14,7 @@ import type { LoopsHandle } from '../loops/useLoops'
 import { chainedSpan, inStartOrder } from './chain'
 import { ClipName } from './ClipName'
 import { useClipSource } from './clipSource'
+import { KEY_TIMINGS, READOUT_FOR, repeatWhileHeld } from './keys'
 import { clamp, type Handle, NUDGE, SCRUB_STEP } from './loopRange'
 import { LoopSlider } from './LoopSlider'
 import type { PlaybackSurface } from './playbackSurface'
@@ -27,8 +29,9 @@ import {
 import { beingEdited, nameToKeep, unwritten } from './savedLoops'
 import { SavedLoopsPanel } from './SavedLoopsPanel'
 import { BackGlyph, ForwardGlyph, SeekButton } from './SeekButton'
-import { isTyping, spaceSets } from './shortcuts'
+import { enterSets, isTyping } from './shortcuts'
 import { ShortcutHint } from './ShortcutHint'
+import { SPEED_STEP, stepped } from './speed'
 import { SpeedStepper } from './SpeedStepper'
 import {
   LoopGlyph,
@@ -396,7 +399,7 @@ function OpenedClip({
      Enforcement stands down while it is true, because the two would otherwise
      fight over the same playhead and enforcement would win on the next frame. */
   const [adjusting, setAdjusting] = useState(false)
-  /* BR-03. Which boundary the next space press lands on, cycling A, B, A… The
+  /* BR-03. Which boundary the next enter press lands on, cycling A, B, A… The
      dancer is told this rather than left to remember it — the hint line reads it
      too, which is why it is state here rather than something the handler keeps to
      itself. */
@@ -418,6 +421,33 @@ function OpenedClip({
   const [countdownOn, setCountdownOn] = useSessionSwitch(COUNTDOWN)
   const countingIn = wide && countdownOn
   const [count, setCount] = useState<number | null>(null)
+  /* #116. What the last arrow key did, shown over the clip for a moment: the
+     speed it set, or the time it scrubbed to. A fresh object each key, so the
+     moment starts over from the latest. */
+  const [readout, setReadout] = useState<{
+    readonly of: 'speed' | 'time'
+  } | null>(null)
+  /* #116. The arrow key held down, and the way to stop its repeat. One at a
+     time: a second arrow takes over from the first. */
+  const held = useRef<{ readonly key: string; readonly letGo: () => void } | null>(
+    null,
+  )
+  /* #116. Whether the clip was playing when the arrows paused it, and so plays
+     on once they stop; and the wait before it does. */
+  const pausedByScrub = useRef(false)
+  const resume = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const stopResume = () => {
+    if (resume.current !== null) clearTimeout(resume.current)
+    resume.current = null
+  }
+
+  /* Played or paused some other way, the clip is the dancer's again, and the
+     scrub has nothing to play on from. */
+  const forgetScrub = () => {
+    stopResume()
+    pausedByScrub.current = false
+  }
   /* The loops kept against *this* clip, read out of the one file that holds
      every clip's. Not state here any more: US-01-15 made Drive the owner, and
      what the panel lists is what Drive has taken — which is the whole of "write
@@ -533,6 +563,24 @@ function OpenedClip({
     if (countingIn) setCount(COUNT_FROM)
     else void surface.current?.play()
   }
+
+  useEffect(() => {
+    if (readout === null) return
+
+    const gone = setTimeout(() => setReadout(null), READOUT_FOR)
+
+    return () => clearTimeout(gone)
+  }, [readout])
+
+  /* Nothing held goes on repeating, and nothing plays on, once the player has
+     gone. */
+  useEffect(
+    () => () => {
+      held.current?.letGo()
+      if (resume.current !== null) clearTimeout(resume.current)
+    },
+    [],
+  )
 
   /* #105. A second a number, and at the end of it the clip plays on. Started
      by the loop coming round; stopped by anything that plays the clip first. */
@@ -680,11 +728,11 @@ function OpenedClip({
   }
 
   /* The slider's route in, and UC-01 alternate flow 11a with it: moving B is the
-     other way of finishing a loop that space left half-set, so it re-arms space
+     other way of finishing a loop that enter left half-set, so it re-arms enter
      for A. Space and the handles are two ways into one state, not two states.
 
      Only B, because A being set is what made the loop half-set in the first place
-     — moving it again leaves space waiting for the B still missing.
+     — moving it again leaves enter waiting for the B still missing.
 
      Space does not come through here. It sets its own boundary and arms its own
      next one in the same press, and routing it past this would have the two fight
@@ -695,7 +743,7 @@ function OpenedClip({
     putLoop(loop)
   }
 
-  /* BR-04: half a loop is not a loop. Between space setting A and space setting
+  /* BR-04: half a loop is not a loop. Between enter setting A and enter setting
      B, B is still parked at the clip's end (BR-02), so a save would keep a
      section nobody chose.
 
@@ -766,7 +814,7 @@ function OpenedClip({
     }
 
     /* Once Drive has taken the loop, the player goes back to the way a clip
-       opens (#71): the whole clip framed, space armed for A, nothing open,
+       opens (#71): the whole clip framed, enter armed for A, nothing open,
        nothing ticked and nothing typed — so the next Save is a new loop. The
        loop just written is deliberately *not* left open. #30 left it open so a
        correction would not need a click, and the cost was a dancer framing the
@@ -826,8 +874,8 @@ function OpenedClip({
   const saveLoopRef = useRef(saveLoop)
   const saveAsNewRef = useRef(saveAsNew)
 
-  /* #98. One arrow-key step of a paused scrub, inside the loop while it is
-     held. Reached through a ref for `saveLoop`'s reason.
+  /* #98. One arrow-key step of a scrub, inside the loop while it is held.
+     Reached through a ref for `saveLoop`'s reason.
 
      Each step builds on the last one rather than on where the clip says it is,
      for two reasons that come to the same thing. A held key repeats faster
@@ -853,6 +901,7 @@ function OpenedClip({
 
     scrubbedTo.current = to
     seekTo(to)
+    setReadout({ of: 'time' })
   }
 
   const scrubRef = useRef(scrub)
@@ -877,28 +926,85 @@ function OpenedClip({
   useEffect(() => {
     if (playback.kind !== 'ready') return
 
+    /* #116. A held arrow repeats on the player's own clock (`keys.ts`), so
+       the keyboard's repeats are taken and ignored, and the key coming up, or
+       the window losing it, ends the hold. */
+    const hold = (
+      key: string,
+      step: () => void,
+      timing: { readonly wait: number; readonly every: number },
+    ) => {
+      held.current?.letGo()
+      held.current = { key, letGo: repeatWhileHeld(step, timing) }
+    }
+
+    const letGo = () => {
+      held.current?.letGo()
+      held.current = null
+    }
+
     const onKeyDown = (event: KeyboardEvent) => {
-      /* #98. ← and → step a paused clip a little at a time, inside the loop
-         while it is held, so a move can be studied without the mouse. Ahead of
-         the repeat guard below, because holding the key is how a scrub keeps
-         going. A loop handle with focus has already taken the key for itself
-         (it prevents the default), and a text field's caret keeps it. Playing,
-         they do nothing new. No hint says so: it is there to be found. */
+      /* #116. ↑ and ↓ step the speed, as the stepper's + and − do. */
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        if (event.defaultPrevented || isTyping(event.target)) return
+
+        event.preventDefault()
+        if (event.repeat) return
+
+        const by = event.key === 'ArrowUp' ? SPEED_STEP : -SPEED_STEP
+
+        hold(
+          event.key,
+          () => {
+            setSpeed((from) => stepped({ from, by }))
+            setReadout({ of: 'speed' })
+          },
+          {
+            wait: KEY_TIMINGS.speedHoldDelay,
+            every: KEY_TIMINGS.speedRepeatEvery,
+          },
+        )
+
+        return
+      }
+
+      /* #98, #116. ← and → step the clip a little at a time, inside the loop
+         while it is held, so a move can be studied without the mouse. Begun
+         while the clip plays, the scrub pauses it, and the key coming up starts
+         the wait before it plays on; begun from paused, it stays paused. A loop
+         handle with focus has already taken the key for itself (it prevents
+         the default), and a text field's caret keeps it. */
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         const clip = surface.current
 
-        if (event.defaultPrevented || isTyping(event.target)) return
-        if (!clip?.paused) return
+        if (event.defaultPrevented || isTyping(event.target) || !clip) return
 
         event.preventDefault()
-        scrubRef.current(event.key === 'ArrowLeft' ? -SCRUB_STEP : SCRUB_STEP)
+        if (event.repeat) return
+
+        stopResume()
+
+        if (!clip.paused) {
+          pausedByScrub.current = true
+          clip.pause()
+        }
+
+        const step = event.key === 'ArrowLeft' ? -SCRUB_STEP : SCRUB_STEP
+
+        hold(event.key, () => scrubRef.current(step), {
+          wait: KEY_TIMINGS.scrubHoldDelay,
+          every:
+            youtube === undefined
+              ? KEY_TIMINGS.scrubRepeatEvery
+              : KEY_TIMINGS.scrubRepeatEveryYouTube,
+        })
 
         return
       }
 
       /* A held key repeats at the operating system's rate and every repeat is
          another keydown. Marking a section is one act however long the thumb stays
-         down; without this, a held space flickers A and B against each other tens
+         down; without this, a held enter flickers A and B against each other tens
          of times a second and lands wherever the release falls.
 
          Alongside BR-05 above every key rather than beside each one, so a shortcut
@@ -938,18 +1044,28 @@ function OpenedClip({
         return
       }
 
-      if (event.code !== 'Space') return
+      /* #116. Space plays and pauses, as it does in every other video player.
+         It also scrolls the page and presses whatever button was last touched,
+         which would play the clip and stop it again in one press. */
+      if (event.code === 'Space') {
+        event.preventDefault()
+        forgetScrub()
+        togglePlay(surface.current)
 
-      /* Space scrolls the page, and activates whatever button was last touched —
-         which, on this screen, the dancer has almost certainly just touched.
-         Marking a section would otherwise scroll the clip out of view, or restart
-         the loop, or both at once. */
+        return
+      }
+
+      if (event.code !== 'Enter') return
+
+      /* Enter presses whatever button was last touched — which, on this screen,
+         the dancer has almost certainly just touched. Marking a section would
+         otherwise restart the loop as well. */
       event.preventDefault()
 
       /* Read off the element for `nudge`'s reason: `time` is a copy, stale by
          however long it has been since the last frame, and a mark placed from it
          would land somewhere other than where the dancer saw. */
-      const framed = spaceSets({
+      const framed = enterSets({
         loop: playback.loop,
         handle: nextPoint,
         seconds: surface.current?.currentTime ?? 0,
@@ -960,10 +1076,30 @@ function OpenedClip({
       setNextPoint(framed.next)
     }
 
-    window.addEventListener('keydown', onKeyDown)
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (held.current?.key !== event.key) return
 
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [playback, nextPoint])
+      letGo()
+
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+      if (!pausedByScrub.current) return
+
+      resume.current = setTimeout(() => {
+        forgetScrub()
+        void surface.current?.play()
+      }, KEY_TIMINGS.resumeAfter)
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', letGo)
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', letGo)
+    }
+  }, [playback, nextPoint, youtube])
 
   /* Read off the element rather than off `time`, on the same reasoning
      `togglePlay` gives above: the element is where the playhead actually is, and
@@ -1462,6 +1598,7 @@ function OpenedClip({
                     setPlaying(true)
                     /* #105: playing ends any count, whoever started it */
                     setCount(null)
+                    forgetScrub()
                   }}
                   onPause={() => setPlaying(false)}
                   onEnded={ended}
@@ -1490,6 +1627,7 @@ function OpenedClip({
                       if (state === PLAYING) {
                         setStarted(true)
                         setCount(null)
+                        forgetScrub()
                       }
                       if (state === ENDED) ended()
                     }}
@@ -1525,6 +1663,20 @@ function OpenedClip({
                   onHold={hushWhileHeld}
                   rounded={isolated ? undefined : 'rounded-b-lg'}
                 />
+              )}
+
+              {/* #116. What the last arrow key did, a moment over the clip,
+                  and so in zen mode too. */}
+              {readout !== null && (
+                <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
+                  <span
+                    role="status"
+                    aria-label="Readout"
+                    className="rounded-full bg-black/60 px-3 py-1 text-sm font-semibold tabular-nums text-white"
+                  >
+                    {readout.of === 'speed' ? `${speed}x` : formatTenths(time)}
+                  </span>
+                </div>
               )}
 
               {/* #105. Over the clip, where the dancer is looking, and so in

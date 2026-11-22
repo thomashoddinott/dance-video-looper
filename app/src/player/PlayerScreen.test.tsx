@@ -741,13 +741,13 @@ describe('the new layout', () => {
 /* #94, #96. In the new layout the A/B slider is put away to begin with, so the
    clip has its room, and a Slider checkbox beside the toggle brings it out and
    puts it away by hand. Space did both for a while (#94); it no longer does,
-   until the keyboard's part in it is worked out. */
+   and Enter, which frames the loop now (#116), does not either. */
 describe('the slider in the new layout', () => {
   const sliderOnOffer = () => screen.queryByRole('group', { name: 'Loop range' })
   const sliderBox = () => screen.queryByRole('checkbox', { name: 'Slider' })
 
-  const pressSpace = () => {
-    fireEvent.keyDown(window, { code: 'Space' })
+  const pressEnter = () => {
+    fireEvent.keyDown(window, { code: 'Enter' })
   }
 
   /* A decoded clip on a wide screen, which opens on the new layout (#100). */
@@ -767,19 +767,19 @@ describe('the slider in the new layout', () => {
     expect(sliderBox()).not.toBeChecked()
   })
 
-  /* #96. Space frames the loop and leaves the slider where it is. */
-  it('stays where it is when space sets A and B', async () => {
+  /* #96. Framing the loop leaves the slider where it is. */
+  it('stays where it is when enter sets A and B', async () => {
     await inTheNewLayout()
 
-    pressSpace()
-    pressSpace()
+    pressEnter()
+    pressEnter()
 
     expect(sliderOnOffer()).not.toBeInTheDocument()
     expect(sliderBox()).not.toBeChecked()
 
     await userEvent.click(sliderBox()!)
-    pressSpace()
-    pressSpace()
+    pressEnter()
+    pressEnter()
 
     expect(sliderOnOffer()).toBeInTheDocument()
     expect(sliderBox()).toBeChecked()
@@ -811,8 +811,8 @@ describe('the slider in the new layout', () => {
     const { container, clip } = await inTheNewLayout()
     await userEvent.click(clip)
 
-    pressSpace()
-    pressSpace()
+    pressEnter()
+    pressEnter()
 
     expect(clipSurface(container)).toBe(clip)
     expect(clip.paused).toBe(false)
@@ -971,6 +971,125 @@ describe('the speed stepper', () => {
     expect(clip.playbackRate).toBe(0.9)
     expect(clip.paused).toBe(false)
     expect(clip.currentTime).toBe(0)
+  })
+})
+
+/* #116. ↑ and ↓ step the speed, as the stepper's + and − do, without
+   reaching for the mouse. The new speed shows over the clip for a moment. */
+describe('changing the speed with the up and down arrows', () => {
+  const rate = () => screen.getByLabelText('Playback speed')
+  const readout = () => screen.queryByRole('status', { name: 'Readout' })
+
+  const tap = (key: 'ArrowUp' | 'ArrowDown') => {
+    fireEvent.keyDown(window, { key, code: key })
+    fireEvent.keyUp(window, { key, code: key })
+  }
+
+  const wait = (ms: number) => {
+    act(() => {
+      vi.advanceTimersByTime(ms)
+    })
+  }
+
+  it('raises the speed a step with up, and lowers it with down', () => {
+    aReadyClip()
+
+    tap('ArrowUp')
+    expect(rate()).toHaveTextContent(/^1.05$/)
+
+    tap('ArrowDown')
+    tap('ArrowDown')
+    expect(rate()).toHaveTextContent(/^0.95$/)
+  })
+
+  it('plays the clip at it', () => {
+    const clip = aReadyClip()
+
+    tap('ArrowDown')
+
+    expect(clip.playbackRate).toBe(0.95)
+  })
+
+  /* One step at once, then after a wait a step at a steady pace, on the
+     player's own clock rather than the keyboard's repeat. */
+  it('keeps stepping while the key is held, after a wait', () => {
+    vi.useFakeTimers()
+    aReadyClip()
+
+    fireEvent.keyDown(window, { key: 'ArrowUp', code: 'ArrowUp' })
+    wait(400 + 120 - 1)
+    expect(rate()).toHaveTextContent(/^1.05$/)
+
+    wait(1)
+    expect(rate()).toHaveTextContent(/^1.1$/)
+
+    wait(120)
+    expect(rate()).toHaveTextContent(/^1.15$/)
+
+    fireEvent.keyUp(window, { key: 'ArrowUp', code: 'ArrowUp' })
+    wait(1000)
+    expect(rate()).toHaveTextContent(/^1.15$/)
+  })
+
+  it('takes no step for the keyboard\'s own repeats', () => {
+    aReadyClip()
+
+    fireEvent.keyDown(window, { key: 'ArrowUp', code: 'ArrowUp' })
+    fireEvent.keyDown(window, { key: 'ArrowUp', code: 'ArrowUp', repeat: true })
+    fireEvent.keyDown(window, { key: 'ArrowUp', code: 'ArrowUp', repeat: true })
+
+    expect(rate()).toHaveTextContent(/^1.05$/)
+  })
+
+  it('stops at 2x', () => {
+    vi.useFakeTimers()
+    aReadyClip()
+
+    fireEvent.keyDown(window, { key: 'ArrowUp', code: 'ArrowUp' })
+    wait(400 + 120 * 40)
+
+    expect(rate()).toHaveTextContent(/^2$/)
+  })
+
+  it('shows the new speed over the clip for a moment', () => {
+    vi.useFakeTimers()
+    aReadyClip()
+
+    tap('ArrowUp')
+    expect(readout()).toHaveTextContent('1.05x')
+
+    wait(900)
+    expect(readout()).not.toBeInTheDocument()
+  })
+
+  it('takes the key rather than letting it scroll the page', () => {
+    aReadyClip()
+
+    expect(
+      fireEvent.keyDown(window, { key: 'ArrowUp', code: 'ArrowUp' }),
+    ).toBe(false)
+  })
+
+  it('stops when the window loses focus, which keeps the key-up', () => {
+    vi.useFakeTimers()
+    aReadyClip()
+
+    fireEvent.keyDown(window, { key: 'ArrowUp', code: 'ArrowUp' })
+    fireEvent.blur(window)
+    wait(1000)
+
+    expect(rate()).toHaveTextContent(/^1.05$/)
+  })
+
+  it('leaves the arrows to the caret in the name field', () => {
+    aReadyClip()
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Loop name' }), {
+      key: 'ArrowUp',
+      code: 'ArrowUp',
+    })
+
+    expect(rate()).toHaveTextContent(/^1$/)
   })
 })
 
@@ -1562,51 +1681,91 @@ describe('tapping the track', () => {
    handle `role="slider"` and `tabIndex={0}`, promising keyboard operation, and
    implements none — and US-01-10 is about space setting A and B, never about
    adjusting a handle that already has focus. */
-/* #98. ← and → step a paused clip a tenth of a second at a time, inside the
-   loop, so a move can be studied without reaching for the mouse. Nothing on
-   the screen says so: it is there to be found. */
-describe('scrubbing a paused clip with the arrow keys', () => {
-  const press = (key: 'ArrowLeft' | 'ArrowRight', { held = false } = {}) => {
-    fireEvent.keyDown(window, { key, code: key, repeat: held })
+/* #98, #116. ← and → scrub a tenth of a second at a time, inside the loop, so
+   a move can be studied without reaching for the mouse. A scrub begun while
+   the clip plays pauses it, and it plays on by itself a few seconds after the
+   last step; one begun from paused stays paused. */
+describe('scrubbing with the left and right arrows', () => {
+  type Arrow = 'ArrowLeft' | 'ArrowRight'
+
+  const down = (key: Arrow, { repeat = false } = {}) =>
+    fireEvent.keyDown(window, { key, code: key, repeat })
+
+  const up = (key: Arrow) => {
+    fireEvent.keyUp(window, { key, code: key })
   }
+
+  const tap = (key: Arrow) => {
+    down(key)
+    up(key)
+  }
+
+  const wait = (ms: number) => {
+    act(() => {
+      vi.advanceTimersByTime(ms)
+    })
+  }
+
+  const readout = () => screen.queryByRole('status', { name: 'Readout' })
 
   it('steps a paused clip a tenth of a second forward and back', () => {
     const clip = aReadyClip({ seconds: 12 })
     clip.currentTime = 5
 
-    press('ArrowRight')
+    tap('ArrowRight')
 
     expect(clip.currentTime).toBeCloseTo(5.1)
 
-    press('ArrowLeft')
-    press('ArrowLeft')
+    tap('ArrowLeft')
+    tap('ArrowLeft')
 
     expect(clip.currentTime).toBeCloseTo(4.9)
   })
 
-  /* Holding the key is how a scrub keeps going, so a repeat is not ignored
-     here the way it is for space. */
-  it('keeps stepping while the key is held down', () => {
+  /* One step at once, then after a wait a step at a steady pace, on the
+     player's own clock rather than the keyboard's repeat. */
+  it('keeps stepping while the key is held, after a wait', () => {
+    vi.useFakeTimers()
     const clip = aReadyClip({ seconds: 12 })
     clip.currentTime = 5
 
-    press('ArrowRight')
-    press('ArrowRight', { held: true })
-    press('ArrowRight', { held: true })
+    down('ArrowRight')
+    wait(300 + 50 - 1)
+    expect(clip.currentTime).toBeCloseTo(5.1)
 
+    wait(1)
+    expect(clip.currentTime).toBeCloseTo(5.2)
+
+    wait(50)
+    expect(clip.currentTime).toBeCloseTo(5.3)
+
+    up('ArrowRight')
+    wait(1000)
     expect(clip.currentTime).toBeCloseTo(5.3)
   })
 
-  /* A held key repeats faster than a seek lands, so each step builds on the
+  it("takes no step for the keyboard's own repeats", () => {
+    const clip = aReadyClip({ seconds: 12 })
+    clip.currentTime = 5
+
+    down('ArrowRight')
+    down('ArrowRight', { repeat: true })
+    down('ArrowRight', { repeat: true })
+
+    expect(clip.currentTime).toBeCloseTo(5.1)
+  })
+
+  /* A held key steps faster than a seek lands, so each step builds on the
      last one asked for rather than on where the clip still is. */
   it('adds the steps up while a seek is still landing', () => {
+    vi.useFakeTimers()
     const clip = aReadyClip({ seconds: 12 })
     clip.currentTime = 5
     const letThemLand = holdSeeks(clip)
 
-    press('ArrowRight')
-    press('ArrowRight', { held: true })
-    press('ArrowRight', { held: true })
+    down('ArrowRight')
+    wait(300 + 50 * 2)
+    up('ArrowRight')
     letThemLand()
 
     expect(clip.currentTime).toBeCloseTo(5.3)
@@ -1615,31 +1774,119 @@ describe('scrubbing a paused clip with the arrow keys', () => {
   it('stops at the ends of the loop rather than leaving it', () => {
     const clip = aReadyClip({ seconds: 12 })
     clip.currentTime = 2
-    fireEvent.keyDown(window, { code: 'Space' })
+    fireEvent.keyDown(window, { code: 'Enter' })
     clip.currentTime = 4
-    fireEvent.keyDown(window, { code: 'Space' })
+    fireEvent.keyDown(window, { code: 'Enter' })
 
     clip.currentTime = 3.95
-    press('ArrowRight')
-    press('ArrowRight', { held: true })
+    tap('ArrowRight')
+    tap('ArrowRight')
 
     expect(clip.currentTime).toBe(4)
 
     clip.currentTime = 2.05
-    press('ArrowLeft')
-    press('ArrowLeft', { held: true })
+    tap('ArrowLeft')
+    tap('ArrowLeft')
 
     expect(clip.currentTime).toBe(2)
   })
 
-  it('does nothing while the clip is playing', async () => {
+  it('pauses a playing clip and steps it', async () => {
     const clip = aReadyClip({ seconds: 12 })
     await userEvent.click(clip)
     clip.currentTime = 5
 
-    press('ArrowRight')
+    tap('ArrowRight')
 
-    expect(clip.currentTime).toBe(5)
+    expect(clip.paused).toBe(true)
+    expect(clip.currentTime).toBeCloseTo(5.1)
+  })
+
+  it('plays on by itself 3s after the last step of a scrub begun while playing', () => {
+    vi.useFakeTimers()
+    const clip = aReadyClip({ seconds: 12 })
+    fireEvent.play(clip)
+
+    down('ArrowRight')
+    wait(1000)
+    up('ArrowRight')
+    wait(3000 - 1)
+    expect(clip.paused).toBe(true)
+
+    wait(1)
+    expect(clip.paused).toBe(false)
+  })
+
+  it('starts the 3s over with each step', () => {
+    vi.useFakeTimers()
+    const clip = aReadyClip({ seconds: 12 })
+    fireEvent.play(clip)
+
+    tap('ArrowRight')
+    wait(2000)
+    tap('ArrowRight')
+    wait(2000)
+    expect(clip.paused).toBe(true)
+
+    wait(1000)
+    expect(clip.paused).toBe(false)
+  })
+
+  it('stays paused after a scrub begun from paused', () => {
+    vi.useFakeTimers()
+    const clip = aReadyClip({ seconds: 12 })
+
+    tap('ArrowRight')
+    wait(10_000)
+
+    expect(clip.paused).toBe(true)
+  })
+
+  /* Space during the wait is the dancer deciding for themselves, so the wait
+     is dropped: it would otherwise play a clip they had just paused again. */
+  it('leaves it to space once space is pressed during the wait', () => {
+    vi.useFakeTimers()
+    const clip = aReadyClip({ seconds: 12 })
+    fireEvent.play(clip)
+
+    tap('ArrowRight')
+    press('Space')
+    expect(clip.paused).toBe(false)
+
+    press('Space')
+    wait(3000)
+    expect(clip.paused).toBe(true)
+  })
+
+  it('does not play on once the clip has been played and paused another way', () => {
+    vi.useFakeTimers()
+    const clip = aReadyClip({ seconds: 12 })
+    fireEvent.play(clip)
+
+    tap('ArrowRight')
+    fireEvent.play(clip)
+    fireEvent.pause(clip)
+    wait(3000)
+
+    expect(clip.paused).toBe(true)
+  })
+
+  it('shows the time over the clip for a moment', () => {
+    vi.useFakeTimers()
+    const clip = aReadyClip({ seconds: 12 })
+    clip.currentTime = 5
+
+    tap('ArrowRight')
+    expect(readout()).toHaveTextContent('0:05.1')
+
+    wait(900)
+    expect(readout()).not.toBeInTheDocument()
+  })
+
+  it('takes the key rather than letting it scroll the page', () => {
+    aReadyClip({ seconds: 12 })
+
+    expect(down('ArrowRight')).toBe(false)
   })
 
   /* The handle moves itself and seeks the clip to where it lands; a step on top
@@ -1824,12 +2071,12 @@ const boundary = (handle: 'Loop start' | 'Loop end') =>
 
 /* UC-01 steps 9–10. The section gets marked while it goes past, which is the whole
    reason the keyboard is here — aiming at a handle means stopping to aim. */
-describe('setting the loop points with space', () => {
+describe('setting the loop points with enter', () => {
   it('sets A wherever the clip has got to', () => {
     const clip = aReadyClip({ seconds: 12 })
     clip.currentTime = 6
 
-    press('Space')
+    press('Enter')
 
     expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '6')
   })
@@ -1843,7 +2090,7 @@ describe('setting the loop points with space', () => {
     dragTo(boundary('Loop end'), 100)
     clip.currentTime = 9
 
-    press('Space')
+    press('Enter')
 
     expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '12')
   })
@@ -1854,9 +2101,9 @@ describe('setting the loop points with space', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 6
-    press('Space')
+    press('Enter')
     clip.currentTime = 9
-    press('Space')
+    press('Enter')
 
     expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '6')
     expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '9')
@@ -1868,11 +2115,11 @@ describe('setting the loop points with space', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 6
-    press('Space')
+    press('Enter')
     clip.currentTime = 9
-    press('Space')
+    press('Enter')
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
 
     expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '3')
   })
@@ -1883,39 +2130,96 @@ describe('setting the loop points with space', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 6
-    press('Space')
+    press('Enter')
     clip.currentTime = 6.05
-    press('Space')
+    press('Enter')
 
     expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '6.2')
   })
 
-  /* Space is the page's scroll key and the activation key of whatever button was
-     last touched, and the dancer has almost certainly just touched one. Marking a
-     section would otherwise scroll the clip out of view, or start the loop over,
-     or both at once. `fireEvent` reports whether the default survived. */
+  /* Enter is the activation key of whatever button was last touched, and the
+     dancer has almost certainly just touched one. Marking a section would
+     otherwise start the loop over as well. `fireEvent` reports whether the
+     default survived. */
+  it('takes the key rather than letting it press a button', () => {
+    aReadyClip({ seconds: 12 })
+
+    expect(fireEvent.keyDown(window, { code: 'Enter' })).toBe(false)
+  })
+})
+
+/* #116. Space plays and pauses, as it does in every other video player; Enter
+   frames the loop, which space did before. */
+describe('playing and pausing with space', () => {
+  it('plays a paused clip', () => {
+    const clip = aReadyClip({ seconds: 12 })
+
+    press('Space')
+
+    expect(clip.paused).toBe(false)
+  })
+
+  it('pauses a playing one', async () => {
+    const clip = aReadyClip({ seconds: 12 })
+    await userEvent.click(clip)
+
+    press('Space')
+
+    expect(clip.paused).toBe(true)
+  })
+
+  it('leaves the loop where it is', () => {
+    const clip = aReadyClip({ seconds: 12 })
+    clip.currentTime = 6
+
+    press('Space')
+
+    expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '0')
+  })
+
+  /* Space scrolls the page, and presses whatever button was last touched,
+     which would play the clip and then stop it again. */
   it('takes the key rather than letting it scroll the page or press a button', () => {
     aReadyClip({ seconds: 12 })
 
     expect(fireEvent.keyDown(window, { code: 'Space' })).toBe(false)
   })
+
+  it('plays once however long the key is held', () => {
+    const clip = aReadyClip({ seconds: 12 })
+
+    press('Space')
+    fireEvent.keyDown(window, { code: 'Space', repeat: true })
+
+    expect(clip.paused).toBe(false)
+  })
+
+  it('leaves the clip alone when space is typed into a field', () => {
+    const clip = aReadyClip({ seconds: 12 })
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Loop name' }), {
+      code: 'Space',
+    })
+
+    expect(clip.paused).toBe(true)
+  })
 })
 
-/* UC-01 alternate flow 11a. Space and the handles are two ways into one state,
+/* UC-01 alternate flow 11a. Enter and the handles are two ways into one state,
    not two states — so a dancer who marks A and then decides to place B by hand
-   finds space armed for A again, rather than for a B they have already set. */
+   finds enter armed for A again, rather than for a B they have already set. */
 describe('finishing a half-set loop by hand', () => {
-  it('re-arms space for A when B is dragged into place', () => {
+  it('re-arms enter for A when B is dragged into place', () => {
     const clip = aReadyClip({ seconds: 12 })
     aLaidOutTrack()
 
     clip.currentTime = 6
-    press('Space')
+    press('Enter')
     dragTo(boundary('Loop end'), 150)
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
 
-    /* A at 3 is the whole of it: had space still been armed for B it would have
+    /* A at 3 is the whole of it: had enter still been armed for B it would have
        tried to put B at 3, where BR-18's floor would have held it at 6.2 and left
        A where it was. */
     expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '3')
@@ -1924,28 +2228,28 @@ describe('finishing a half-set loop by hand', () => {
   /* The arrow keys reach the same boundary by the same route, and BR-03 makes
      the ways of setting the points one state — so nudging B finishes the loop
      exactly as dragging it does. */
-  it('re-arms space for A when B is moved with its arrow keys', () => {
+  it('re-arms enter for A when B is moved with its arrow keys', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 6
-    press('Space')
+    press('Enter')
     fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
 
     expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '3')
   })
 
   /* Only B finishes a loop. A is already set — that is what made the loop
-     half-set — so moving it leaves space waiting for the B it is still missing. */
-  it('leaves space armed for B when A is the handle that moved', () => {
+     half-set — so moving it leaves enter waiting for the B it is still missing. */
+  it('leaves enter armed for B when A is the handle that moved', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 6
-    press('Space')
+    press('Enter')
     fireEvent.keyDown(boundary('Loop start'), { key: 'ArrowLeft' })
     clip.currentTime = 9
-    press('Space')
+    press('Enter')
 
     expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '9')
   })
@@ -1985,7 +2289,7 @@ describe('isolating the video from the keyboard', () => {
   })
 
   /* A clip that will not decode has nothing to isolate and no position to mark,
-     so nothing is bound on it — the same gate that keeps space off it. Without
+     so nothing is bound on it — the same gate that keeps enter off it. Without
      that, `f` would black out a screen whose only content is the sentence saying
      the clip could not be played. */
   it('does nothing on a clip that will not decode', () => {
@@ -1998,8 +2302,8 @@ describe('isolating the video from the keyboard', () => {
   })
 })
 
-/* BR-05 and UC-01 alternate flow *a. Every shortcut here is space or a single
-   printing character, so a caret in a text field turns each of them into
+/* BR-05 and UC-01 alternate flow *a. Every shortcut here is a key a text field
+   has a use for, so a caret in a text field turns each of them into
    something the dancer meant to type — otherwise a loop could not be named
    "space fix" without reframing the clip.
 
@@ -2017,11 +2321,11 @@ describe('typing rather than pressing a shortcut', () => {
     return survived
   }
 
-  it('leaves the loop alone when space is typed', () => {
+  it('leaves the loop alone when enter is typed', () => {
     const clip = aReadyClip({ seconds: 12 })
     clip.currentTime = 6
 
-    typeInAField('Space')
+    typeInAField('Enter')
 
     expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '0')
   })
@@ -2051,7 +2355,7 @@ describe('typing rather than pressing a shortcut', () => {
   })
 })
 
-/* None of the above is discoverable, and the point that space will set next is
+/* None of the above is discoverable, and the point that enter will set next is
    not something the dancer can read off the screen any other way — two presses in
    and a glance away, and which one is coming is a guess. */
 describe('the hint line', () => {
@@ -2060,23 +2364,23 @@ describe('the hint line', () => {
   it('names the keys the player answers to', () => {
     aReadyClip({ seconds: 12 })
 
-    expect(hint()).toHaveTextContent(/space/i)
+    expect(hint()).toHaveTextContent(/enter/i)
     expect(hint()).toHaveTextContent(/f\s+toggles zen mode/i)
   })
 
-  it('says space will set A before anything has been marked', () => {
+  it('says enter will set A before anything has been marked', () => {
     aReadyClip({ seconds: 12 })
 
-    expect(hint()).toHaveTextContent(/space\s+sets\s+A/i)
+    expect(hint()).toHaveTextContent(/enter\s+sets\s+A/i)
   })
 
-  it('says space will set B once A is marked', () => {
+  it('says enter will set B once A is marked', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 6
-    press('Space')
+    press('Enter')
 
-    expect(hint()).toHaveTextContent(/space\s+sets\s+B/i)
+    expect(hint()).toHaveTextContent(/enter\s+sets\s+B/i)
   })
 
   /* The keys do nothing on a clip that will not decode, so the line that offers
@@ -2093,16 +2397,16 @@ describe('the hint line', () => {
 
 /* A key held rather than tapped repeats at the operating system's rate, and every
    repeat arrives as another keydown. Marking a section is one act however long the
-   thumb stays down — left alone, a held space would flicker A and B against each
+   thumb stays down — left alone, a held enter would flicker A and B against each
    other tens of times a second and land wherever the release happened to fall. */
 describe('a shortcut key held down', () => {
   it('sets one loop point rather than one per repeat', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 6
-    press('Space')
+    press('Enter')
     clip.currentTime = 9
-    fireEvent.keyDown(window, { code: 'Space', repeat: true })
+    fireEvent.keyDown(window, { code: 'Enter', repeat: true })
 
     expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '12')
   })
@@ -2213,9 +2517,9 @@ describe('saving a loop', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
     clip.currentTime = 7
-    press('Space')
+    press('Enter')
     await userEvent.click(saveControl())
 
     expect(savedEntries()).toEqual(['Loop 10:03 - 0:07 · 1x'])
@@ -2261,14 +2565,14 @@ describe('after a loop is written', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
     clip.currentTime = 7
-    press('Space')
+    press('Enter')
     await userEvent.click(saveControl())
     clip.currentTime = 8
-    press('Space')
+    press('Enter')
     clip.currentTime = 11
-    press('Space')
+    press('Enter')
     await userEvent.click(saveControl())
 
     expect(savedEntries()).toEqual([
@@ -2291,9 +2595,9 @@ describe('after a loop is written', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
     clip.currentTime = 7
-    press('Space')
+    press('Enter')
     await userEvent.click(saveControl())
 
     expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '0')
@@ -2365,9 +2669,9 @@ describe('the line beneath the name field', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
     clip.currentTime = 7
-    press('Space')
+    press('Enter')
 
     expect(panel().getByText(/^saves 0:03 - 0:07 · 1x$/)).toBeInTheDocument()
   })
@@ -2411,7 +2715,7 @@ describe('the line beneath the name field', () => {
   })
 })
 
-/* BR-04. Between space setting A and space setting B, B is still parked at the
+/* BR-04. Between enter setting A and enter setting B, B is still parked at the
    end of the clip — so a save would keep something nobody chose. The refusal is
    one guard read by every route in, which is why the button being disabled and
    the key doing nothing can never disagree. */
@@ -2420,7 +2724,7 @@ describe('a half-set loop', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
 
     expect(saveControl()).toBeDisabled()
   })
@@ -2429,7 +2733,7 @@ describe('a half-set loop', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
 
     expect(panel().getByText(/set b to finish the loop/i)).toBeInTheDocument()
     expect(panel().queryByText(/^saves /)).toBeNull()
@@ -2439,21 +2743,21 @@ describe('a half-set loop', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
     clip.currentTime = 7
-    press('Space')
+    press('Enter')
 
     expect(saveControl()).toBeEnabled()
     expect(panel().getByText(/^saves 0:03 - 0:07 · 1x$/)).toBeInTheDocument()
   })
 
   /* UC-01 alternate flow 11a: dragging B by hand is the other way of finishing a
-     loop space left half-set, so it lifts the refusal too. */
+     loop enter left half-set, so it lifts the refusal too. */
   it('can be saved again once B is dragged into place', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
     fireEvent.keyDown(boundary('Loop end'), { key: 'ArrowLeft' })
 
     expect(saveControl()).toBeEnabled()
@@ -2488,9 +2792,9 @@ describe('recalling a saved loop', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
     clip.currentTime = 7
-    press('Space')
+    press('Enter')
     await userEvent.click(screen.getByRole('button', { name: 'Much slower' }))
     await userEvent.type(nameField(), 'chasse')
     await userEvent.click(saveControl())
@@ -2537,19 +2841,19 @@ describe('recalling a saved loop', () => {
     expect(clip.currentTime).toBe(3)
   })
 
-  /* A loop recalled is a whole loop, so space is armed for A again — otherwise
+  /* A loop recalled is a whole loop, so enter is armed for A again — otherwise
      the next press would move B on a section the dancer had just restored. */
-  it('arms space for A, not for the B it already has', async () => {
+  it('arms enter for A, not for the B it already has', async () => {
     const clip = aReadyClip({ seconds: 12 })
 
     await userEvent.click(saveControl())
     clip.currentTime = 5
-    press('Space')
+    press('Enter')
     await userEvent.click(savedLoop('Loop 1'))
 
     expect(
       screen.getByRole('note', { name: 'Keyboard shortcuts' }),
-    ).toHaveTextContent(/space\s+sets\s+A/i)
+    ).toHaveTextContent(/enter\s+sets\s+A/i)
   })
 })
 
@@ -2600,9 +2904,9 @@ describe('removing a saved loop', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
     clip.currentTime = 7
-    press('Space')
+    press('Enter')
     await userEvent.click(saveControl())
 
     await userEvent.click(removeControl('Loop 1'))
@@ -2697,9 +3001,9 @@ describe('correcting the loop the player is set to', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
     clip.currentTime = 7
-    press('Space')
+    press('Enter')
     await userEvent.type(nameField(), 'chasse')
     await userEvent.click(saveControl())
     await userEvent.click(savedLoop('chasse'))
@@ -2786,7 +3090,7 @@ describe('correcting the loop the player is set to', () => {
     const clip = await aSavedLoopReframed()
 
     clip.currentTime = 5
-    press('Space')
+    press('Enter')
 
     expect(updateControl()).toBeDisabled()
   })
@@ -2829,7 +3133,7 @@ describe('saving a new loop while one is open', () => {
     const clip = await aLoopSavedAndOpened()
 
     clip.currentTime = 5
-    press('Space')
+    press('Enter')
 
     expect(saveAsNewControl()).toBeDisabled()
   })
@@ -2883,29 +3187,29 @@ describe('saving with the s key', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
     clip.currentTime = 7
-    press('Space')
+    press('Enter')
     press('KeyS')
 
     expect(savedEntries()).toEqual(['Loop 10:03 - 0:07 · 1x'])
   })
 
-  /* #71, by the route a dancer framing with space is already on: two sections,
+  /* #71, by the route a dancer framing with enter is already on: two sections,
      two presses, two loops. */
   it('keeps the next section as a second loop on the next press', async () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
     clip.currentTime = 7
-    press('Space')
+    press('Enter')
     press('KeyS')
     await panel().findByRole('button', { name: /^Loop 1/ })
     clip.currentTime = 8
-    press('Space')
+    press('Enter')
     clip.currentTime = 11
-    press('Space')
+    press('Enter')
     press('KeyS')
 
     expect(savedEntries()).toEqual([
@@ -2928,7 +3232,7 @@ describe('saving with the s key', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
     press('KeyS')
 
     expect(savedEntries()).toEqual([])
@@ -2994,7 +3298,7 @@ describe('correcting and adding with the s key', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
     fireEvent.keyDown(window, { code: 'KeyS', shiftKey: true })
 
     expect(savedEntries()).toEqual([])
@@ -3028,7 +3332,7 @@ describe('saving with Enter from the name field', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
     await userEvent.type(nameField(), 'chasse{Enter}')
 
     expect(savedEntries()).toEqual([])
@@ -3062,7 +3366,7 @@ describe('the s segment of the hint line', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
 
     expect(hintLine()).toHaveTextContent(/s\s+saves once B is set/i)
   })
@@ -3071,9 +3375,9 @@ describe('the s segment of the hint line', () => {
     const clip = aReadyClip({ seconds: 12 })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
     clip.currentTime = 7
-    press('Space')
+    press('Enter')
 
     expect(hintLine()).toHaveTextContent(/s\s+saves the loop/i)
   })
@@ -3136,17 +3440,17 @@ describe('a loop on its way to Drive', () => {
   })
 
   /* #71. The player goes back to a fresh loop when the write lands, not when
-     it is asked for — so a space pressed while it was going is undone with
-     everything else, and space is armed for A rather than for the B of a mark
+     it is asked for — so a enter pressed while it was going is undone with
+     everything else, and enter is armed for A rather than for the B of a mark
      that is no longer there. */
-  it('lands on a fresh loop even if space was pressed while it was going', async () => {
+  it('lands on a fresh loop even if enter was pressed while it was going', async () => {
     const { held, letGo } = holdOpen()
 
     const clip = aReadyClip({ seconds: 12, held })
 
     await userEvent.click(saveControl())
     clip.currentTime = 5
-    press('Space')
+    press('Enter')
 
     letGo()
     await waitFor(() => {
@@ -3154,7 +3458,7 @@ describe('a loop on its way to Drive', () => {
     })
     expect(
       screen.getByRole('note', { name: 'Keyboard shortcuts' }),
-    ).toHaveTextContent(/space\s+sets\s+A/i)
+    ).toHaveTextContent(/enter\s+sets\s+A/i)
   })
 
   it('refuses the s key while one is already going', async () => {
@@ -3199,9 +3503,9 @@ describe('a loop on its way to Drive', () => {
     const clip = aReadyClip({ seconds: 12, refuses: true })
 
     clip.currentTime = 3
-    press('Space')
+    press('Enter')
     clip.currentTime = 7
-    press('Space')
+    press('Enter')
     await userEvent.click(saveControl())
 
     expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '3')
@@ -3636,9 +3940,9 @@ const aClipLoopingPartOfIt = ({ seconds = 12, a = 2, b = 6 } = {}) => {
   const clip = aReadyClip({ seconds })
 
   clip.currentTime = a
-  press('Space')
+  press('Enter')
   clip.currentTime = b
-  press('Space')
+  press('Enter')
 
   return clip
 }
@@ -3736,7 +4040,7 @@ describe('scrubbing the position bar', () => {
   it('travels exactly the loop and no further', () => {
     const clip = aClipLoopingPartOfIt({ seconds: 20, a: 4, b: 6 })
 
-    /* Off A first, or the assertion below is satisfied by the playhead space
+    /* Off A first, or the assertion below is satisfied by the playhead enter
        already left at B and says nothing about the drag. */
     toStartOfLoop()
     scrubAt(900)
@@ -3979,7 +4283,7 @@ describe('scrubbing while the loop runs', () => {
   const aRunningLoop = () => {
     const clip = aClipLoopingPartOfIt({ seconds: 20, a: 4, b: 6 })
 
-    /* Off B first: space left the playhead there, and enforcement would send it
+    /* Off B first: enter left the playhead there, and enforcement would send it
        to A on the first frame of playback before the drag happened at all. */
     toStartOfLoop()
     fireEvent.play(clip)
@@ -4465,6 +4769,7 @@ describe('a YouTube video in the player', () => {
 
     for (let step = 0; step < 3; step++) {
       fireEvent.keyDown(window, { key: 'ArrowRight', code: 'ArrowRight' })
+      fireEvent.keyUp(window, { key: 'ArrowRight', code: 'ArrowRight' })
       await act(async () => {
         await new Promise((landed) => setTimeout(landed, 0))
       })
@@ -4474,6 +4779,28 @@ describe('a YouTube video in the player', () => {
       expect.closeTo(5.3),
       true,
     )
+  })
+
+  /* #116. Each step is a seek YouTube takes its time to show, so a held key
+     repeats every 250ms there rather than every 50ms. */
+  it('repeats a held arrow-key scrub more slowly than a clip', async () => {
+    const youtube = aYouTube(aYouTubePlayer({ getCurrentTime: vi.fn(() => 5) }))
+    await readyYouTube(youtube)
+    vi.useFakeTimers()
+    const readout = () => screen.getByRole('status', { name: 'Readout' })
+
+    fireEvent.keyDown(window, { key: 'ArrowRight', code: 'ArrowRight' })
+    act(() => {
+      vi.advanceTimersByTime(300 + 250 - 1)
+    })
+    expect(readout()).toHaveTextContent('0:05.1')
+
+    act(() => {
+      vi.advanceTimersByTime(1)
+    })
+    expect(readout()).toHaveTextContent('0:05.2')
+
+    fireEvent.keyUp(window, { key: 'ArrowRight', code: 'ArrowRight' })
   })
 
   it('lays the loop over the whole video once YouTube knows its length', async () => {
