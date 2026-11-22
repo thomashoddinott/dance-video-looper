@@ -1099,6 +1099,37 @@ describe('changing the speed with the up and down arrows', () => {
 /* #105, desktop-first. A 3, 2, 1 count before the loop comes round, so the
    dancer has a few seconds to get back into position. `fireEvent` and the fake
    clock throughout, for the reason the block below gives. */
+/* #115. Every key the player answers to, in a box in the corner. Desktop
+   first, like the other experiments, and gone with everything else in zen. */
+describe('the key map in the player', () => {
+  const keyMap = () => screen.queryByRole('group', { name: 'Keys' })
+
+  it('is offered, closed, on a screen 1024px wide or wider', () => {
+    aWindow({ wide: true })
+    aReadyClip()
+
+    expect(keyMap()).toBeInTheDocument()
+    expect(keyMap()).not.toHaveAttribute('open')
+  })
+
+  it('is not offered on a narrower screen', () => {
+    aReadyClip()
+
+    expect(keyMap()).not.toBeInTheDocument()
+  })
+
+  it('goes in zen mode, and comes back with the controls', () => {
+    aWindow({ wide: true })
+    aReadyClip()
+
+    press('KeyF')
+    expect(keyMap()).not.toBeInTheDocument()
+
+    press('KeyF')
+    expect(keyMap()).toBeInTheDocument()
+  })
+})
+
 describe('the countdown before the loop comes round', () => {
   const countdownPill = () => screen.queryByRole('button', { name: 'Countdown' })
   const count = () => screen.queryByRole('timer', { name: 'Countdown' })
