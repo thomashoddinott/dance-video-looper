@@ -906,10 +906,40 @@ function OpenedClip({
 
   const scrubRef = useRef(scrub)
 
+  /* #105, #116. Play or pause, from the transport, the video or space. While
+     the count holds the clip at A it is waiting to play on, whatever YouTube
+     says of the seek there it may still be buffering, so it plays on at once. */
+  const playOrPause = () => {
+    if (count !== null) {
+      setCount(null)
+      void surface.current?.play()
+      return
+    }
+
+    togglePlay(surface.current)
+  }
+
+  /* #116. A scrub pauses a clip that is playing, or held for the count
+     (#105), and the clip plays on once the scrub is done. */
+  const pauseForScrub = () => {
+    const clip = surface.current
+
+    if (!clip || (clip.paused && count === null)) return
+
+    pausedByScrub.current = true
+    setCount(null)
+    clip.pause()
+  }
+
+  const playOrPauseRef = useRef(playOrPause)
+  const pauseForScrubRef = useRef(pauseForScrub)
+
   useEffect(() => {
     saveLoopRef.current = saveLoop
     saveAsNewRef.current = saveAsNew
     scrubRef.current = scrub
+    playOrPauseRef.current = playOrPause
+    pauseForScrubRef.current = pauseForScrub
   })
 
   /* UC-01 steps 9–10: the section is marked while it goes past, so the shortcut
@@ -983,11 +1013,7 @@ function OpenedClip({
         if (event.repeat) return
 
         stopResume()
-
-        if (!clip.paused) {
-          pausedByScrub.current = true
-          clip.pause()
-        }
+        pauseForScrubRef.current()
 
         const step = event.key === 'ArrowLeft' ? -SCRUB_STEP : SCRUB_STEP
 
@@ -1050,7 +1076,7 @@ function OpenedClip({
       if (event.code === 'Space') {
         event.preventDefault()
         forgetScrub()
-        togglePlay(surface.current)
+        playOrPauseRef.current()
 
         return
       }
@@ -1380,6 +1406,10 @@ function OpenedClip({
     />
   )
 
+  /* #105. Held for the count, the clip is not playing, though YouTube may
+     still say it is buffering the seek to A. */
+  const playingOn = playing && count === null
+
   /* The transport appears once there is something to control. Before metadata
      there is no region to loop and no length to return to, and a clip that will
      not decode has nothing to play — three dead controls would say the
@@ -1411,10 +1441,10 @@ function OpenedClip({
             <LoopGlyph />
           </TransportButton>
           <TransportButton
-            label={playing ? 'PAUSE' : 'PLAY'}
-            onClick={() => togglePlay(surface.current)}
+            label={playingOn ? 'PAUSE' : 'PLAY'}
+            onClick={playOrPause}
           >
-            {playing ? <PauseGlyph /> : <PlayGlyph />}
+            {playingOn ? <PauseGlyph /> : <PlayGlyph />}
           </TransportButton>
         </>
       )}
@@ -1641,7 +1671,7 @@ function OpenedClip({
                     <div
                       data-tap-layer
                       aria-hidden="true"
-                      onClick={() => togglePlay(surface.current)}
+                      onClick={playOrPause}
                       className="absolute inset-0"
                     />
                   )}

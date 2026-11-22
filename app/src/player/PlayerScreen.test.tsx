@@ -34,7 +34,7 @@ import { SEEK_BACKSTOP } from './seekGate'
 import { PlayerScreen } from './PlayerScreen'
 import type { MountYouTube } from './youtubeMount'
 import { aYouTube, aYouTubePlayer } from './youtubePlayer.factory'
-import { ENDED, PLAYING } from './youtubeSurface'
+import { BUFFERING, ENDED, PLAYING } from './youtubeSurface'
 
 /* The player reaches Drive now, for a clip this device has never held
    (US-01-14). Nothing in this file is about that — every clip here is local —
@@ -1200,6 +1200,39 @@ describe('the countdown before the loop comes round', () => {
     fireEvent.click(play())
 
     expect(count()).not.toBeInTheDocument()
+    expect(clip.paused).toBe(false)
+  })
+
+  it('plays on at once when space is pressed during the count', () => {
+    const clip = playingOnAWideScreen()
+    reachB(clip)
+
+    press('Space')
+
+    expect(count()).not.toBeInTheDocument()
+    expect(clip.paused).toBe(false)
+  })
+
+  /* #116. A scrub during the count takes over from it, as a scrub begun while
+     playing does: the clip plays on 3s after the last step, from there. */
+  it('ends the count when an arrow scrubs, and plays on 3s after the last step', () => {
+    const clip = playingOnAWideScreen()
+    reachB(clip)
+
+    fireEvent.keyDown(window, { key: 'ArrowRight', code: 'ArrowRight' })
+    fireEvent.keyUp(window, { key: 'ArrowRight', code: 'ArrowRight' })
+
+    expect(count()).not.toBeInTheDocument()
+    expect(clip.currentTime).toBeCloseTo(0.1)
+
+    act(() => {
+      vi.advanceTimersByTime(3000 - 1)
+    })
+    expect(clip.paused).toBe(true)
+
+    act(() => {
+      vi.advanceTimersByTime(1)
+    })
     expect(clip.paused).toBe(false)
   })
 
@@ -4937,6 +4970,41 @@ describe('a YouTube video in the player', () => {
     await userEvent.click(tapLayer(container) as HTMLElement)
 
     expect(player.pauseVideo).toHaveBeenCalled()
+  })
+
+  /* #105, #116. While the count holds the video at A, YouTube can say it is
+     still buffering the seek there, which reads as playing. The count is
+     what decides: the transport offers PLAY, and space plays on at once, as
+     PLAY does. */
+  it('plays on at once from the count, though YouTube says it is buffering', async () => {
+    aWindow({ wide: true })
+    const youtube = aYouTube(
+      aYouTubePlayer({ getPlayerState: vi.fn(() => BUFFERING) }),
+    )
+    renderYouTube(youtube)
+    await waitFor(() => {
+      expect(youtube.mount).toHaveBeenCalled()
+    })
+    act(() => {
+      youtube.ready()
+    })
+    await screen.findByRole('button', { name: 'PLAY' })
+
+    act(() => {
+      youtube.state(ENDED)
+    })
+    act(() => {
+      youtube.state(BUFFERING)
+    })
+
+    expect(screen.getByRole('timer', { name: 'Countdown' })).toBeInTheDocument()
+    expect(transportButton('PLAY')).toBeInTheDocument()
+
+    press('Space')
+
+    expect(youtube.player.playVideo).toHaveBeenCalled()
+    expect(youtube.player.pauseVideo).not.toHaveBeenCalled()
+    expect(screen.queryByRole('timer', { name: 'Countdown' })).not.toBeInTheDocument()
   })
 
   it('comes back round to A when the video runs out mid-loop', async () => {
