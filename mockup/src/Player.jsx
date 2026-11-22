@@ -54,7 +54,7 @@ function KeysPanel({ keys, onChange }) {
         {field('scrubHoldDelay', '←→ held: wait before repeating (ms)', 50)}
         {field('scrubRepeatEvery', '←→ held: one step every, clip (ms)', 10)}
         {field('scrubRepeatEveryYouTube', '←→ held: one step every, YouTube (ms)', 10)}
-        {field('youTubeResumeAfter', 'YouTube: play on after a scrub (s, 0 = off)', 1)}
+        {field('resumeAfter', 'Scrub begun while playing: play on after (s, 0 = off)', 1)}
         <button
           type="button"
           onClick={() => onChange(KEY_DEFAULTS)}
@@ -924,15 +924,16 @@ function Player({
       setNextPoint('a')
     }
 
-    /* The key coming up ends the hold. On YouTube a scrub can play on by
-       itself a moment later, if the clip was playing when it began. */
+    /* The key coming up ends the hold. A scrub begun while the clip was
+       playing plays on by itself a few seconds after the last step; one begun
+       from paused stays paused. */
     const onKeyUp = (event) => {
       if (heldRef.current?.code !== event.code) return
       stopHeld()
 
       const scrubbing = event.code === 'ArrowLeft' || event.code === 'ArrowRight'
-      const after = keysRef.current.youTubeResumeAfter
-      if (scrubbing && youtube && pausedByScrubRef.current && after > 0) {
+      const after = keysRef.current.resumeAfter
+      if (scrubbing && pausedByScrubRef.current && after > 0) {
         resumeRef.current = setTimeout(() => {
           pausedByScrubRef.current = false
           videoRef.current?.play()

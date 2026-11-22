@@ -8,5 +8,5 @@ export const KEY_DEFAULTS = {
   scrubHoldDelay: 300,
   scrubRepeatEvery: 50,
   scrubRepeatEveryYouTube: 250,
-  youTubeResumeAfter: 0,
+  resumeAfter: 3,
 }
