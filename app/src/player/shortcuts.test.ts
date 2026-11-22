@@ -2,19 +2,19 @@ import { describe, expect, it } from 'vitest'
 
 import { MIN_LOOP } from './loopRange'
 import type { Loop } from './playback'
-import { isTyping, spaceSets } from './shortcuts'
+import { isTyping, enterSets } from './shortcuts'
 
 const aLoop = ({ a = 0, b = 12 }: Partial<Loop> = {}): Loop => ({ a, b })
 
-/* BR-02 and BR-03. Space marks the section while it goes past, so a press is read
+/* BR-02 and BR-03. Enter marks the section while it goes past, so a press is read
    against the clip's own position — and it answers two things at once: where the
    loop ends up, and which boundary the next press will land on. They come back
    together because they are one decision; worked out apart, a screen could set A
    and then arm A again. */
-describe('setting a loop point with space', () => {
+describe('setting a loop point with enter', () => {
   it('puts A where the clip has got to', () => {
     expect(
-      spaceSets({ loop: aLoop(), handle: 'a', seconds: 6, duration: 12 }).loop,
+      enterSets({ loop: aLoop(), handle: 'a', seconds: 6, duration: 12 }).loop,
     ).toEqual({ a: 6, b: 12 })
   })
 
@@ -22,7 +22,7 @@ describe('setting a loop point with space', () => {
      invalid, so B goes to the end and what is on screen stays playable. */
   it('parks B at the end of the clip when A is set', () => {
     expect(
-      spaceSets({
+      enterSets({
         loop: aLoop({ a: 1, b: 5 }),
         handle: 'a',
         seconds: 9,
@@ -37,19 +37,19 @@ describe('setting a loop point with space', () => {
      sets B goes through the floor anyway, so the two still cannot cross. */
   it('leaves A on the playhead even within the minimum loop of the end', () => {
     expect(
-      spaceSets({ loop: aLoop(), handle: 'a', seconds: 11.95, duration: 12 }).loop,
+      enterSets({ loop: aLoop(), handle: 'a', seconds: 11.95, duration: 12 }).loop,
     ).toEqual({ a: 11.95, b: 12 })
   })
 
   it('arms the next press for B once A is set', () => {
     expect(
-      spaceSets({ loop: aLoop(), handle: 'a', seconds: 6, duration: 12 }).next,
+      enterSets({ loop: aLoop(), handle: 'a', seconds: 6, duration: 12 }).next,
     ).toBe('b')
   })
 
   it('puts B where the clip has got to, leaving A where it was', () => {
     expect(
-      spaceSets({
+      enterSets({
         loop: aLoop({ a: 2, b: 12 }),
         handle: 'b',
         seconds: 8,
@@ -62,7 +62,7 @@ describe('setting a loop point with space', () => {
      drag and the arrow keys use, so the rule keeps one home. */
   it('keeps B off A by the minimum loop', () => {
     expect(
-      spaceSets({
+      enterSets({
         loop: aLoop({ a: 6, b: 12 }),
         handle: 'b',
         seconds: 6.05,
@@ -73,7 +73,7 @@ describe('setting a loop point with space', () => {
 
   it('comes round to A once B is set', () => {
     expect(
-      spaceSets({ loop: aLoop(), handle: 'b', seconds: 8, duration: 12 }).next,
+      enterSets({ loop: aLoop(), handle: 'b', seconds: 8, duration: 12 }).next,
     ).toBe('a')
   })
 })

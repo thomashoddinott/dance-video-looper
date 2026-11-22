@@ -27,7 +27,7 @@ import {
 import { beingEdited, nameToKeep, unwritten } from './savedLoops'
 import { SavedLoopsPanel } from './SavedLoopsPanel'
 import { BackGlyph, ForwardGlyph, SeekButton } from './SeekButton'
-import { isTyping, spaceSets } from './shortcuts'
+import { enterSets, isTyping } from './shortcuts'
 import { ShortcutHint } from './ShortcutHint'
 import { SpeedStepper } from './SpeedStepper'
 import {
@@ -396,7 +396,7 @@ function OpenedClip({
      Enforcement stands down while it is true, because the two would otherwise
      fight over the same playhead and enforcement would win on the next frame. */
   const [adjusting, setAdjusting] = useState(false)
-  /* BR-03. Which boundary the next space press lands on, cycling A, B, A… The
+  /* BR-03. Which boundary the next enter press lands on, cycling A, B, A… The
      dancer is told this rather than left to remember it — the hint line reads it
      too, which is why it is state here rather than something the handler keeps to
      itself. */
@@ -680,11 +680,11 @@ function OpenedClip({
   }
 
   /* The slider's route in, and UC-01 alternate flow 11a with it: moving B is the
-     other way of finishing a loop that space left half-set, so it re-arms space
+     other way of finishing a loop that enter left half-set, so it re-arms enter
      for A. Space and the handles are two ways into one state, not two states.
 
      Only B, because A being set is what made the loop half-set in the first place
-     — moving it again leaves space waiting for the B still missing.
+     — moving it again leaves enter waiting for the B still missing.
 
      Space does not come through here. It sets its own boundary and arms its own
      next one in the same press, and routing it past this would have the two fight
@@ -695,7 +695,7 @@ function OpenedClip({
     putLoop(loop)
   }
 
-  /* BR-04: half a loop is not a loop. Between space setting A and space setting
+  /* BR-04: half a loop is not a loop. Between enter setting A and enter setting
      B, B is still parked at the clip's end (BR-02), so a save would keep a
      section nobody chose.
 
@@ -766,7 +766,7 @@ function OpenedClip({
     }
 
     /* Once Drive has taken the loop, the player goes back to the way a clip
-       opens (#71): the whole clip framed, space armed for A, nothing open,
+       opens (#71): the whole clip framed, enter armed for A, nothing open,
        nothing ticked and nothing typed — so the next Save is a new loop. The
        loop just written is deliberately *not* left open. #30 left it open so a
        correction would not need a click, and the cost was a dancer framing the
@@ -898,7 +898,7 @@ function OpenedClip({
 
       /* A held key repeats at the operating system's rate and every repeat is
          another keydown. Marking a section is one act however long the thumb stays
-         down; without this, a held space flickers A and B against each other tens
+         down; without this, a held enter flickers A and B against each other tens
          of times a second and lands wherever the release falls.
 
          Alongside BR-05 above every key rather than beside each one, so a shortcut
@@ -938,18 +938,27 @@ function OpenedClip({
         return
       }
 
-      if (event.code !== 'Space') return
+      /* #116. Space plays and pauses, as it does in every other video player.
+         It also scrolls the page and presses whatever button was last touched,
+         which would play the clip and stop it again in one press. */
+      if (event.code === 'Space') {
+        event.preventDefault()
+        togglePlay(surface.current)
 
-      /* Space scrolls the page, and activates whatever button was last touched —
-         which, on this screen, the dancer has almost certainly just touched.
-         Marking a section would otherwise scroll the clip out of view, or restart
-         the loop, or both at once. */
+        return
+      }
+
+      if (event.code !== 'Enter') return
+
+      /* Enter presses whatever button was last touched — which, on this screen,
+         the dancer has almost certainly just touched. Marking a section would
+         otherwise restart the loop as well. */
       event.preventDefault()
 
       /* Read off the element for `nudge`'s reason: `time` is a copy, stale by
          however long it has been since the last frame, and a mark placed from it
          would land somewhere other than where the dancer saw. */
-      const framed = spaceSets({
+      const framed = enterSets({
         loop: playback.loop,
         handle: nextPoint,
         seconds: surface.current?.currentTime ?? 0,

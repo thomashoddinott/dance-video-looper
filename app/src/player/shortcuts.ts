@@ -1,10 +1,10 @@
 import { type Handle, movedTo } from './loopRange'
 import type { Loop } from './playback'
 
-/* BR-05. Every shortcut on this screen is space or a single printing character,
-   so a caret in a text field turns each of them into something the dancer meant to
-   type — a loop could not otherwise be named "space fix" without reframing the
-   clip.
+/* BR-05. Every shortcut on this screen is a key a text field has a use for —
+   space, enter, the arrows or a single printing character — so a caret in a field
+   turns each of them into something the dancer meant to type: a loop could not
+   otherwise be named "space fix" without the clip starting.
 
    Asked of what the key landed on rather than of what has focus, because that is
    what the event carries and the two cannot then disagree.
@@ -18,11 +18,11 @@ export const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
 
-/* BR-03. A press answers two things at once — where the loop ends up, and which
+/* BR-03, on Enter since #116 (space, before). A press answers two things at once — where the loop ends up, and which
    boundary the next press lands on — and they come back together because they are
    one decision. Worked out apart, a caller could set A and then arm A again.
 
-   `Handle` rather than a second `'a' | 'b'`: the boundary space sets and the
+   `Handle` rather than a second `'a' | 'b'`: the boundary enter sets and the
    boundary a drag moves are the same boundary, and two names for it would let the
    two routes drift.
 
@@ -31,7 +31,7 @@ export const isTyping = (target: EventTarget | null) =>
    whole content of the press, and moving A back to make room would put it
    somewhere they did not choose. B goes through `movedTo` as the drag and the
    arrow keys do, so the floor keeps one home and the two can still never cross. */
-export const spaceSets = ({
+export const enterSets = ({
   loop,
   handle,
   seconds,

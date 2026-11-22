@@ -13,7 +13,7 @@ function Key({ children }: { readonly children: ReactNode }) {
   )
 }
 
-/* None of the shortcuts is discoverable, and which point space will set next is
+/* None of the shortcuts is discoverable, and which point enter will set next is
    not readable off the screen any other way — two presses in and a glance away,
    and which one is coming is a guess.
 
@@ -47,7 +47,7 @@ export function ShortcutHint({
     >
       {next && (
         <>
-          <Key>space</Key> sets{' '}
+          <Key>enter</Key> sets{' '}
           <span className="font-semibold text-ink/70">{next.toUpperCase()}</span>
           <span className="px-2">&middot;</span>
           {/* US-01-11's segment. It says when the key will not work rather than
