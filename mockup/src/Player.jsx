@@ -27,46 +27,6 @@ function formatTenths(seconds) {
   return `${mins}:${secs.toFixed(1).padStart(4, '0')}`
 }
 
-/* #116 mockup gate only: the knobs for trying the keys, out of the way in a
-   corner, closed to begin with. */
-function KeysPanel({ keys, onChange }) {
-  const field = (name, label, step) => (
-    <label className="flex items-center justify-between gap-3">
-      <span>{label}</span>
-      <input
-        type="number"
-        step={step}
-        min={0}
-        value={keys[name]}
-        onChange={(event) => onChange({ ...keys, [name]: Number(event.target.value) })}
-        className="w-20 rounded bg-control px-2 py-1 text-right tabular-nums text-ink"
-      />
-    </label>
-  )
-
-  return (
-    <details className="fixed right-3 bottom-3 z-40 w-80 rounded-xl bg-panel/95 p-3 text-xs text-ink/80 shadow-lg ring-1 ring-ink/10">
-      <summary className="cursor-pointer font-semibold">Keys (mockup)</summary>
-      <div className="mt-2 flex flex-col gap-1.5">
-        {field('speedHoldDelay', '↑↓ held: wait before repeating (ms)', 50)}
-        {field('speedRepeatEvery', '↑↓ held: one step every (ms)', 10)}
-        {field('scrubStep', '←→ step (s)', 0.05)}
-        {field('scrubHoldDelay', '←→ held: wait before repeating (ms)', 50)}
-        {field('scrubRepeatEvery', '←→ held: one step every, clip (ms)', 10)}
-        {field('scrubRepeatEveryYouTube', '←→ held: one step every, YouTube (ms)', 10)}
-        {field('resumeAfter', 'Scrub begun while playing: play on after (s, 0 = off)', 1)}
-        <button
-          type="button"
-          onClick={() => onChange(KEY_DEFAULTS)}
-          className="mt-1 self-end text-accent hover:underline"
-        >
-          Back to the defaults
-        </button>
-      </div>
-    </details>
-  )
-}
-
 function formatSpeed(speed) {
   return String(Math.round(speed * 100) / 100)
 }
@@ -586,8 +546,6 @@ function Player({
   onTryNewUi,
   countdown = true,
   onCountdown,
-  keys = KEY_DEFAULTS,
-  onKeys,
 }) {
   /* #20 spike: a YouTube entry plays in the IFrame player, which hands back a
      surface shaped like the <video> this ref otherwise holds. Nothing below the
@@ -646,7 +604,7 @@ function Player({
   const nextPointRef = useRef(nextPoint)
   /* #116: what the keys need without re-subscribing — the timings, the speed,
      the seek, and the held key's timers */
-  const keysRef = useRef(keys)
+  const keysRef = useRef(KEY_DEFAULTS)
   const speedRef = useRef(speed)
   const scrubRef = useRef(null)
   const togglePlayRef = useRef(null)
@@ -658,9 +616,8 @@ function Player({
   const [badge, setBadge] = useState(null)
 
   useEffect(() => {
-    keysRef.current = keys
     speedRef.current = speed
-  }, [keys, speed])
+  }, [speed])
 
   useEffect(() => {
     if (!badge) return
@@ -1404,8 +1361,6 @@ function Player({
 
   const hint = (
     <p className="mb-4 hidden text-center text-xs text-ink/40 sm:block">
-      <Key>space</Key> plays
-      <span className="px-2">&middot;</span>
       <Key>enter</Key> sets{' '}
       <span className="font-semibold text-ink/70">
         {nextPoint.toUpperCase()}
@@ -1428,11 +1383,7 @@ function Player({
         </>
       )}
       <span className="px-2">&middot;</span>
-      <Key>&uarr;&darr;</Key> speed
-      <span className="px-2">&middot;</span>
-      <Key>&larr;&rarr;</Key> scrub
-      <span className="px-2">&middot;</span>
-      <Key>f</Key> zen
+      <Key>f</Key> toggles zen mode
     </p>
   )
 
@@ -1699,7 +1650,6 @@ function Player({
         )}
       </main>
 
-      {!zen && <KeysPanel keys={keys} onChange={(next) => onKeys?.(next)} />}
     </div>
   )
 }
