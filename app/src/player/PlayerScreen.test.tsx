@@ -1681,51 +1681,91 @@ describe('tapping the track', () => {
    handle `role="slider"` and `tabIndex={0}`, promising keyboard operation, and
    implements none — and US-01-10 is about space setting A and B, never about
    adjusting a handle that already has focus. */
-/* #98. ← and → step a paused clip a tenth of a second at a time, inside the
-   loop, so a move can be studied without reaching for the mouse. Nothing on
-   the screen says so: it is there to be found. */
-describe('scrubbing a paused clip with the arrow keys', () => {
-  const press = (key: 'ArrowLeft' | 'ArrowRight', { held = false } = {}) => {
-    fireEvent.keyDown(window, { key, code: key, repeat: held })
+/* #98, #116. ← and → scrub a tenth of a second at a time, inside the loop, so
+   a move can be studied without reaching for the mouse. A scrub begun while
+   the clip plays pauses it, and it plays on by itself a few seconds after the
+   last step; one begun from paused stays paused. */
+describe('scrubbing with the left and right arrows', () => {
+  type Arrow = 'ArrowLeft' | 'ArrowRight'
+
+  const down = (key: Arrow, { repeat = false } = {}) =>
+    fireEvent.keyDown(window, { key, code: key, repeat })
+
+  const up = (key: Arrow) => {
+    fireEvent.keyUp(window, { key, code: key })
   }
+
+  const tap = (key: Arrow) => {
+    down(key)
+    up(key)
+  }
+
+  const wait = (ms: number) => {
+    act(() => {
+      vi.advanceTimersByTime(ms)
+    })
+  }
+
+  const readout = () => screen.queryByRole('status', { name: 'Readout' })
 
   it('steps a paused clip a tenth of a second forward and back', () => {
     const clip = aReadyClip({ seconds: 12 })
     clip.currentTime = 5
 
-    press('ArrowRight')
+    tap('ArrowRight')
 
     expect(clip.currentTime).toBeCloseTo(5.1)
 
-    press('ArrowLeft')
-    press('ArrowLeft')
+    tap('ArrowLeft')
+    tap('ArrowLeft')
 
     expect(clip.currentTime).toBeCloseTo(4.9)
   })
 
-  /* Holding the key is how a scrub keeps going, so a repeat is not ignored
-     here the way it is for space. */
-  it('keeps stepping while the key is held down', () => {
+  /* One step at once, then after a wait a step at a steady pace, on the
+     player's own clock rather than the keyboard's repeat. */
+  it('keeps stepping while the key is held, after a wait', () => {
+    vi.useFakeTimers()
     const clip = aReadyClip({ seconds: 12 })
     clip.currentTime = 5
 
-    press('ArrowRight')
-    press('ArrowRight', { held: true })
-    press('ArrowRight', { held: true })
+    down('ArrowRight')
+    wait(300 + 50 - 1)
+    expect(clip.currentTime).toBeCloseTo(5.1)
 
+    wait(1)
+    expect(clip.currentTime).toBeCloseTo(5.2)
+
+    wait(50)
+    expect(clip.currentTime).toBeCloseTo(5.3)
+
+    up('ArrowRight')
+    wait(1000)
     expect(clip.currentTime).toBeCloseTo(5.3)
   })
 
-  /* A held key repeats faster than a seek lands, so each step builds on the
+  it("takes no step for the keyboard's own repeats", () => {
+    const clip = aReadyClip({ seconds: 12 })
+    clip.currentTime = 5
+
+    down('ArrowRight')
+    down('ArrowRight', { repeat: true })
+    down('ArrowRight', { repeat: true })
+
+    expect(clip.currentTime).toBeCloseTo(5.1)
+  })
+
+  /* A held key steps faster than a seek lands, so each step builds on the
      last one asked for rather than on where the clip still is. */
   it('adds the steps up while a seek is still landing', () => {
+    vi.useFakeTimers()
     const clip = aReadyClip({ seconds: 12 })
     clip.currentTime = 5
     const letThemLand = holdSeeks(clip)
 
-    press('ArrowRight')
-    press('ArrowRight', { held: true })
-    press('ArrowRight', { held: true })
+    down('ArrowRight')
+    wait(300 + 50 * 2)
+    up('ArrowRight')
     letThemLand()
 
     expect(clip.currentTime).toBeCloseTo(5.3)
@@ -1739,26 +1779,114 @@ describe('scrubbing a paused clip with the arrow keys', () => {
     fireEvent.keyDown(window, { code: 'Enter' })
 
     clip.currentTime = 3.95
-    press('ArrowRight')
-    press('ArrowRight', { held: true })
+    tap('ArrowRight')
+    tap('ArrowRight')
 
     expect(clip.currentTime).toBe(4)
 
     clip.currentTime = 2.05
-    press('ArrowLeft')
-    press('ArrowLeft', { held: true })
+    tap('ArrowLeft')
+    tap('ArrowLeft')
 
     expect(clip.currentTime).toBe(2)
   })
 
-  it('does nothing while the clip is playing', async () => {
+  it('pauses a playing clip and steps it', async () => {
     const clip = aReadyClip({ seconds: 12 })
     await userEvent.click(clip)
     clip.currentTime = 5
 
-    press('ArrowRight')
+    tap('ArrowRight')
 
-    expect(clip.currentTime).toBe(5)
+    expect(clip.paused).toBe(true)
+    expect(clip.currentTime).toBeCloseTo(5.1)
+  })
+
+  it('plays on by itself 3s after the last step of a scrub begun while playing', () => {
+    vi.useFakeTimers()
+    const clip = aReadyClip({ seconds: 12 })
+    fireEvent.play(clip)
+
+    down('ArrowRight')
+    wait(1000)
+    up('ArrowRight')
+    wait(3000 - 1)
+    expect(clip.paused).toBe(true)
+
+    wait(1)
+    expect(clip.paused).toBe(false)
+  })
+
+  it('starts the 3s over with each step', () => {
+    vi.useFakeTimers()
+    const clip = aReadyClip({ seconds: 12 })
+    fireEvent.play(clip)
+
+    tap('ArrowRight')
+    wait(2000)
+    tap('ArrowRight')
+    wait(2000)
+    expect(clip.paused).toBe(true)
+
+    wait(1000)
+    expect(clip.paused).toBe(false)
+  })
+
+  it('stays paused after a scrub begun from paused', () => {
+    vi.useFakeTimers()
+    const clip = aReadyClip({ seconds: 12 })
+
+    tap('ArrowRight')
+    wait(10_000)
+
+    expect(clip.paused).toBe(true)
+  })
+
+  /* Space during the wait is the dancer deciding for themselves, so the wait
+     is dropped: it would otherwise play a clip they had just paused again. */
+  it('leaves it to space once space is pressed during the wait', () => {
+    vi.useFakeTimers()
+    const clip = aReadyClip({ seconds: 12 })
+    fireEvent.play(clip)
+
+    tap('ArrowRight')
+    press('Space')
+    expect(clip.paused).toBe(false)
+
+    press('Space')
+    wait(3000)
+    expect(clip.paused).toBe(true)
+  })
+
+  it('does not play on once the clip has been played and paused another way', () => {
+    vi.useFakeTimers()
+    const clip = aReadyClip({ seconds: 12 })
+    fireEvent.play(clip)
+
+    tap('ArrowRight')
+    fireEvent.play(clip)
+    fireEvent.pause(clip)
+    wait(3000)
+
+    expect(clip.paused).toBe(true)
+  })
+
+  it('shows the time over the clip for a moment', () => {
+    vi.useFakeTimers()
+    const clip = aReadyClip({ seconds: 12 })
+    clip.currentTime = 5
+
+    tap('ArrowRight')
+    expect(readout()).toHaveTextContent('0:05.1')
+
+    wait(900)
+    expect(readout()).not.toBeInTheDocument()
+  })
+
+  it('takes the key rather than letting it scroll the page', () => {
+    aReadyClip({ seconds: 12 })
+
+    expect(down('ArrowRight')).toBe(false)
   })
 
   /* The handle moves itself and seeks the clip to where it lands; a step on top
@@ -4641,6 +4769,7 @@ describe('a YouTube video in the player', () => {
 
     for (let step = 0; step < 3; step++) {
       fireEvent.keyDown(window, { key: 'ArrowRight', code: 'ArrowRight' })
+      fireEvent.keyUp(window, { key: 'ArrowRight', code: 'ArrowRight' })
       await act(async () => {
         await new Promise((landed) => setTimeout(landed, 0))
       })
@@ -4650,6 +4779,28 @@ describe('a YouTube video in the player', () => {
       expect.closeTo(5.3),
       true,
     )
+  })
+
+  /* #116. Each step is a seek YouTube takes its time to show, so a held key
+     repeats every 250ms there rather than every 50ms. */
+  it('repeats a held arrow-key scrub more slowly than a clip', async () => {
+    const youtube = aYouTube(aYouTubePlayer({ getCurrentTime: vi.fn(() => 5) }))
+    await readyYouTube(youtube)
+    vi.useFakeTimers()
+    const readout = () => screen.getByRole('status', { name: 'Readout' })
+
+    fireEvent.keyDown(window, { key: 'ArrowRight', code: 'ArrowRight' })
+    act(() => {
+      vi.advanceTimersByTime(300 + 250 - 1)
+    })
+    expect(readout()).toHaveTextContent('0:05.1')
+
+    act(() => {
+      vi.advanceTimersByTime(1)
+    })
+    expect(readout()).toHaveTextContent('0:05.2')
+
+    fireEvent.keyUp(window, { key: 'ArrowRight', code: 'ArrowRight' })
   })
 
   it('lays the loop over the whole video once YouTube knows its length', async () => {

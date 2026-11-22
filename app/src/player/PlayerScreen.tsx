@@ -2,6 +2,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router'
 
 import type { Clip } from '../clips/clip'
+import { formatTenths } from '../clips/format'
 import type { ClipCache } from '../clips/clipCache'
 import { browserClipCache } from '../clips/clipCache'
 import { shapeOfYouTube, type ShapeYouTube, type VideoShape } from '../clips/youtube'
@@ -431,6 +432,22 @@ function OpenedClip({
   const held = useRef<{ readonly key: string; readonly letGo: () => void } | null>(
     null,
   )
+  /* #116. Whether the clip was playing when the arrows paused it, and so plays
+     on once they stop; and the wait before it does. */
+  const pausedByScrub = useRef(false)
+  const resume = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const stopResume = () => {
+    if (resume.current !== null) clearTimeout(resume.current)
+    resume.current = null
+  }
+
+  /* Played or paused some other way, the clip is the dancer's again, and the
+     scrub has nothing to play on from. */
+  const forgetScrub = () => {
+    stopResume()
+    pausedByScrub.current = false
+  }
   /* The loops kept against *this* clip, read out of the one file that holds
      every clip's. Not state here any more: US-01-15 made Drive the owner, and
      what the panel lists is what Drive has taken — which is the whole of "write
@@ -555,10 +572,12 @@ function OpenedClip({
     return () => clearTimeout(gone)
   }, [readout])
 
-  /* Nothing held goes on repeating once the player has gone. */
+  /* Nothing held goes on repeating, and nothing plays on, once the player has
+     gone. */
   useEffect(
     () => () => {
       held.current?.letGo()
+      if (resume.current !== null) clearTimeout(resume.current)
     },
     [],
   )
@@ -855,8 +874,8 @@ function OpenedClip({
   const saveLoopRef = useRef(saveLoop)
   const saveAsNewRef = useRef(saveAsNew)
 
-  /* #98. One arrow-key step of a paused scrub, inside the loop while it is
-     held. Reached through a ref for `saveLoop`'s reason.
+  /* #98. One arrow-key step of a scrub, inside the loop while it is held.
+     Reached through a ref for `saveLoop`'s reason.
 
      Each step builds on the last one rather than on where the clip says it is,
      for two reasons that come to the same thing. A held key repeats faster
@@ -882,6 +901,7 @@ function OpenedClip({
 
     scrubbedTo.current = to
     seekTo(to)
+    setReadout({ of: 'time' })
   }
 
   const scrubRef = useRef(scrub)
@@ -948,20 +968,36 @@ function OpenedClip({
         return
       }
 
-      /* #98. ← and → step a paused clip a little at a time, inside the loop
-         while it is held, so a move can be studied without the mouse. Ahead of
-         the repeat guard below, because holding the key is how a scrub keeps
-         going. A loop handle with focus has already taken the key for itself
-         (it prevents the default), and a text field's caret keeps it. Playing,
-         they do nothing new. No hint says so: it is there to be found. */
+      /* #98, #116. ← and → step the clip a little at a time, inside the loop
+         while it is held, so a move can be studied without the mouse. Begun
+         while the clip plays, the scrub pauses it, and the key coming up starts
+         the wait before it plays on; begun from paused, it stays paused. A loop
+         handle with focus has already taken the key for itself (it prevents
+         the default), and a text field's caret keeps it. */
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         const clip = surface.current
 
-        if (event.defaultPrevented || isTyping(event.target)) return
-        if (!clip?.paused) return
+        if (event.defaultPrevented || isTyping(event.target) || !clip) return
 
         event.preventDefault()
-        scrubRef.current(event.key === 'ArrowLeft' ? -SCRUB_STEP : SCRUB_STEP)
+        if (event.repeat) return
+
+        stopResume()
+
+        if (!clip.paused) {
+          pausedByScrub.current = true
+          clip.pause()
+        }
+
+        const step = event.key === 'ArrowLeft' ? -SCRUB_STEP : SCRUB_STEP
+
+        hold(event.key, () => scrubRef.current(step), {
+          wait: KEY_TIMINGS.scrubHoldDelay,
+          every:
+            youtube === undefined
+              ? KEY_TIMINGS.scrubRepeatEvery
+              : KEY_TIMINGS.scrubRepeatEveryYouTube,
+        })
 
         return
       }
@@ -1013,6 +1049,7 @@ function OpenedClip({
          which would play the clip and stop it again in one press. */
       if (event.code === 'Space') {
         event.preventDefault()
+        forgetScrub()
         togglePlay(surface.current)
 
         return
@@ -1040,7 +1077,17 @@ function OpenedClip({
     }
 
     const onKeyUp = (event: KeyboardEvent) => {
-      if (held.current?.key === event.key) letGo()
+      if (held.current?.key !== event.key) return
+
+      letGo()
+
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+      if (!pausedByScrub.current) return
+
+      resume.current = setTimeout(() => {
+        forgetScrub()
+        void surface.current?.play()
+      }, KEY_TIMINGS.resumeAfter)
     }
 
     window.addEventListener('keydown', onKeyDown)
@@ -1052,7 +1099,7 @@ function OpenedClip({
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', letGo)
     }
-  }, [playback, nextPoint])
+  }, [playback, nextPoint, youtube])
 
   /* Read off the element rather than off `time`, on the same reasoning
      `togglePlay` gives above: the element is where the playhead actually is, and
@@ -1551,6 +1598,7 @@ function OpenedClip({
                     setPlaying(true)
                     /* #105: playing ends any count, whoever started it */
                     setCount(null)
+                    forgetScrub()
                   }}
                   onPause={() => setPlaying(false)}
                   onEnded={ended}
@@ -1579,6 +1627,7 @@ function OpenedClip({
                       if (state === PLAYING) {
                         setStarted(true)
                         setCount(null)
+                        forgetScrub()
                       }
                       if (state === ENDED) ended()
                     }}
@@ -1625,7 +1674,7 @@ function OpenedClip({
                     aria-label="Readout"
                     className="rounded-full bg-black/60 px-3 py-1 text-sm font-semibold tabular-nums text-white"
                   >
-                    {readout.of === 'speed' ? `${speed}x` : null}
+                    {readout.of === 'speed' ? `${speed}x` : formatTenths(time)}
                   </span>
                 </div>
               )}
