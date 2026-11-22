@@ -974,6 +974,125 @@ describe('the speed stepper', () => {
   })
 })
 
+/* #116. ↑ and ↓ step the speed, as the stepper's + and − do, without
+   reaching for the mouse. The new speed shows over the clip for a moment. */
+describe('changing the speed with the up and down arrows', () => {
+  const rate = () => screen.getByLabelText('Playback speed')
+  const readout = () => screen.queryByRole('status', { name: 'Readout' })
+
+  const tap = (key: 'ArrowUp' | 'ArrowDown') => {
+    fireEvent.keyDown(window, { key, code: key })
+    fireEvent.keyUp(window, { key, code: key })
+  }
+
+  const wait = (ms: number) => {
+    act(() => {
+      vi.advanceTimersByTime(ms)
+    })
+  }
+
+  it('raises the speed a step with up, and lowers it with down', () => {
+    aReadyClip()
+
+    tap('ArrowUp')
+    expect(rate()).toHaveTextContent(/^1.05$/)
+
+    tap('ArrowDown')
+    tap('ArrowDown')
+    expect(rate()).toHaveTextContent(/^0.95$/)
+  })
+
+  it('plays the clip at it', () => {
+    const clip = aReadyClip()
+
+    tap('ArrowDown')
+
+    expect(clip.playbackRate).toBe(0.95)
+  })
+
+  /* One step at once, then after a wait a step at a steady pace, on the
+     player's own clock rather than the keyboard's repeat. */
+  it('keeps stepping while the key is held, after a wait', () => {
+    vi.useFakeTimers()
+    aReadyClip()
+
+    fireEvent.keyDown(window, { key: 'ArrowUp', code: 'ArrowUp' })
+    wait(400 + 120 - 1)
+    expect(rate()).toHaveTextContent(/^1.05$/)
+
+    wait(1)
+    expect(rate()).toHaveTextContent(/^1.1$/)
+
+    wait(120)
+    expect(rate()).toHaveTextContent(/^1.15$/)
+
+    fireEvent.keyUp(window, { key: 'ArrowUp', code: 'ArrowUp' })
+    wait(1000)
+    expect(rate()).toHaveTextContent(/^1.15$/)
+  })
+
+  it('takes no step for the keyboard\'s own repeats', () => {
+    aReadyClip()
+
+    fireEvent.keyDown(window, { key: 'ArrowUp', code: 'ArrowUp' })
+    fireEvent.keyDown(window, { key: 'ArrowUp', code: 'ArrowUp', repeat: true })
+    fireEvent.keyDown(window, { key: 'ArrowUp', code: 'ArrowUp', repeat: true })
+
+    expect(rate()).toHaveTextContent(/^1.05$/)
+  })
+
+  it('stops at 2x', () => {
+    vi.useFakeTimers()
+    aReadyClip()
+
+    fireEvent.keyDown(window, { key: 'ArrowUp', code: 'ArrowUp' })
+    wait(400 + 120 * 40)
+
+    expect(rate()).toHaveTextContent(/^2$/)
+  })
+
+  it('shows the new speed over the clip for a moment', () => {
+    vi.useFakeTimers()
+    aReadyClip()
+
+    tap('ArrowUp')
+    expect(readout()).toHaveTextContent('1.05x')
+
+    wait(900)
+    expect(readout()).not.toBeInTheDocument()
+  })
+
+  it('takes the key rather than letting it scroll the page', () => {
+    aReadyClip()
+
+    expect(
+      fireEvent.keyDown(window, { key: 'ArrowUp', code: 'ArrowUp' }),
+    ).toBe(false)
+  })
+
+  it('stops when the window loses focus, which keeps the key-up', () => {
+    vi.useFakeTimers()
+    aReadyClip()
+
+    fireEvent.keyDown(window, { key: 'ArrowUp', code: 'ArrowUp' })
+    fireEvent.blur(window)
+    wait(1000)
+
+    expect(rate()).toHaveTextContent(/^1.05$/)
+  })
+
+  it('leaves the arrows to the caret in the name field', () => {
+    aReadyClip()
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Loop name' }), {
+      key: 'ArrowUp',
+      code: 'ArrowUp',
+    })
+
+    expect(rate()).toHaveTextContent(/^1$/)
+  })
+})
+
 /* BR-07: enforced per animation frame rather than on the video's own progress
    events, which fire at about 4 Hz — the spike measured 86 ms of overshoot on a
    two-second loop that way, which is visible. */

@@ -13,6 +13,7 @@ import type { LoopsHandle } from '../loops/useLoops'
 import { chainedSpan, inStartOrder } from './chain'
 import { ClipName } from './ClipName'
 import { useClipSource } from './clipSource'
+import { KEY_TIMINGS, READOUT_FOR, repeatWhileHeld } from './keys'
 import { clamp, type Handle, NUDGE, SCRUB_STEP } from './loopRange'
 import { LoopSlider } from './LoopSlider'
 import type { PlaybackSurface } from './playbackSurface'
@@ -29,6 +30,7 @@ import { SavedLoopsPanel } from './SavedLoopsPanel'
 import { BackGlyph, ForwardGlyph, SeekButton } from './SeekButton'
 import { enterSets, isTyping } from './shortcuts'
 import { ShortcutHint } from './ShortcutHint'
+import { SPEED_STEP, stepped } from './speed'
 import { SpeedStepper } from './SpeedStepper'
 import {
   LoopGlyph,
@@ -418,6 +420,17 @@ function OpenedClip({
   const [countdownOn, setCountdownOn] = useSessionSwitch(COUNTDOWN)
   const countingIn = wide && countdownOn
   const [count, setCount] = useState<number | null>(null)
+  /* #116. What the last arrow key did, shown over the clip for a moment: the
+     speed it set, or the time it scrubbed to. A fresh object each key, so the
+     moment starts over from the latest. */
+  const [readout, setReadout] = useState<{
+    readonly of: 'speed' | 'time'
+  } | null>(null)
+  /* #116. The arrow key held down, and the way to stop its repeat. One at a
+     time: a second arrow takes over from the first. */
+  const held = useRef<{ readonly key: string; readonly letGo: () => void } | null>(
+    null,
+  )
   /* The loops kept against *this* clip, read out of the one file that holds
      every clip's. Not state here any more: US-01-15 made Drive the owner, and
      what the panel lists is what Drive has taken — which is the whole of "write
@@ -533,6 +546,22 @@ function OpenedClip({
     if (countingIn) setCount(COUNT_FROM)
     else void surface.current?.play()
   }
+
+  useEffect(() => {
+    if (readout === null) return
+
+    const gone = setTimeout(() => setReadout(null), READOUT_FOR)
+
+    return () => clearTimeout(gone)
+  }, [readout])
+
+  /* Nothing held goes on repeating once the player has gone. */
+  useEffect(
+    () => () => {
+      held.current?.letGo()
+    },
+    [],
+  )
 
   /* #105. A second a number, and at the end of it the clip plays on. Started
      by the loop coming round; stopped by anything that plays the clip first. */
@@ -877,7 +906,48 @@ function OpenedClip({
   useEffect(() => {
     if (playback.kind !== 'ready') return
 
+    /* #116. A held arrow repeats on the player's own clock (`keys.ts`), so
+       the keyboard's repeats are taken and ignored, and the key coming up, or
+       the window losing it, ends the hold. */
+    const hold = (
+      key: string,
+      step: () => void,
+      timing: { readonly wait: number; readonly every: number },
+    ) => {
+      held.current?.letGo()
+      held.current = { key, letGo: repeatWhileHeld(step, timing) }
+    }
+
+    const letGo = () => {
+      held.current?.letGo()
+      held.current = null
+    }
+
     const onKeyDown = (event: KeyboardEvent) => {
+      /* #116. ↑ and ↓ step the speed, as the stepper's + and − do. */
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        if (event.defaultPrevented || isTyping(event.target)) return
+
+        event.preventDefault()
+        if (event.repeat) return
+
+        const by = event.key === 'ArrowUp' ? SPEED_STEP : -SPEED_STEP
+
+        hold(
+          event.key,
+          () => {
+            setSpeed((from) => stepped({ from, by }))
+            setReadout({ of: 'speed' })
+          },
+          {
+            wait: KEY_TIMINGS.speedHoldDelay,
+            every: KEY_TIMINGS.speedRepeatEvery,
+          },
+        )
+
+        return
+      }
+
       /* #98. ← and → step a paused clip a little at a time, inside the loop
          while it is held, so a move can be studied without the mouse. Ahead of
          the repeat guard below, because holding the key is how a scrub keeps
@@ -969,9 +1039,19 @@ function OpenedClip({
       setNextPoint(framed.next)
     }
 
-    window.addEventListener('keydown', onKeyDown)
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (held.current?.key === event.key) letGo()
+    }
 
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', letGo)
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', letGo)
+    }
   }, [playback, nextPoint])
 
   /* Read off the element rather than off `time`, on the same reasoning
@@ -1534,6 +1614,20 @@ function OpenedClip({
                   onHold={hushWhileHeld}
                   rounded={isolated ? undefined : 'rounded-b-lg'}
                 />
+              )}
+
+              {/* #116. What the last arrow key did, a moment over the clip,
+                  and so in zen mode too. */}
+              {readout !== null && (
+                <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
+                  <span
+                    role="status"
+                    aria-label="Readout"
+                    className="rounded-full bg-black/60 px-3 py-1 text-sm font-semibold tabular-nums text-white"
+                  >
+                    {readout.of === 'speed' ? `${speed}x` : null}
+                  </span>
+                </div>
               )}
 
               {/* #105. Over the clip, where the dancer is looking, and so in
