@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Library from './Library.jsx'
+import { KEY_DEFAULTS } from './keys.js'
 import Player from './Player.jsx'
 import { SAMPLE_CLIP_LOOPS } from './seedLoops.js'
 
@@ -119,6 +120,8 @@ function App() {
   const [tryNewUi, setTryNewUi] = useState(true)
   /* #105: the player's **Countdown** pill, on to begin with */
   const [countdown, setCountdown] = useState(true)
+  /* #116 mockup gate: the keys' timings, held here so they last from clip to clip */
+  const [keys, setKeys] = useState(KEY_DEFAULTS)
 
   const addClip = (added) => setClips([added, ...clips])
 
@@ -145,6 +148,8 @@ function App() {
         tryNewUi={tryNewUi}
         countdown={countdown}
         onCountdown={setCountdown}
+        keys={keys}
+        onKeys={setKeys}
         onTryNewUi={setTryNewUi}
         /* A YouTube entry added by link has no length until the player loads
            it (oEmbed does not give one), so the first open fills it in. */
