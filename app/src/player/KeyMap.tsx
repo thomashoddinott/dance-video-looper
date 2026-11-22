@@ -57,13 +57,14 @@ const KEY_MAP: readonly { readonly group: string; readonly rows: readonly Row[] 
 ]
 
 /* In the corner, closed until it is clicked, so it is there for whoever wants
-   it and in nobody's way. A `details` because opening and closing is all it
-   does, and the browser already does that. */
+   it and in nobody's way: closed, it hugs its label, and only open does it
+   take the width the map needs. A `details` because opening and closing is
+   all it does, and the browser already does that. */
 export function KeyMap() {
   return (
     <details
       aria-label="Keys"
-      className="fixed right-3 bottom-3 z-40 w-96 rounded-xl bg-panel p-3 text-xs text-ink/80 shadow-lg ring-1 ring-ink/10"
+      className="fixed right-3 bottom-3 z-40 rounded-xl bg-panel px-3 py-2 text-xs text-ink/80 shadow-lg ring-1 ring-ink/10 open:w-96 open:p-3"
     >
       <summary className="cursor-pointer font-semibold">Keys</summary>
       {KEY_MAP.map(({ group, rows }) => (
