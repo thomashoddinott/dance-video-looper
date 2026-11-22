@@ -27,6 +27,88 @@ function formatTenths(seconds) {
   return `${mins}:${secs.toFixed(1).padStart(4, '0')}`
 }
 
+/* #115 + #116: every key the player answers to, in one place. It repeats the
+   hint line on purpose: the hint says what the next key does, this is the
+   whole map. The timings are frozen, read from keys.js. Wide screens only,
+   like the other experiments. */
+const K = KEY_DEFAULTS
+const KEY_MAP = [
+  {
+    group: 'Play',
+    rows: [
+      { keys: ['space'], does: 'plays and pauses' },
+      { keys: ['f'], does: 'zen mode' },
+      { keys: ['esc'], does: 'leaves zen mode' },
+    ],
+  },
+  {
+    group: 'Arrows',
+    rows: [
+      {
+        keys: ['↑', '↓'],
+        does: `speed ±${SPEED_STEP}, ${SPEED_MIN}x to ${SPEED_MAX}x`,
+        notes: [`held: after ${K.speedHoldDelay}ms, a step every ${K.speedRepeatEvery}ms`],
+      },
+      {
+        keys: ['←', '→'],
+        does: `scrub ${K.scrubStep}s, inside the loop`,
+        notes: [
+          `held: after ${K.scrubHoldDelay}ms, a step every ${K.scrubRepeatEvery}ms (YouTube ${K.scrubRepeatEveryYouTube}ms)`,
+          `while playing: pauses, plays on ${K.resumeAfter}s after the last step`,
+        ],
+      },
+    ],
+  },
+  {
+    group: 'Loop',
+    rows: [
+      { keys: ['enter'], does: 'sets A, then B' },
+      { keys: ['s'], does: 'saves the loop, or updates the open one' },
+      { keys: ['⇧s'], does: 'saves it as a new one' },
+      { keys: ['enter'], does: 'in the name field: saves' },
+      {
+        keys: ['←', '→'],
+        does: `on a focused A or B handle: moves it ${NUDGE}s`,
+      },
+      { keys: ['home', 'end'], does: 'on a focused handle: to the start or end' },
+    ],
+  },
+]
+
+function KeysPanel() {
+  return (
+    <details className="fixed right-3 bottom-3 z-40 hidden w-96 rounded-xl bg-panel p-3 text-xs text-ink/80 shadow-lg ring-1 ring-ink/10 lg:block">
+      <summary className="cursor-pointer font-semibold">Keys</summary>
+      {KEY_MAP.map(({ group, rows }) => (
+        <section key={group} className="mt-3">
+          <h3 className="mb-1.5 text-[10px] font-semibold tracking-wider text-ink/40 uppercase">
+            {group}
+          </h3>
+          <dl className="grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-1.5">
+            {rows.map(({ keys, does, notes = [] }) => (
+              <div key={keys.join() + does} className="contents">
+                <dt className="flex flex-wrap items-start gap-1">
+                  {keys.map((key) => (
+                    <Key key={key}>{key}</Key>
+                  ))}
+                </dt>
+                <dd>
+                  {does}
+                  {notes.map((note) => (
+                    <span key={note} className="block text-ink/45 tabular-nums">
+                      {note}
+                    </span>
+                  ))}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ))}
+    </details>
+  )
+}
+
 function formatSpeed(speed) {
   return String(Math.round(speed * 100) / 100)
 }
@@ -1650,6 +1732,7 @@ function Player({
         )}
       </main>
 
+      {!zen && <KeysPanel />}
     </div>
   )
 }

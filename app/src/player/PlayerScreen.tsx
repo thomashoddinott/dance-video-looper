@@ -14,6 +14,7 @@ import type { LoopsHandle } from '../loops/useLoops'
 import { chainedSpan, inStartOrder } from './chain'
 import { ClipName } from './ClipName'
 import { useClipSource } from './clipSource'
+import { KeyMap } from './KeyMap'
 import { KEY_TIMINGS, READOUT_FOR, repeatWhileHeld } from './keys'
 import { clamp, type Handle, NUDGE, SCRUB_STEP } from './loopRange'
 import { LoopSlider } from './LoopSlider'
@@ -1757,6 +1758,10 @@ function OpenedClip({
           </div>
         </div>
       </main>
+
+      {/* #115. Every key, in the corner, closed until clicked. Desktop first,
+          like the other experiments, and gone with the controls in zen. */}
+      {wide && !isolated && <KeyMap />}
     </div>
   )
 }
