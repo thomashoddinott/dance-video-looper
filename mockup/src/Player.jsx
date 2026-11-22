@@ -77,7 +77,7 @@ const KEY_MAP = [
 
 function KeysPanel() {
   return (
-    <details className="fixed right-3 bottom-3 z-40 hidden w-96 rounded-xl bg-panel p-3 text-xs text-ink/80 shadow-lg ring-1 ring-ink/10 lg:block">
+    <details className="fixed right-3 bottom-3 z-40 hidden rounded-xl bg-panel px-3 py-2 text-xs text-ink/80 shadow-lg ring-1 ring-ink/10 open:w-96 open:p-3 lg:block">
       <summary className="cursor-pointer font-semibold">Keys</summary>
       {KEY_MAP.map(({ group, rows }) => (
         <section key={group} className="mt-3">
