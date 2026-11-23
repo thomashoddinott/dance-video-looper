@@ -1517,14 +1517,15 @@ function Player({
     if (finder?.bar) keepTrying(finder.joins, next)
   }
 
-  /* One loop a group into Saved loops, in time order, and the finder closes */
+  /* One loop a group into Saved loops, in time order, and the finder closes.
+     Each is saved at 1x, whatever the player's speed: only the times are kept. */
   const saveGroups = () => {
     const made = groups.map((group, k) => ({
       id: nextId + k,
       name: group.name,
       a: group.a,
       b: group.b,
-      speed,
+      speed: 1,
     }))
 
     setSaved([...saved, ...made])
