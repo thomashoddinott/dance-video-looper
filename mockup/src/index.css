@@ -20,4 +20,6 @@
 
   --color-salsa: #a3142c;
   --color-bachata: #b026ff;
+  /* #107 spike: the Loop Finder's own colour, so its slider reads as a mode */
+  --color-finder: #d9761a;
 }

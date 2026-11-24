@@ -109,6 +109,71 @@ function KeysPanel() {
   )
 }
 
+/* #107 spike. Every whole bar from the first 1 to the end of the clip, laid end
+   to end. Nothing before the first 1: whatever comes before it, an intro or a
+   walk-on, is not a bar. */
+function barsFrom({ one, length }, duration) {
+  const made = []
+
+  for (let k = 0; one + (k + 1) * length <= duration + 0.01; k++) {
+    made.push({ start: one + k * length, end: one + (k + 1) * length })
+  }
+
+  return made
+}
+
+/* #107 spike. The bars as loops: bars joined across a line make one, and each
+   reaches past itself by `wiggle` percent of a bar, half of it a lead-in
+   before its 1, half a run-on past the next 1. At 100 a one-bar loop is twice
+   the bar. `joins` holds k for the line between bar k and bar k + 1. */
+function groupsOf(bars, joins, { length }, wiggle, duration) {
+  const reach = (length * wiggle) / 100 / 2
+  const groups = []
+
+  bars.forEach((bar, k) => {
+    const last = groups[groups.length - 1]
+
+    if (last && joins.includes(k - 1)) {
+      last.last = k
+      last.end = bar.end
+    } else {
+      groups.push({ first: k, last: k, start: bar.start, end: bar.end })
+    }
+  })
+
+  return groups.map((group) => ({
+    ...group,
+    a: Math.max(0, group.start - reach),
+    b: Math.min(duration, group.end + reach),
+    label: group.first === group.last ? `${group.first + 1}` : `${group.first + 1}–${group.last + 1}`,
+    name:
+      group.first === group.last
+        ? `Bar ${group.first + 1}`
+        : `Bars ${group.first + 1}–${group.last + 1}`,
+  }))
+}
+
+/* #107 spike. The counts a reach takes in, either side of a bar: at 50%, two
+   counts each way, so it leads in on 7 8 and runs on to 1 2. */
+function countsReached(wiggle) {
+  const counts = (wiggle / 100) * 8 / 2
+
+  if (counts === 0) return { before: '–', after: '–' }
+  if (!Number.isInteger(counts) || counts > 8) {
+    const said = `${Math.round(counts * 10) / 10} counts`
+    return { before: said, after: said }
+  }
+
+  const before = Array.from({ length: counts }, (_, k) => 9 - counts + k)
+  const after = Array.from({ length: counts }, (_, k) => k + 1)
+  return { before: before.join(' '), after: after.join(' ') }
+}
+
+/* #107 spike. One 8-count, as length and tempo: eight beats in it. */
+function countReadout(length) {
+  return `${length.toFixed(2)}s · ${Math.round((8 * 60) / length)} BPM`
+}
+
 function formatSpeed(speed) {
   return String(Math.round(speed * 100) / 100)
 }
@@ -270,7 +335,17 @@ function SpeedStepper({ speed, onChange }) {
   )
 }
 
-function LoopSlider({ duration, time, loop, onScrub, onLoopChange, onHold }) {
+function LoopSlider({
+  duration,
+  time,
+  loop,
+  onScrub,
+  onLoopChange,
+  onHold,
+  tone = 'accent',
+  marks,
+  lane,
+}) {
   const trackRef = useRef(null)
   const [dragging, setDragging] = useState(null)
 
@@ -305,12 +380,101 @@ function LoopSlider({ duration, time, loop, onScrub, onLoopChange, onHold }) {
 
   const pct = (t) => (duration ? (t / duration) * 100 : 0)
 
+  /* #107 spike: once the Loop Finder has its 8-count, the slider is the bars.
+     Every one is drawn grey, the one being tried in the finder's colour with
+     its lead-in and run-on behind it. The line between two bars joins them
+     into one loop, and splits them again. */
+  if (lane) {
+    const active = lane.groups.find((group) => group.first === lane.trying) ?? null
+    const joined = (k) => lane.joins.includes(k)
+
+    return (
+      <div className="relative h-24 select-none">
+        {active && (
+          <>
+            <span
+              className="absolute top-1 -translate-x-1/2 text-sm tabular-nums text-ink/70"
+              style={{ left: `${pct(active.a)}%` }}
+            >
+              {formatTime(active.a)}
+            </span>
+            <span
+              className="absolute bottom-1 -translate-x-1/2 text-sm tabular-nums text-ink/70"
+              style={{ left: `${pct(active.b)}%` }}
+            >
+              {formatTime(active.b)}
+            </span>
+          </>
+        )}
+        <div
+          className="absolute inset-x-0 top-1/2 h-9 -translate-y-1/2 cursor-pointer rounded-md bg-control/60"
+          ref={trackRef}
+          onPointerDown={(event) => onScrub(timeAt(event.clientX))}
+        >
+          {active && (
+            <div
+              className="absolute inset-y-0 rounded-md bg-finder/25"
+              style={{ left: `${pct(active.a)}%`, width: `${pct(active.b - active.a)}%` }}
+            />
+          )}
+          {lane.groups.map((group) => (
+            <button
+              key={group.first}
+              type="button"
+              aria-label={group.name}
+              aria-pressed={group === active}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => lane.onTry(group)}
+              className={`absolute inset-y-1.5 overflow-hidden rounded text-[10px] font-semibold tabular-nums ${
+                group === active ? 'bg-finder text-white' : 'bg-ink/20 text-ink/60 hover:bg-finder/40'
+              }`}
+              style={{
+                left: `calc(${pct(group.start)}% + 1px)`,
+                width: `calc(${pct(group.end - group.start)}% - 2px)`,
+              }}
+            >
+              {group.label}
+            </button>
+          ))}
+          {lane.bars.slice(1).map((bar, k) => (
+            <button
+              key={bar.start}
+              type="button"
+              aria-label={`${joined(k) ? 'Split' : 'Join'} bars ${k + 1} and ${k + 2}`}
+              title={joined(k) ? 'Split' : 'Join'}
+              aria-pressed={joined(k)}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => lane.onJoin(k)}
+              className="group absolute -inset-y-1.5 z-10 flex w-3 -translate-x-1/2 cursor-pointer justify-center"
+              style={{ left: `${pct(bar.start)}%` }}
+            >
+              {/* Joined, the line keeps only its ends, so a label across it reads */}
+              {joined(k) ? (
+                <span className="flex h-full flex-col justify-between py-1.5">
+                  <span className="block h-1.5 w-0.5 rounded bg-white/80 group-hover:bg-ink/60" />
+                  <span className="block h-1.5 w-0.5 rounded bg-white/80 group-hover:bg-ink/60" />
+                </span>
+              ) : (
+                <span className="block h-full w-0.5 rounded group-hover:bg-ink/60" />
+              )}
+            </button>
+          ))}
+          <div
+            className="pointer-events-none absolute -inset-y-1 z-20 w-0.5 -translate-x-1/2 rounded bg-ink/80"
+            style={{ left: `${pct(time)}%` }}
+          />
+        </div>
+      </div>
+    )
+  }
+
   // A sits above the track with its point down, B below with its point up —
   // the same arrangement LoopTube uses, so the labels never collide.
   const handle =
     'absolute flex h-10 w-10 touch-none items-center justify-center ' +
     '-translate-x-1/2 cursor-grab active:cursor-grabbing'
-  const drop = 'h-4 w-4 bg-ink shadow'
+  /* #107 spike: the Loop Finder colours the slider its own */
+  const drop = `h-4 w-4 shadow ${tone === 'finder' ? 'bg-finder' : 'bg-ink'}`
 
   return (
     <div className="relative h-24 select-none">
@@ -320,9 +484,17 @@ function LoopSlider({ duration, time, loop, onScrub, onLoopChange, onHold }) {
         onPointerDown={(event) => onScrub(timeAt(event.clientX))}
       >
         <div
-          className="absolute inset-y-0 rounded-full bg-accent"
+          className={`absolute inset-y-0 rounded-full ${tone === 'finder' ? 'bg-finder' : 'bg-accent'}`}
           style={{ left: `${pct(loop.a)}%`, width: `${pct(loop.b - loop.a)}%` }}
         />
+        {/* #107 spike: each press while the Loop Finder counts */}
+        {marks?.map((mark) => (
+          <div
+            key={mark}
+            className="pointer-events-none absolute -inset-y-1.5 w-0.5 -translate-x-1/2 rounded bg-finder"
+            style={{ left: `${pct(mark)}%` }}
+          />
+        ))}
         <div
           className="pointer-events-none absolute -inset-y-1 w-0.5 -translate-x-1/2 rounded bg-ink/80"
           style={{ left: `${pct(time)}%` }}
@@ -673,6 +845,17 @@ function Player({
      round, on a wide screen with the Countdown pill on. Null while nothing is
      counting. */
   const [count, setCount] = useState(null)
+  /* #107 spike, mockup only: the Loop Finder, a mode of its own. Null while
+     off. On, it holds the 8-count found (`bar`, null until confirmed), the
+     bar being tried, and what the player was set to before, to go back to. */
+  const [finder, setFinder] = useState(null)
+  /* How far each bar's loop reaches past it, as a percentage of a bar. */
+  const [wiggle, setWiggle] = useState(50)
+  /* How many 8-counts the tempo is taken over, and the presses so far: the
+     first on a 1, then one at the end of each 8-count. */
+  const [over, setOver] = useState(1)
+  const [marks, setMarks] = useState([])
+  const finderEnterRef = useRef(null)
 
   /* #86, on trial. With **Try new UI** on, a wide screen puts the controls and
      the loops in a column left of the clip, and the clip has the rest. Off, or
@@ -950,6 +1133,8 @@ function Player({
       event.preventDefault()
 
       const t = video.currentTime
+      /* #107 spike: while the Loop Finder counts, it takes the press */
+      if (finderEnterRef.current?.(t)) return
       if (nextPointRef.current === 'a') {
         // B parks at the end of the clip, so the loop stays valid until B is set
         setLoop({ a: t, b: video.duration })
@@ -1122,6 +1307,7 @@ function Player({
 
   // dragging B by hand finishes a loop that space left half-set
   const changeLoop = (next) => {
+    if (finder && !finder.bar) setMarks([])
     if (next.b !== loop.b) setNextPoint('a')
     setLoop(next)
   }
@@ -1205,12 +1391,157 @@ function Player({
     startAfresh()
   }
 
+  /* #107 spike. The Loop Finder starts from nothing, the whole clip framed and
+     enter armed for the first 1, rather than from a loop already there.
+     Leaving it puts the player back the way it was. */
+  const openFinder = () => {
+    setFinder({
+      before: { loop, nextPoint, looping, editingId, chain },
+      bar: null,
+      trying: null,
+      joins: [],
+    })
+    setMarks([])
+    setLoop({ a: 0, b: duration })
+    setNextPoint('a')
+    setLooping(true)
+    setEditingId(null)
+    setChain([])
+  }
+
+  const closeFinder = () => {
+    const { before } = finder
+
+    setLoop(before.loop)
+    setNextPoint(before.nextPoint)
+    setLooping(before.looping)
+    setEditingId(before.editingId)
+    setChain(before.chain)
+    setMarks([])
+    setFinder(null)
+  }
+
+  /* Enter while counting: the first press is the 1 the bars start from, and
+     each one after it ends an 8-count. Once `over` of them are in, the loop is
+     all of them, to check against; a press after that starts again. Taken
+     here, ahead of the A and B the key sets any other time. */
+  const finderEnter = (t) => {
+    if (!finder || finder.bar) return false
+
+    const counted = marks.length === over + 1
+    const next = marks.length === 0 || counted ? [t] : [...marks, t]
+
+    setMarks(next)
+
+    if (next.length === 1) {
+      setLoop({ a: t, b: duration })
+      setNextPoint('b')
+    } else if (next.length === over + 1) {
+      setLoop({ a: next[0], b: Math.max(t, next[0] + MIN_LOOP) })
+      setNextPoint('a')
+    }
+
+    return true
+  }
+
+  const changeOver = (next) => {
+    setOver(next)
+    setMarks([])
+    setLoop({ a: 0, b: duration })
+    setNextPoint('a')
+  }
+
+  /* The 8-counts framed, as against the whole clip the finder opens on */
+  const countFramed =
+    !halfSet && loop.b - loop.a > MIN_LOOP && (loop.a > 0.05 || loop.b < duration - 0.05)
+
+  /* One 8-count: the span framed, shared out over the counts in it */
+  const countLength = (loop.b - loop.a) / over
+
+  /* How far the presses strayed from that, when there are several */
+  const spread =
+    marks.length === over + 1 && over > 1
+      ? Math.max(...marks.slice(1).map((mark, k) => Math.abs(mark - marks[k] - countLength)))
+      : null
+
+  const confirmCount = () => {
+    if (!countFramed) return
+    setFinder({ ...finder, bar: { one: loop.a, length: countLength }, trying: null, joins: [] })
+  }
+
+  /* Back to counting, from the 8-counts found last time */
+  const findAgain = () => {
+    const { bar } = finder
+
+    setLoop({ a: bar.one, b: bar.one + bar.length * over })
+    setNextPoint('a')
+    setMarks([])
+    setFinder({ ...finder, bar: null, trying: null, joins: [] })
+  }
+
+  const bars = finder?.bar ? barsFrom(finder.bar, duration) : []
+  const groups = finder?.bar ? groupsOf(bars, finder.joins, finder.bar, wiggle, duration) : []
+
+  /* A loop tried: looped with its lead-in and run-on, from the top */
+  const tryGroup = (group) => {
+    setLoop({ a: group.a, b: group.b })
+    setLooping(true)
+    setNextPoint('a')
+    setFinder({ ...finder, trying: group.first })
+    scrub(group.a)
+    Promise.resolve(videoRef.current?.play()).catch(() => {})
+  }
+
+  /* The loop being tried, after the bars or the reach change under it */
+  const keepTrying = (joins, reachWiggle) => {
+    if (finder.trying === null) return null
+
+    const now = groupsOf(bars, joins, finder.bar, reachWiggle, duration).find(
+      (group) => group.first <= finder.trying && finder.trying <= group.last,
+    )
+
+    if (now) setLoop({ a: now.a, b: now.b })
+    return now?.first ?? null
+  }
+
+  const toggleJoin = (k) => {
+    const joins = finder.joins.includes(k)
+      ? finder.joins.filter((one) => one !== k)
+      : [...finder.joins, k]
+
+    setFinder({ ...finder, joins, trying: keepTrying(joins, wiggle) })
+  }
+
+  const changeWiggle = (next) => {
+    setWiggle(next)
+    if (finder?.bar) keepTrying(finder.joins, next)
+  }
+
+  /* One loop a group into Saved loops, in time order, and the finder closes.
+     Each is saved at 1x, whatever the player's speed: only the times are kept. */
+  const saveGroups = () => {
+    const made = groups.map((group, k) => ({
+      id: nextId + k,
+      name: group.name,
+      a: group.a,
+      b: group.b,
+      speed: 1,
+    }))
+
+    setSaved([...saved, ...made])
+    setNextId(nextId + made.length)
+    setMarks([])
+    setFinder(null)
+    startAfresh()
+  }
+
   // the key handler subscribes once, so it reaches save through a ref
   useEffect(() => {
     saveLoopRef.current = saveLoop
     scrubRef.current = scrub
     togglePlayRef.current = togglePlay
     saveAsNewRef.current = saveAsNew
+    finderEnterRef.current = finderEnter
   })
 
   const loadLoop = (item) => {
@@ -1438,7 +1769,133 @@ function Player({
       onScrub={scrub}
       onLoopChange={changeLoop}
       onHold={holdScrub}
+      tone={finder ? 'finder' : 'accent'}
+      marks={finder && !finder.bar ? marks : null}
+      lane={
+        finder?.bar
+          ? { bars, groups, joins: finder.joins, trying: finder.trying, onTry: tryGroup, onJoin: toggleJoin }
+          : null
+      }
     />
+  )
+
+  /* #107 spike: the slider is out while the Loop Finder is, whatever the box says */
+  const sliderShown = sliderOut || !!finder
+
+  const reached = countsReached(wiggle)
+
+  /* #107 spike: the Loop Finder's panel. First the 8-count, found with enter
+     as any loop is; then every bar in the clip, to try one at a time and to
+     save all at once. */
+  const finderPanel = finder && (
+    <div
+      role="group"
+      aria-label="Loop Finder"
+      className={`rounded-2xl bg-panel p-4 ring-2 ring-finder/60 ${columns ? '' : 'mt-6'}`}
+    >
+      <h2 className="text-xs font-bold tracking-widest text-finder">LOOP FINDER</h2>
+
+      {finder.bar === null ? (
+        <>
+          <div className="mt-2 flex items-center gap-2 text-sm">
+            <span className="font-semibold">Find the 8 count</span>
+            <span className="ml-auto text-ink/60">over</span>
+            <button
+              type="button"
+              aria-label="Fewer 8 counts"
+              onClick={() => changeOver(Math.max(1, over - 1))}
+              className={`rounded-md px-2.5 py-1 font-semibold active:scale-95 ${CONTROL}`}
+            >
+              &minus;
+            </button>
+            <span aria-label="8 counts to average" className="w-5 text-center font-semibold tabular-nums">
+              {over}
+            </span>
+            <button
+              type="button"
+              aria-label="More 8 counts"
+              onClick={() => changeOver(over + 1)}
+              className={`rounded-md px-2.5 py-1 font-semibold active:scale-95 ${CONTROL}`}
+            >
+              +
+            </button>
+          </div>
+          <div className="mt-3 flex items-center gap-3 text-sm">
+            <span className="tabular-nums text-ink/60">
+              {countFramed
+                ? `${countReadout(countLength)}${spread !== null ? ` · ±${spread.toFixed(2)}s` : ''}`
+                : over > 1 && marks.length > 0
+                  ? `${marks.length - 1} of ${over}`
+                  : ''}
+            </span>
+            <button
+              type="button"
+              onClick={confirmCount}
+              disabled={!countFramed}
+              className="ml-auto rounded-lg bg-finder px-3 py-2 text-sm font-semibold text-white shadow active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+            >
+              Confirm
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mt-2 flex items-center gap-3 text-sm">
+            <span className="font-semibold">8 count</span>
+            <span className="tabular-nums text-ink/60">{countReadout(finder.bar.length)}</span>
+            <button
+              type="button"
+              onClick={findAgain}
+              className="ml-auto text-xs font-medium text-finder hover:underline"
+            >
+              Find again
+            </button>
+          </div>
+
+          <div className="mt-3 flex items-center gap-2 text-sm">
+            <span className="font-semibold">Wiggle</span>
+            <button
+              type="button"
+              aria-label="Less wiggle"
+              onClick={() => changeWiggle(Math.max(0, wiggle - 5))}
+              className={`rounded-md px-2.5 py-1 font-semibold active:scale-95 ${CONTROL}`}
+            >
+              &minus;
+            </button>
+            <input
+              type="number"
+              min={0}
+              step={5}
+              value={wiggle}
+              aria-label="Wiggle"
+              onChange={(event) => changeWiggle(Math.max(0, Number(event.target.value) || 0))}
+              className="w-14 rounded-md bg-ink/10 px-2 py-1 text-right tabular-nums outline-none"
+            />
+            <span className="text-ink/60">%</span>
+            <button
+              type="button"
+              aria-label="More wiggle"
+              onClick={() => changeWiggle(wiggle + 5)}
+              className={`rounded-md px-2.5 py-1 font-semibold active:scale-95 ${CONTROL}`}
+            >
+              +
+            </button>
+            <span className="ml-auto text-xs tabular-nums text-ink/60">
+              in {reached.before} · out {reached.after}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={saveGroups}
+            disabled={groups.length === 0}
+            className="mt-3 w-full rounded-lg bg-finder px-3 py-2 text-sm font-semibold text-white shadow active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+          >
+            Save {groups.length} loops
+          </button>
+        </>
+      )}
+    </div>
   )
 
   const hint = (
@@ -1540,6 +1997,18 @@ function Player({
             >
               Countdown
             </button>
+            {/* #107 spike: a mode, in its own colour while it is on */}
+            <button
+              type="button"
+              aria-pressed={!!finder}
+              disabled={!duration}
+              onClick={() => (finder ? closeFinder() : openFinder())}
+              className={`rounded-full px-3 py-1 text-xs font-semibold disabled:opacity-40 ${
+                finder ? 'bg-finder text-white' : 'bg-control text-ink/70 hover:bg-control-hi'
+              }`}
+            >
+              Loop Finder
+            </button>
             <button
               type="button"
               aria-pressed={tryNewUi}
@@ -1598,7 +2067,7 @@ function Player({
                     width={
                       columns
                         ? /* #86: the clip has the column to itself, less the slider */
-                          `min(100cqw - 3rem, 1100px, (100dvh - ${sliderOut ? '14.5rem' : '7.5rem'}) * 16 / 9)`
+                          `min(100cqw - 3rem, 1100px, (100dvh - ${sliderShown ? '14.5rem' : '7.5rem'}) * 16 / 9)`
                         : undefined
                     }
                     onReady={youtubeReady}
@@ -1634,7 +2103,7 @@ function Player({
                       ? /* #86: the height the slider under it leaves */
                         /* #94: the slider's room too, while it is put away */
                         `mx-auto block max-w-full rounded-lg bg-black ${
-                          sliderOut ? 'max-h-[calc(100dvh-14.5rem)]' : 'max-h-[calc(100dvh-7.5rem)]'
+                          sliderShown ? 'max-h-[calc(100dvh-14.5rem)]' : 'max-h-[calc(100dvh-7.5rem)]'
                         }`
                       : 'mx-auto block max-h-[50vh] max-w-full rounded-lg bg-black lg:max-h-[80vh]'
                 }
@@ -1708,10 +2177,11 @@ function Player({
             {/* Hidden rather than unmounted, for the same reason */}
             <div className={zen ? 'hidden' : columns ? 'mt-2' : undefined}>
               {!columns && seekAndSpeed}
-              {(!columns || sliderOut) && slider}
+              {(!columns || sliderShown) && slider}
               {!columns && hint}
               {!columns && transport}
-              {!columns && savedLoopsPanel}
+              {!columns && finderPanel}
+              {!columns && !finder && savedLoopsPanel}
               {!columns && spike}
             </div>
           </div>
@@ -1727,7 +2197,9 @@ function Player({
               {transport}
               {spike}
             </div>
-            {savedLoopsPanel}
+            {finderPanel}
+            {/* #107 spike: out of the way while the Loop Finder is open */}
+            {!finder && savedLoopsPanel}
           </div>
         )}
       </main>
