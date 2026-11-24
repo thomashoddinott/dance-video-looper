@@ -1107,9 +1107,12 @@ describe('changing the speed with the up and down arrows', () => {
 const finderPill = () => screen.queryByRole('button', { name: 'Loop Finder' })
 const finderPanel = () => screen.queryByRole('group', { name: 'Loop Finder' })
 
-const aClipInTheFinder = ({ seconds = 26 } = {}) => {
+const aClipInTheFinder = ({
+  seconds = 26,
+  ...loops
+}: { readonly seconds?: number } & LoopOptions = {}) => {
   aWindow({ wide: true })
-  const clip = aReadyClip({ seconds })
+  const clip = aReadyClip({ seconds, ...loops })
   fireEvent.click(finderPill()!)
 
   return clip
@@ -1271,8 +1274,8 @@ describe('finding the 8 count in the Loop Finder', () => {
    the first 1, to try one at a time, join across the lines between them, and
    reach past with the wiggle. Here the first 1 is at 1s and an 8 count lasts
    3.5s, so a 26s clip holds seven bars, the last ending at 25.5s. */
-const aCountFound = () => {
-  const clip = aClipInTheFinder({ seconds: 26 })
+const aCountFound = (loops: LoopOptions = {}) => {
+  const clip = aClipInTheFinder({ seconds: 26, ...loops })
   clip.currentTime = 1
   press('Enter')
   clip.currentTime = 4.5
@@ -1382,6 +1385,57 @@ describe('the bars in the Loop Finder', () => {
     expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled()
     expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '1')
     expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '4.5')
+  })
+})
+
+/* One loop per group, named by its bars, at 1x whatever the player's speed:
+   only the times are kept. */
+describe('saving the Loop Finder\'s loops', () => {
+  const save = () => screen.getByRole('button', { name: /^Save \d+ loops$/ })
+
+  it('offers to save as many loops as there are on the slider', () => {
+    aCountFound()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Join bars 2 and 3' }))
+
+    expect(save()).toHaveAccessibleName('Save 6 loops')
+  })
+
+  it('writes one loop per group, named by its bars, at 1x, and closes', async () => {
+    aCountFound()
+    fireEvent.click(screen.getByRole('button', { name: 'Join bars 2 and 3' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Slower' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Slower' }))
+
+    fireEvent.click(save())
+
+    await waitFor(() => {
+      expect(finderPanel()).not.toBeInTheDocument()
+    })
+    expect(finderPill()).toHaveAttribute('aria-pressed', 'false')
+
+    const entries = savedEntries()
+
+    expect(entries.map((entry) => entry?.replace(/\d:\d\d.*/, ''))).toEqual([
+      'Bar 1',
+      'Bars 2–3',
+      'Bar 4',
+      'Bar 5',
+      'Bar 6',
+      'Bar 7',
+    ])
+    expect(entries.every((entry) => entry?.endsWith('· 1x'))).toBe(true)
+  })
+
+  it('stays open, and says so, when Drive does not take them', async () => {
+    aCountFound({ refuses: true })
+
+    fireEvent.click(save())
+
+    await waitFor(() => {
+      expect(finderPanel()).toHaveTextContent(A_REFUSAL)
+    })
+    expect(aBar('Bar 1')).toBeInTheDocument()
   })
 })
 

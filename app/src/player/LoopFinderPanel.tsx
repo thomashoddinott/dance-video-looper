@@ -29,6 +29,13 @@ export type Cutting = {
   readonly reached: { readonly before: string; readonly after: string }
   readonly onWiggle: (wiggle: number) => void
   readonly onFindAgain: () => void
+  /* How many loops a save would write: one per group of bars */
+  readonly loops: number
+  readonly writing: boolean
+  /* What to tell the dancer about a save that did not land, as Saved loops
+     would, since it is out of the way while the finder is open */
+  readonly notice: string | null
+  readonly onSave: () => void
 }
 
 /* A − and + either side of a number, as the speed stepper has */
@@ -157,6 +164,21 @@ function Cut({ stage }: { readonly stage: Cutting }) {
           in {stage.reached.before} · out {stage.reached.after}
         </span>
       </div>
+
+      <button
+        type="button"
+        onClick={stage.onSave}
+        disabled={stage.loops === 0 || stage.writing}
+        className={`mt-3 w-full ${ACT}`}
+      >
+        Save {stage.loops} loops
+      </button>
+
+      {stage.notice !== null && (
+        <p role="alert" className="mt-2 rounded-lg bg-ink/10 px-3 py-2 text-xs text-ink/80">
+          {stage.notice}
+        </p>
+      )}
     </>
   )
 }

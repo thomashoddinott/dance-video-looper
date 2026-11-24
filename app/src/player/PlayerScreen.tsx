@@ -1103,6 +1103,35 @@ function OpenedClip({
     if (finder !== null) keepTrying(finder.joins, next)
   }
 
+  /* One loop per group into Drive, in one write, named by its bars and at 1x
+     whatever the player's speed: only the times are kept. Once Drive has them
+     the finder closes, onto the way a clip opens, as after any save (#71). */
+  const saveGroups = () => {
+    if (finder === null || groups.length === 0 || loops.writing) return
+
+    const kept = groups.map((group) => ({
+      id: crypto.randomUUID(),
+      name: group.name,
+      a: group.a,
+      b: group.b,
+      speed: 1,
+    }))
+
+    void loops.saveAll(clip.id, kept).then((written) => {
+      if (!written) return
+
+      setFinder(null)
+      setMarks([])
+      setPlayback((held) =>
+        held.kind === 'ready' ? { ...held, loop: wholeClip(held.duration) } : held,
+      )
+      setNextPoint('a')
+      setEditingId(null)
+      setChain([])
+      setLoopName('')
+    })
+  }
+
   /* Back to counting, from the 8 counts found last time */
   const findAgain = () => {
     if (finder === null || finder.count === null) return
@@ -1664,6 +1693,10 @@ function OpenedClip({
               reached: countsReached(wiggle),
               onWiggle: changeWiggle,
               onFindAgain: findAgain,
+              loops: groups.length,
+              writing: loops.writing,
+              notice: loops.notice,
+              onSave: saveGroups,
             }
       }
     />
