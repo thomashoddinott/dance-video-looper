@@ -1101,6 +1101,93 @@ describe('changing the speed with the up and down arrows', () => {
    clock throughout, for the reason the block below gives. */
 /* #115. Every key the player answers to, in a box in the corner. Desktop
    first, like the other experiments, and gone with everything else in zen. */
+/* #121. The Loop Finder: find one 8 count by hand, and the clip is cut into
+   bars from it, to try one at a time, join and save. Desktop first, like the
+   other experiments, and a mode of its own while it is on. */
+const finderPill = () => screen.queryByRole('button', { name: 'Loop Finder' })
+const finderPanel = () => screen.queryByRole('group', { name: 'Loop Finder' })
+
+const aClipInTheFinder = ({ seconds = 26 } = {}) => {
+  aWindow({ wide: true })
+  const clip = aReadyClip({ seconds })
+  fireEvent.click(finderPill()!)
+
+  return clip
+}
+
+describe('the Loop Finder', () => {
+  it('is offered, off, on a screen 1024px wide or wider', () => {
+    aWindow({ wide: true })
+    aReadyClip()
+
+    expect(finderPill()).toHaveAttribute('aria-pressed', 'false')
+    expect(finderPanel()).not.toBeInTheDocument()
+  })
+
+  it('is not offered on a narrower screen', () => {
+    aReadyClip()
+
+    expect(finderPill()).not.toBeInTheDocument()
+  })
+
+  /* It does not start from the loops already there: the whole clip is framed,
+     and enter is armed for the first 1. */
+  it('starts fresh, with the whole clip framed and enter armed', () => {
+    aWindow({ wide: true })
+    const clip = aReadyClip({ seconds: 12 })
+    clip.currentTime = 2
+    press('Enter')
+    clip.currentTime = 5
+    press('Enter')
+    press('Enter')
+
+    fireEvent.click(finderPill()!)
+
+    expect(finderPill()).toHaveAttribute('aria-pressed', 'true')
+    expect(finderPanel()).toBeInTheDocument()
+    expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '0')
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '12')
+  })
+
+  it('has the slider out, in its own colour', () => {
+    aClipInTheFinder()
+
+    expect(screen.getByRole('group', { name: 'Loop range' })).toBeVisible()
+    expect(document.querySelector('.loop-span')).toHaveClass('bg-finder')
+  })
+
+  it('puts Saved loops out of the way while it is open', () => {
+    aClipInTheFinder()
+
+    expect(screen.queryByRole('region', { name: 'Saved loops' })).not.toBeInTheDocument()
+  })
+
+  it('puts the player back as it was when it is turned off', () => {
+    aWindow({ wide: true })
+    const clip = aReadyClip({ seconds: 12 })
+    clip.currentTime = 2
+    press('Enter')
+    clip.currentTime = 5
+    press('Enter')
+
+    fireEvent.click(finderPill()!)
+    clip.currentTime = 7
+    press('Enter')
+    fireEvent.click(finderPill()!)
+
+    /* The new layout has the slider put away again, so it is read as it is */
+    const put = (name: string) => screen.getByRole('slider', { name, hidden: true })
+
+    expect(finderPanel()).not.toBeInTheDocument()
+    expect(put('Loop start')).toHaveAttribute('aria-valuenow', '2')
+    expect(put('Loop end')).toHaveAttribute('aria-valuenow', '5')
+    expect(screen.getByRole('region', { name: 'Saved loops' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('note', { name: 'Keyboard shortcuts' }),
+    ).toHaveTextContent(/enter\s+sets\s+A/i)
+  })
+})
+
 describe('the key map in the player', () => {
   const keyMap = () => screen.queryByRole('group', { name: 'Keys' })
 

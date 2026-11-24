@@ -15,6 +15,8 @@ import { chainedSpan, inStartOrder } from './chain'
 import { ClipName } from './ClipName'
 import { useClipSource } from './clipSource'
 import { KeyMap } from './KeyMap'
+import type { Count } from './loopFinder'
+import { LoopFinderPanel } from './LoopFinderPanel'
 import { KEY_TIMINGS, READOUT_FOR, repeatWhileHeld } from './keys'
 import { clamp, type Handle, NUDGE, SCRUB_STEP } from './loopRange'
 import { LoopSlider } from './LoopSlider'
@@ -95,6 +97,22 @@ const Glyph = ({
   </svg>
 )
 
+/* #121. The Loop Finder while it is on: the 8 count found (null until it is
+   confirmed), the loop being tried (by its first bar), the lines joined, and
+   what the player was set to before, to go back to. */
+type Finder = {
+  readonly before: {
+    readonly loop: Loop
+    readonly looping: boolean
+    readonly nextPoint: Handle
+    readonly editingId: string | null
+    readonly chain: readonly string[]
+  }
+  readonly count: Count | null
+  readonly trying: number | null
+  readonly joins: readonly number[]
+}
+
 /* #105. Where the count before the loop comes round starts: 3, 2, 1. */
 const COUNT_FROM = 3
 
@@ -104,18 +122,28 @@ function SwitchPill({
   on,
   onToggle,
   children,
+  tone = 'accent',
+  disabled = false,
 }: {
   readonly on: boolean
   readonly onToggle: (on: boolean) => void
   readonly children: ReactNode
+  /* #121: a mode in its own colour, rather than a setting in the brand's */
+  readonly tone?: 'accent' | 'finder'
+  readonly disabled?: boolean
 }) {
   return (
     <button
       type="button"
       aria-pressed={on}
+      disabled={disabled}
       onClick={() => onToggle(!on)}
-      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-        on ? 'bg-accent text-on-accent' : 'bg-control text-ink/70 hover:bg-control-hi'
+      className={`rounded-full px-3 py-1 text-xs font-semibold disabled:opacity-40 ${
+        !on
+          ? 'bg-control text-ink/70 hover:bg-control-hi'
+          : tone === 'finder'
+            ? 'bg-finder text-white'
+            : 'bg-accent text-on-accent'
       }`}
     >
       {children}
@@ -486,6 +514,8 @@ function OpenedClip({
      not written anywhere, and that is the point — a chain is a way to play the
      loops already saved, not another loop to save. */
   const [chain, setChain] = useState<readonly string[]>([])
+  /* #121. The Loop Finder, a mode of its own; null while it is off. */
+  const [finder, setFinder] = useState<Finder | null>(null)
 
   /* One seek in flight at a time, and the rest of the drag dropped rather than
      queued — #23. A ref rather than state because every read and write happens
@@ -860,6 +890,50 @@ function OpenedClip({
      indistinguishable in a list that has no reorder and, until now, no rename. */
   const saveAsNew = () => {
     writeLoop(null, (kept) => loops.save(clip.id, kept))
+  }
+
+  /* #121. The Loop Finder starts from nothing: the whole clip framed and enter
+     armed for the first 1, rather than the loops already there. Turning it off
+     puts the player back the way it was. */
+  const openFinder = () => {
+    if (playback.kind !== 'ready') return
+
+    setFinder({
+      before: {
+        loop: playback.loop,
+        looping: playback.looping,
+        nextPoint,
+        editingId,
+        chain,
+      },
+      count: null,
+      trying: null,
+      joins: [],
+    })
+    setPlayback((held) =>
+      held.kind === 'ready'
+        ? { ...held, loop: wholeClip(held.duration), looping: true }
+        : held,
+    )
+    setNextPoint('a')
+    setEditingId(null)
+    setChain([])
+  }
+
+  const closeFinder = () => {
+    if (finder === null) return
+
+    const { before } = finder
+
+    setPlayback((held) =>
+      held.kind === 'ready'
+        ? { ...held, loop: before.loop, looping: before.looping }
+        : held,
+    )
+    setNextPoint(before.nextPoint)
+    setEditingId(before.editingId)
+    setChain(before.chain)
+    setFinder(null)
   }
 
   /* The key handler below subscribes on the loop and the armed boundary, and
@@ -1384,8 +1458,13 @@ function OpenedClip({
 
      In the new layout it is put away while no loop is being picked (#94):
      hidden in place rather than unmounted, for the header's reason. */
+  /* #121: the slider is out while the Loop Finder is, whatever the box says */
+  const sliderShown = sliderOut || finder !== null
+
+  const finderPanel = finder !== null && <LoopFinderPanel column={column} />
+
   const loopRange = (
-    <div role="group" aria-label="Loop range" hidden={column && !sliderOut}>
+    <div role="group" aria-label="Loop range" hidden={column && !sliderShown}>
       {playback.kind === 'ready' && (
         <LoopSlider
           duration={playback.duration}
@@ -1394,6 +1473,7 @@ function OpenedClip({
           onSeek={seekTo}
           onLoopChange={changeLoop}
           onHold={hushWhileHeld}
+          tone={finder ? 'finder' : 'accent'}
         />
       )}
     </div>
@@ -1500,6 +1580,15 @@ function OpenedClip({
             <SwitchPill on={countdownOn} onToggle={setCountdownOn}>
               Countdown
             </SwitchPill>
+            {/* #121: a mode, in its own colour while it is on */}
+            <SwitchPill
+              on={finder !== null}
+              onToggle={(on) => (on ? openFinder() : closeFinder())}
+              tone="finder"
+              disabled={playback.kind !== 'ready'}
+            >
+              Loop Finder
+            </SwitchPill>
             <SwitchPill on={tryNewUi} onToggle={setTryNewUi}>
               Try new UI
             </SwitchPill>
@@ -1538,7 +1627,9 @@ function OpenedClip({
               <div className="mt-4">{hint}</div>
               {transport}
             </div>
-            {savedLoops}
+            {/* #121: Saved loops steps aside while the Loop Finder is open */}
+            {finderPanel}
+            {finder === null && savedLoops}
           </div>
         )}
         {/* The card becomes the black field the clip sits alone in. Same
@@ -1556,7 +1647,7 @@ function OpenedClip({
               ? 'fixed inset-0 z-50 flex items-center justify-center bg-black'
               : column
                 ? `@container min-h-0 overflow-y-auto rounded-2xl bg-panel p-6 ${
-                    sliderOut ? '' : '[--player-controls:var(--player-chrome)]'
+                    sliderShown ? '' : '[--player-controls:var(--player-chrome)]'
                   }`
                 : 'mx-auto w-fit max-w-full rounded-2xl bg-panel p-4 lg:p-6'
           }
@@ -1754,7 +1845,8 @@ function OpenedClip({
             {loopRange}
             {!column && hint}
             {!column && transport}
-            {!column && savedLoops}
+            {!column && finderPanel}
+            {!column && finder === null && savedLoops}
           </div>
         </div>
       </main>

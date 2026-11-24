@@ -21,6 +21,8 @@
 
   --color-salsa: #a3142c;
   --color-bachata: #b026ff;
+  /* #121: the Loop Finder's own colour, so its slider reads as a mode */
+  --color-finder: #d9761a;
 }
 
 /* #81, #86. How much of a wide screen's height the new layout takes from the
