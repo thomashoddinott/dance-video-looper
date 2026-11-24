@@ -36,22 +36,26 @@ export type LoopsHandle = {
      pressing Update, and a patch would be a second shape for the same thing. */
   readonly update: (clipId: string, loop: SavedLoop) => Promise<boolean>
   readonly remove: (clipId: string, id: string) => Promise<boolean>
+  /* #121: several new loops in one write, so they land together or not at
+     all. The Loop Finder's bars, which a failure part way would leave half
+     kept. */
+  readonly saveAll: (clipId: string, loops: readonly SavedLoop[]) => Promise<boolean>
 }
 
 /* Deliberately different sentences, because the dancer can act on the
    difference. "Could not be read" also carries the news that their existing
    loops are still there, in a file this app has refused to touch — reporting
    that as "could not be saved" would hide the more important half. */
-const noticeFor = (error: unknown, what: string) => {
+const noticeFor = (error: unknown, what: string, was = 'was') => {
   if (error instanceof LoopsRefused && error.because === 'unreadable') {
-    return `Your saved loops in Drive could not be read, so ${what} was not saved. Nothing was overwritten.`
+    return `Your saved loops in Drive could not be read, so ${what} ${was} not saved. Nothing was overwritten.`
   }
 
   if (error instanceof LoopsRefused && error.because === 'moved') {
-    return `Your loops changed on another device while this was saving, so ${what} was not saved. Try again.`
+    return `Your loops changed on another device while this was saving, so ${what} ${was} not saved. Try again.`
   }
 
-  return `${what} was not saved to Drive.`
+  return `${what} ${was} not saved to Drive.`
 }
 
 /* The loops live here, above both screens, rather than inside the player. The
@@ -144,7 +148,7 @@ export const useLoops = (
      rests on (UC-01 Q-05). Three copies of this would be three chances to get
      the order of "write, then show" wrong in one of them. */
   const write = useCallback(
-    async (change: LoopsChange, what: string) => {
+    async (change: LoopsChange, what: string, was?: string) => {
       setNotice(null)
       setWriting(true)
 
@@ -177,7 +181,7 @@ export const useLoops = (
         return true
       } catch (error) {
         reportIfWithdrawn(error)
-        setNotice(noticeFor(error, what))
+        setNotice(noticeFor(error, what, was))
 
         return false
       } finally {
@@ -213,5 +217,17 @@ export const useLoops = (
     [write],
   )
 
-  return { loops, writing, notice, save, update, remove }
+  /* Each one appended as a save appends it, so the merge is the same three
+     changes it always was, made several times over inside one write. */
+  const saveAll = useCallback(
+    (clipId: string, adding: readonly SavedLoop[]) =>
+      write(
+        (held) => adding.reduce((into, loop) => withLoop(into, clipId, loop), held),
+        'Those loops',
+        'were',
+      ),
+    [write],
+  )
+
+  return { loops, writing, notice, save, update, remove, saveAll }
 }
