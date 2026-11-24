@@ -15,10 +15,10 @@ import { chainedSpan, inStartOrder } from './chain'
 import { ClipName } from './ClipName'
 import { useClipSource } from './clipSource'
 import { KeyMap } from './KeyMap'
-import type { Count } from './loopFinder'
+import { bpmOf, type Count, pressed, spreadOf } from './loopFinder'
 import { LoopFinderPanel } from './LoopFinderPanel'
 import { KEY_TIMINGS, READOUT_FOR, repeatWhileHeld } from './keys'
-import { clamp, type Handle, NUDGE, SCRUB_STEP } from './loopRange'
+import { clamp, type Handle, MIN_LOOP, NUDGE, SCRUB_STEP } from './loopRange'
 import { LoopSlider } from './LoopSlider'
 import type { PlaybackSurface } from './playbackSurface'
 import {
@@ -514,8 +514,11 @@ function OpenedClip({
      not written anywhere, and that is the point — a chain is a way to play the
      loops already saved, not another loop to save. */
   const [chain, setChain] = useState<readonly string[]>([])
-  /* #121. The Loop Finder, a mode of its own; null while it is off. */
+  /* #121. The Loop Finder, a mode of its own; null while it is off. How many
+     8 counts it averages over, and the presses so far. */
   const [finder, setFinder] = useState<Finder | null>(null)
+  const [over, setOver] = useState(1)
+  const [marks, setMarks] = useState<readonly number[]>([])
 
   /* One seek in flight at a time, and the rest of the drag dropped rather than
      queued — #23. A ref rather than state because every read and write happens
@@ -769,6 +772,10 @@ function OpenedClip({
      next one in the same press, and routing it past this would have the two fight
      over `nextPoint` inside one batch. */
   const changeLoop = (loop: Loop) => {
+    /* #121: a hand on the slider while the finder counts leaves the presses
+       behind */
+    if (finder !== null && finder.count === null) setMarks([])
+
     if (playback.kind === 'ready' && loop.b !== playback.loop.b) setNextPoint('a')
 
     putLoop(loop)
@@ -910,6 +917,7 @@ function OpenedClip({
       trying: null,
       joins: [],
     })
+    setMarks([])
     setPlayback((held) =>
       held.kind === 'ready'
         ? { ...held, loop: wholeClip(held.duration), looping: true }
@@ -933,8 +941,91 @@ function OpenedClip({
     setNextPoint(before.nextPoint)
     setEditingId(before.editingId)
     setChain(before.chain)
+    setMarks([])
     setFinder(null)
   }
+
+  /* The whole clip framed and enter armed for the first 1, as the finder
+     opens and whenever its count starts again. */
+  const countAfresh = () => {
+    setMarks([])
+    setPlayback((held) =>
+      held.kind === 'ready' ? { ...held, loop: wholeClip(held.duration) } : held,
+    )
+    setNextPoint('a')
+  }
+
+  /* Enter while the finder counts, taken ahead of the A and B it sets any
+     other time. The first press is the 1 the bars start from, and B waits at
+     the end of the clip until the last of `over` 8 counts is in; then the
+     loop is all of them, to check by ear. */
+  const finderEnter = (at: number) => {
+    if (finder === null || finder.count !== null || playback.kind !== 'ready') {
+      return false
+    }
+
+    const next = pressed({ marks, over, at })
+    const [one = at] = next
+
+    setMarks(next)
+
+    if (next.length === 1) {
+      putLoop({ a: at, b: playback.duration })
+      setNextPoint('b')
+    } else if (next.length === over + 1) {
+      putLoop({ a: one, b: Math.max(at, one + MIN_LOOP) })
+      setNextPoint('a')
+    }
+
+    return true
+  }
+
+  const changeOver = (next: number) => {
+    setOver(next)
+    countAfresh()
+  }
+
+  /* The 8 counts framed, as against the whole clip the finder opens on, and
+     one 8 count as their share of it */
+  const counted =
+    finder !== null &&
+    finder.count === null &&
+    playback.kind === 'ready' &&
+    nextPoint === 'a' &&
+    playback.loop.b - playback.loop.a > MIN_LOOP &&
+    (playback.loop.a > 0 || playback.loop.b < playback.duration)
+      ? playback.loop
+      : null
+  const countLength = counted === null ? 0 : (counted.b - counted.a) / over
+
+  const confirmCount = () => {
+    if (finder === null || counted === null) return
+
+    setFinder({
+      ...finder,
+      count: { one: counted.a, length: countLength },
+      trying: null,
+      joins: [],
+    })
+  }
+
+  /* What the panel reads while counting: the 8 count once it is framed, with
+     how far the presses strayed when there were several; until then, how
+     many are in. */
+  const countReading = () => {
+    if (counted !== null) {
+      const spread = marks.length === over + 1 ? spreadOf(marks, countLength) : null
+
+      return `${countLength.toFixed(2)}s · ${bpmOf(countLength)} BPM${
+        spread === null ? '' : ` · ±${spread.toFixed(2)}s`
+      }`
+    }
+
+    return over > 1 && marks.length > 0 ? `${marks.length - 1} of ${over}` : ''
+  }
+
+  /* Reached by the key handler through a ref, for `saveLoop`'s reason */
+  const finderEnterRef = useRef(finderEnter)
 
   /* The key handler below subscribes on the loop and the armed boundary, and
      nothing else — so it reaches the save through a ref rather than closing over
@@ -1014,6 +1105,7 @@ function OpenedClip({
     saveAsNewRef.current = saveAsNew
     scrubRef.current = scrub
     playOrPauseRef.current = playOrPause
+    finderEnterRef.current = finderEnter
     pauseForScrubRef.current = pauseForScrub
   })
 
@@ -1166,6 +1258,9 @@ function OpenedClip({
       /* Read off the element for `nudge`'s reason: `time` is a copy, stale by
          however long it has been since the last frame, and a mark placed from it
          would land somewhere other than where the dancer saw. */
+      /* #121: while the Loop Finder counts, it takes the press */
+      if (finderEnterRef.current(surface.current?.currentTime ?? 0)) return
+
       const framed = enterSets({
         loop: playback.loop,
         handle: nextPoint,
@@ -1461,7 +1556,19 @@ function OpenedClip({
   /* #121: the slider is out while the Loop Finder is, whatever the box says */
   const sliderShown = sliderOut || finder !== null
 
-  const finderPanel = finder !== null && <LoopFinderPanel column={column} />
+  const finderPanel = finder !== null && (
+    <LoopFinderPanel
+      column={column}
+      stage={{
+        kind: 'counting',
+        over,
+        reading: countReading(),
+        canConfirm: counted !== null,
+        onOver: changeOver,
+        onConfirm: confirmCount,
+      }}
+    />
+  )
 
   const loopRange = (
     <div role="group" aria-label="Loop range" hidden={column && !sliderShown}>
@@ -1474,6 +1581,7 @@ function OpenedClip({
           onLoopChange={changeLoop}
           onHold={hushWhileHeld}
           tone={finder ? 'finder' : 'accent'}
+          marks={marks}
         />
       )}
     </div>

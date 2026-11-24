@@ -1188,6 +1188,85 @@ describe('the Loop Finder', () => {
   })
 })
 
+/* The first enter is the 1 the bars start from; with the finder over N, each
+   of the next N ends an 8 count, and one 8 count is their average. */
+describe('finding the 8 count in the Loop Finder', () => {
+  const confirm = () => within(finderPanel()!).getByRole('button', { name: 'Confirm' })
+  const marksOnTheSlider = () => document.querySelectorAll('.loop-mark').length
+
+  const pressAt = (clip: HTMLVideoElement, seconds: number) => {
+    clip.currentTime = seconds
+    press('Enter')
+  }
+
+  it('frames the 8 count from the first enter to the next, and reads its tempo', () => {
+    const clip = aClipInTheFinder()
+
+    pressAt(clip, 2)
+    pressAt(clip, 5.5)
+
+    expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '2')
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '5.5')
+    expect(finderPanel()).toHaveTextContent('3.50s · 137 BPM')
+  })
+
+  it('averages over several 8 counts, and says how far the presses strayed', () => {
+    const clip = aClipInTheFinder()
+    fireEvent.click(screen.getByRole('button', { name: 'More 8 counts' }))
+    fireEvent.click(screen.getByRole('button', { name: 'More 8 counts' }))
+
+    pressAt(clip, 1)
+    pressAt(clip, 4.48)
+    expect(finderPanel()).toHaveTextContent('1 of 3')
+
+    pressAt(clip, 8.05)
+    pressAt(clip, 11.5)
+
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '11.5')
+    expect(finderPanel()).toHaveTextContent('3.50s · 137 BPM · ±0.07s')
+  })
+
+  it('marks each press on the slider', () => {
+    const clip = aClipInTheFinder()
+    fireEvent.click(screen.getByRole('button', { name: 'More 8 counts' }))
+
+    pressAt(clip, 1)
+    pressAt(clip, 4.5)
+
+    expect(marksOnTheSlider()).toBe(2)
+  })
+
+  it('refuses Confirm until the 8 counts are framed', () => {
+    const clip = aClipInTheFinder()
+
+    expect(confirm()).toBeDisabled()
+
+    pressAt(clip, 2)
+    expect(confirm()).toBeDisabled()
+
+    pressAt(clip, 5.5)
+    expect(confirm()).toBeEnabled()
+  })
+
+  it('starts the count again when the number of 8 counts changes', () => {
+    const clip = aClipInTheFinder()
+    pressAt(clip, 2)
+
+    fireEvent.click(screen.getByRole('button', { name: 'More 8 counts' }))
+
+    expect(marksOnTheSlider()).toBe(0)
+    expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '0')
+  })
+
+  it('counts over no fewer than one 8 count', () => {
+    aClipInTheFinder()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fewer 8 counts' }))
+
+    expect(screen.getByRole('status', { name: '8 counts to average' })).toHaveTextContent('1')
+  })
+})
+
 describe('the key map in the player', () => {
   const keyMap = () => screen.queryByRole('group', { name: 'Keys' })
 

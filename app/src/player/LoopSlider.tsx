@@ -142,6 +142,7 @@ export function LoopSlider({
   onLoopChange,
   onHold,
   tone = 'accent',
+  marks = [],
 }: {
   readonly duration: number
   readonly loop: Loop
@@ -155,6 +156,8 @@ export function LoopSlider({
      else. */
   readonly onHold: (held: boolean) => void
   readonly tone?: Tone
+  /* #121: each press while the Loop Finder counts */
+  readonly marks?: readonly number[]
 }) {
   const track = useRef<HTMLDivElement>(null)
   /* Which handle is under the finger, or none. A boolean would not do: both
@@ -239,6 +242,13 @@ export function LoopSlider({
             width: `${percent(loop.b - loop.a, duration)}%`,
           }}
         />
+        {marks.map((mark) => (
+          <div
+            key={mark}
+            className="loop-mark pointer-events-none absolute -inset-y-1.5 w-0.5 -translate-x-1/2 rounded bg-finder"
+            style={{ left: `${percent(mark, duration)}%` }}
+          />
+        ))}
         <div
           className="loop-playhead pointer-events-none absolute -inset-y-1 w-0.5 -translate-x-1/2 rounded bg-ink/80"
           style={{ left: `${percent(time, duration)}%` }}
