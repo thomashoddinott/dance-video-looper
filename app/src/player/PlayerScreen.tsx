@@ -15,7 +15,18 @@ import { chainedSpan, inStartOrder } from './chain'
 import { ClipName } from './ClipName'
 import { useClipSource } from './clipSource'
 import { KeyMap } from './KeyMap'
-import { bpmOf, type Count, pressed, spreadOf } from './loopFinder'
+import { BarLane } from './BarLane'
+import {
+  barsFrom,
+  bpmOf,
+  type Count,
+  countsReached,
+  type Group,
+  groupsOf,
+  pressed,
+  spreadOf,
+  WIGGLE,
+} from './loopFinder'
 import { LoopFinderPanel } from './LoopFinderPanel'
 import { KEY_TIMINGS, READOUT_FOR, repeatWhileHeld } from './keys'
 import { clamp, type Handle, MIN_LOOP, NUDGE, SCRUB_STEP } from './loopRange'
@@ -519,6 +530,8 @@ function OpenedClip({
   const [finder, setFinder] = useState<Finder | null>(null)
   const [over, setOver] = useState(1)
   const [marks, setMarks] = useState<readonly number[]>([])
+  /* How far each of its loops reaches past its bars, as a percentage of one */
+  const [wiggle, setWiggle] = useState(WIGGLE)
 
   /* One seek in flight at a time, and the rest of the drag dropped rather than
      queued — #23. A ref rather than state because every read and write happens
@@ -1026,6 +1039,81 @@ function OpenedClip({
 
   /* Reached by the key handler through a ref, for `saveLoop`'s reason */
   const finderEnterRef = useRef(finderEnter)
+
+  /* The 8 count found, cut into bars from its first 1, and the bars as the
+     loops they would be saved as. */
+  const bars =
+    finder?.count && playback.kind === 'ready'
+      ? barsFrom(finder.count, playback.duration)
+      : []
+  const groupsWith = (joins: readonly number[], reach: number) =>
+    finder?.count && playback.kind === 'ready'
+      ? groupsOf({
+          bars,
+          joins,
+          length: finder.count.length,
+          wiggle: reach,
+          duration: playback.duration,
+        })
+      : []
+  const groups = groupsWith(finder?.joins ?? [], wiggle)
+
+  /* A loop tried: looped from its lead-in to its run-on, from the top */
+  const tryGroup = (group: Group) => {
+    if (finder === null) return
+
+    setPlayback((held) =>
+      held.kind === 'ready'
+        ? { ...held, loop: { a: group.a, b: group.b }, looping: true }
+        : held,
+    )
+    setNextPoint('a')
+    setFinder({ ...finder, trying: group.first })
+    seekTo(group.a)
+    void surface.current?.play()
+  }
+
+  /* The loop being tried, after the joins or the reach change under it: the
+     one that now holds its first bar, which a join may have moved. */
+  const keepTrying = (joins: readonly number[], reach: number) => {
+    if (finder === null || finder.trying === null) return null
+
+    const { trying } = finder
+    const now = groupsWith(joins, reach).find(
+      (group) => group.first <= trying && trying <= group.last,
+    )
+
+    if (now) putLoop({ a: now.a, b: now.b })
+
+    return now?.first ?? null
+  }
+
+  const toggleJoin = (k: number) => {
+    if (finder === null) return
+
+    const joins = finder.joins.includes(k)
+      ? finder.joins.filter((one) => one !== k)
+      : [...finder.joins, k]
+
+    setFinder({ ...finder, joins, trying: keepTrying(joins, wiggle) })
+  }
+
+  const changeWiggle = (next: number) => {
+    setWiggle(next)
+    if (finder !== null) keepTrying(finder.joins, next)
+  }
+
+  /* Back to counting, from the 8 counts found last time */
+  const findAgain = () => {
+    if (finder === null || finder.count === null) return
+
+    const { one, length } = finder.count
+
+    putLoop({ a: one, b: one + length * over })
+    setNextPoint('a')
+    setMarks([])
+    setFinder({ ...finder, count: null, trying: null, joins: [] })
+  }
 
   /* The key handler below subscribes on the loop and the armed boundary, and
      nothing else — so it reaches the save through a ref rather than closing over
@@ -1559,20 +1647,43 @@ function OpenedClip({
   const finderPanel = finder !== null && (
     <LoopFinderPanel
       column={column}
-      stage={{
-        kind: 'counting',
-        over,
-        reading: countReading(),
-        canConfirm: counted !== null,
-        onOver: changeOver,
-        onConfirm: confirmCount,
-      }}
+      stage={
+        finder.count === null
+          ? {
+              kind: 'counting',
+              over,
+              reading: countReading(),
+              canConfirm: counted !== null,
+              onOver: changeOver,
+              onConfirm: confirmCount,
+            }
+          : {
+              kind: 'cutting',
+              reading: `${finder.count.length.toFixed(2)}s · ${bpmOf(finder.count.length)} BPM`,
+              wiggle,
+              reached: countsReached(wiggle),
+              onWiggle: changeWiggle,
+              onFindAgain: findAgain,
+            }
+      }
     />
   )
 
   const loopRange = (
     <div role="group" aria-label="Loop range" hidden={column && !sliderShown}>
-      {playback.kind === 'ready' && (
+      {playback.kind === 'ready' && finder?.count ? (
+        <BarLane
+          duration={playback.duration}
+          time={time}
+          bars={bars}
+          groups={groups}
+          joins={finder.joins}
+          trying={finder.trying}
+          onTry={tryGroup}
+          onJoin={toggleJoin}
+          onSeek={seekTo}
+        />
+      ) : playback.kind === 'ready' && (
         <LoopSlider
           duration={playback.duration}
           loop={playback.loop}

@@ -1267,6 +1267,124 @@ describe('finding the 8 count in the Loop Finder', () => {
   })
 })
 
+/* Once the 8 count is confirmed, the slider is the bars: every whole bar from
+   the first 1, to try one at a time, join across the lines between them, and
+   reach past with the wiggle. Here the first 1 is at 1s and an 8 count lasts
+   3.5s, so a 26s clip holds seven bars, the last ending at 25.5s. */
+const aCountFound = () => {
+  const clip = aClipInTheFinder({ seconds: 26 })
+  clip.currentTime = 1
+  press('Enter')
+  clip.currentTime = 4.5
+  press('Enter')
+  fireEvent.click(within(finderPanel()!).getByRole('button', { name: 'Confirm' }))
+
+  return clip
+}
+
+const aBar = (name: string) => screen.queryByRole('button', { name })
+
+describe('the bars in the Loop Finder', () => {
+  const barsOnTheSlider = () => screen.getAllByRole('button', { name: /^Bars? \d/ })
+
+  const runOn = (clip: HTMLVideoElement, seconds: number) => {
+    clip.currentTime = seconds
+    act(() => {
+      vi.advanceTimersByTime(A_FEW_FRAMES)
+    })
+  }
+
+  it('lays every whole bar from the first 1 on the slider, in place of A and B', () => {
+    aCountFound()
+
+    expect(barsOnTheSlider()).toHaveLength(7)
+    expect(aBar('Bar 1')).toBeInTheDocument()
+    expect(screen.queryByRole('slider', { name: 'Loop start' })).not.toBeInTheDocument()
+  })
+
+  /* At 50%, a quarter of a bar each way: bar 2, 4.5s to 8s, loops from 3.625s
+     to 8.875s. */
+  it('loops a bar clicked, from its lead-in to its run-on, and plays it', () => {
+    vi.useFakeTimers()
+    const clip = aCountFound()
+
+    fireEvent.click(aBar('Bar 2')!)
+
+    expect(aBar('Bar 2')).toHaveAttribute('aria-pressed', 'true')
+    expect(clip.currentTime).toBe(3.625)
+    expect(clip.paused).toBe(false)
+
+    runOn(clip, 8.875)
+    expect(clip.currentTime).toBe(3.625)
+  })
+
+  it('moves the loop being tried with the wiggle', () => {
+    vi.useFakeTimers()
+    const clip = aCountFound()
+    fireEvent.click(aBar('Bar 2')!)
+    fireEvent.play(clip)
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Wiggle' }), {
+      target: { value: '0' },
+    })
+    runOn(clip, 8)
+
+    expect(clip.currentTime).toBe(4.5)
+  })
+
+  it('reads the counts the wiggle reaches either side', () => {
+    aCountFound()
+
+    expect(finderPanel()).toHaveTextContent('in 7 8 · out 1 2')
+
+    for (let step = 0; step < 5; step++) {
+      fireEvent.click(screen.getByRole('button', { name: 'Less wiggle' }))
+    }
+
+    expect(finderPanel()).toHaveTextContent('in 8 · out 1')
+  })
+
+  it('joins two bars across the line between them, and splits them again', () => {
+    aCountFound()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Join bars 2 and 3' }))
+
+    expect(aBar('Bars 2–3')).toBeInTheDocument()
+    expect(aBar('Bar 2')).not.toBeInTheDocument()
+    expect(barsOnTheSlider()).toHaveLength(6)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Split bars 2 and 3' }))
+
+    expect(aBar('Bar 2')).toBeInTheDocument()
+    expect(barsOnTheSlider()).toHaveLength(7)
+  })
+
+  it('loops the joined bars as one, reaching past both ends', () => {
+    vi.useFakeTimers()
+    const clip = aCountFound()
+    fireEvent.click(aBar('Bar 2')!)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Join bars 2 and 3' }))
+    runOn(clip, 8.9)
+
+    expect(aBar('Bars 2–3')).toHaveAttribute('aria-pressed', 'true')
+    expect(clip.currentTime).toBe(8.9)
+
+    runOn(clip, 12.375)
+    expect(clip.currentTime).toBe(3.625)
+  })
+
+  it('goes back to finding the 8 count, from the one found', () => {
+    aCountFound()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find again' }))
+
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled()
+    expect(boundary('Loop start')).toHaveAttribute('aria-valuenow', '1')
+    expect(boundary('Loop end')).toHaveAttribute('aria-valuenow', '4.5')
+  })
+})
+
 describe('the key map in the player', () => {
   const keyMap = () => screen.queryByRole('group', { name: 'Keys' })
 

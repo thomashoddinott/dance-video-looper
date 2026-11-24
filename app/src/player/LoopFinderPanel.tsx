@@ -18,6 +18,19 @@ export type Counting = {
   readonly onConfirm: () => void
 }
 
+/* The 8 count found, cut into bars on the slider. */
+export type Cutting = {
+  readonly kind: 'cutting'
+  /* The 8 count, as length and tempo */
+  readonly reading: string
+  /* How far each loop reaches past its bars, as a percentage of a bar */
+  readonly wiggle: number
+  /* The counts that reaches either side, as a dancer counts them */
+  readonly reached: { readonly before: string; readonly after: string }
+  readonly onWiggle: (wiggle: number) => void
+  readonly onFindAgain: () => void
+}
+
 /* A − and + either side of a number, as the speed stepper has */
 function Stepper({
   less,
@@ -52,7 +65,7 @@ export function LoopFinderPanel({
   stage,
 }: {
   readonly column: boolean
-  readonly stage: Counting
+  readonly stage: Counting | Cutting
 }) {
   return (
     <div
@@ -62,6 +75,14 @@ export function LoopFinderPanel({
     >
       <h2 className="text-xs font-bold tracking-widest text-finder">LOOP FINDER</h2>
 
+      {stage.kind === 'counting' ? <Counted stage={stage} /> : <Cut stage={stage} />}
+    </div>
+  )
+}
+
+function Counted({ stage }: { readonly stage: Counting }) {
+  return (
+    <>
       <div className="mt-2 flex items-center gap-2 text-sm">
         <span className="font-semibold">Find the 8 count</span>
         <span className="ml-auto text-ink/60">over</span>
@@ -92,6 +113,50 @@ export function LoopFinderPanel({
           Confirm
         </button>
       </div>
-    </div>
+    </>
+  )
+}
+
+function Cut({ stage }: { readonly stage: Cutting }) {
+  return (
+    <>
+      <div className="mt-2 flex items-center gap-3 text-sm">
+        <span className="font-semibold">8 count</span>
+        <span className="tabular-nums text-ink/60">{stage.reading}</span>
+        <button
+          type="button"
+          onClick={stage.onFindAgain}
+          className="ml-auto text-xs font-medium text-finder hover:underline"
+        >
+          Find again
+        </button>
+      </div>
+
+      <div className="mt-3 flex items-center gap-2 text-sm">
+        <span className="font-semibold">Wiggle</span>
+        <Stepper
+          less="Less wiggle"
+          more="More wiggle"
+          onLess={() => stage.onWiggle(Math.max(0, stage.wiggle - 5))}
+          onMore={() => stage.onWiggle(stage.wiggle + 5)}
+        >
+          <input
+            type="number"
+            min={0}
+            step={5}
+            value={stage.wiggle}
+            aria-label="Wiggle"
+            onChange={(event) =>
+              stage.onWiggle(Math.max(0, Number(event.target.value) || 0))
+            }
+            className="w-14 rounded-md bg-ink/10 px-2 py-1 text-right tabular-nums outline-none"
+          />
+        </Stepper>
+        <span className="text-ink/60">%</span>
+        <span className="ml-auto text-xs tabular-nums text-ink/60">
+          in {stage.reached.before} · out {stage.reached.after}
+        </span>
+      </div>
+    </>
   )
 }
