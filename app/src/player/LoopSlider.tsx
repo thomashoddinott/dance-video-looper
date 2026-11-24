@@ -19,7 +19,10 @@ const HANDLE =
   'absolute flex h-10 w-10 touch-none items-center justify-center ' +
   '-translate-x-1/2 cursor-grab active:cursor-grabbing'
 
-const DROP = 'h-4 w-4 bg-ink shadow'
+const DROP = 'h-4 w-4 shadow'
+
+/* #121: the Loop Finder colours the slider its own, so it reads as a mode */
+export type Tone = 'accent' | 'finder'
 
 const TIME = 'absolute top-1/2 -translate-x-1/2 text-sm tabular-nums text-ink/70'
 
@@ -48,6 +51,7 @@ function LoopHandle({
   onDrag,
   onLetGo,
   onKey,
+  tone,
 }: {
   readonly handle: Handle
   readonly label: string
@@ -57,6 +61,7 @@ function LoopHandle({
   readonly onDrag: (clientX: number) => void
   readonly onLetGo: () => void
   readonly onKey: (handle: Handle, seconds: number) => void
+  readonly tone: Tone
 }) {
   const at = `${percent(seconds, duration)}%`
 
@@ -112,7 +117,7 @@ function LoopHandle({
         style={{ left: at }}
       >
         <span
-          className={`${DROP} ${
+          className={`${DROP} ${tone === 'finder' ? 'bg-finder' : 'bg-ink'} ${
             handle === 'a'
               ? 'rounded-[50%_50%_50%_0] rotate-45'
               : 'rounded-[0_50%_50%_50%] rotate-45'
@@ -136,6 +141,8 @@ export function LoopSlider({
   onSeek,
   onLoopChange,
   onHold,
+  tone = 'accent',
+  marks = [],
 }: {
   readonly duration: number
   readonly loop: Loop
@@ -148,6 +155,9 @@ export function LoopSlider({
      held on a handle and a key held down on one are the same fact to everyone
      else. */
   readonly onHold: (held: boolean) => void
+  readonly tone?: Tone
+  /* #121: each press while the Loop Finder counts */
+  readonly marks?: readonly number[]
 }) {
   const track = useRef<HTMLDivElement>(null)
   /* Which handle is under the finger, or none. A boolean would not do: both
@@ -224,12 +234,21 @@ export function LoopSlider({
             own — deliberately, since the handles are the sliders and this only
             mirrors what they announce. */}
         <div
-          className="loop-span absolute inset-y-0 rounded-full bg-accent"
+          className={`loop-span absolute inset-y-0 rounded-full ${
+            tone === 'finder' ? 'bg-finder' : 'bg-accent'
+          }`}
           style={{
             left: `${percent(loop.a, duration)}%`,
             width: `${percent(loop.b - loop.a, duration)}%`,
           }}
         />
+        {marks.map((mark) => (
+          <div
+            key={mark}
+            className="loop-mark pointer-events-none absolute -inset-y-1.5 w-0.5 -translate-x-1/2 rounded bg-finder"
+            style={{ left: `${percent(mark, duration)}%` }}
+          />
+        ))}
         <div
           className="loop-playhead pointer-events-none absolute -inset-y-1 w-0.5 -translate-x-1/2 rounded bg-ink/80"
           style={{ left: `${percent(time, duration)}%` }}
@@ -245,6 +264,7 @@ export function LoopSlider({
         onDrag={drag}
         onLetGo={letGo}
         onKey={key}
+        tone={tone}
       />
       <LoopHandle
         handle="b"
@@ -255,6 +275,7 @@ export function LoopSlider({
         onDrag={drag}
         onLetGo={letGo}
         onKey={key}
+        tone={tone}
       />
     </div>
   )

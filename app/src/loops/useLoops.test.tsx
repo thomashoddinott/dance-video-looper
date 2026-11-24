@@ -291,6 +291,57 @@ describe('saving a loop', () => {
 /* #30. Same path as a save — write first, then show — and the same two things
    worth pinning: what actually went into Drive, and that a refusal leaves the
    entry the dancer was correcting exactly as it was. */
+/* #121. The Loop Finder keeps all its bars at once, so they go in one write:
+   a clip half cut into loops, with the rest lost to a failure part way, would
+   be worse than either all of them or none. */
+describe('saving several loops at once', () => {
+  it('puts them all in Drive in one write, in order, and then in the list', async () => {
+    const bars = [getLoop({ id: 'bar-1' }), getLoop({ id: 'bar-2' }), getLoop({ id: 'bar-3' })]
+    const api = holding({})
+
+    const { result } = renderLoops(api)
+
+    await waitFor(() => {
+      expect(api.readJson).toHaveBeenCalled()
+    })
+    await result.current.saveAll(A_CLIP, bars)
+
+    expect(api.writeJson).toHaveBeenCalledTimes(1)
+    expect(bodyWritten(api).clips).toEqual({ [A_CLIP]: bars })
+    await waitFor(() => {
+      expect(result.current.loops.clips).toEqual({ [A_CLIP]: bars })
+    })
+  })
+
+  it('adds to the loops the clip already has', async () => {
+    const mine = getLoop({ id: 'mine' })
+    const bar = getLoop({ id: 'bar-1' })
+    const api = holding({ [A_CLIP]: [mine] })
+
+    const { result } = renderLoops(api)
+
+    await result.current.saveAll(A_CLIP, [bar])
+
+    expect(bodyWritten(api).clips).toEqual({ [A_CLIP]: [mine, bar] })
+  })
+
+  it('adds none of them and says so when the write fails', async () => {
+    const api = holding({})
+
+    vi.mocked(api.writeJson).mockRejectedValue(new DriveError('boom', 500))
+
+    const { result } = renderLoops(api)
+
+    await expect(
+      result.current.saveAll(A_CLIP, [getLoop(), getLoop({ id: 'two' })]),
+    ).resolves.toBe(false)
+    await waitFor(() => {
+      expect(result.current.notice).toBe('Those loops were not saved to Drive.')
+    })
+    expect(result.current.loops).toEqual(NO_LOOPS)
+  })
+})
+
 describe('updating a loop', () => {
   it('writes it over the entry that was there, in place', async () => {
     const first = getLoop({ id: 'first' })

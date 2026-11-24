@@ -15,8 +15,21 @@ import { chainedSpan, inStartOrder } from './chain'
 import { ClipName } from './ClipName'
 import { useClipSource } from './clipSource'
 import { KeyMap } from './KeyMap'
+import { BarLane } from './BarLane'
+import {
+  barsFrom,
+  bpmOf,
+  type Count,
+  countsReached,
+  type Group,
+  groupsOf,
+  pressed,
+  spreadOf,
+  WIGGLE,
+} from './loopFinder'
+import { LoopFinderPanel } from './LoopFinderPanel'
 import { KEY_TIMINGS, READOUT_FOR, repeatWhileHeld } from './keys'
-import { clamp, type Handle, NUDGE, SCRUB_STEP } from './loopRange'
+import { clamp, type Handle, MIN_LOOP, NUDGE, SCRUB_STEP } from './loopRange'
 import { LoopSlider } from './LoopSlider'
 import type { PlaybackSurface } from './playbackSurface'
 import {
@@ -95,6 +108,22 @@ const Glyph = ({
   </svg>
 )
 
+/* #121. The Loop Finder while it is on: the 8 count found (null until it is
+   confirmed), the loop being tried (by its first bar), the lines joined, and
+   what the player was set to before, to go back to. */
+type Finder = {
+  readonly before: {
+    readonly loop: Loop
+    readonly looping: boolean
+    readonly nextPoint: Handle
+    readonly editingId: string | null
+    readonly chain: readonly string[]
+  }
+  readonly count: Count | null
+  readonly trying: number | null
+  readonly joins: readonly number[]
+}
+
 /* #105. Where the count before the loop comes round starts: 3, 2, 1. */
 const COUNT_FROM = 3
 
@@ -104,18 +133,28 @@ function SwitchPill({
   on,
   onToggle,
   children,
+  tone = 'accent',
+  disabled = false,
 }: {
   readonly on: boolean
   readonly onToggle: (on: boolean) => void
   readonly children: ReactNode
+  /* #121: a mode in its own colour, rather than a setting in the brand's */
+  readonly tone?: 'accent' | 'finder'
+  readonly disabled?: boolean
 }) {
   return (
     <button
       type="button"
       aria-pressed={on}
+      disabled={disabled}
       onClick={() => onToggle(!on)}
-      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-        on ? 'bg-accent text-on-accent' : 'bg-control text-ink/70 hover:bg-control-hi'
+      className={`rounded-full px-3 py-1 text-xs font-semibold disabled:opacity-40 ${
+        !on
+          ? 'bg-control text-ink/70 hover:bg-control-hi'
+          : tone === 'finder'
+            ? 'bg-finder text-white'
+            : 'bg-accent text-on-accent'
       }`}
     >
       {children}
@@ -486,6 +525,13 @@ function OpenedClip({
      not written anywhere, and that is the point — a chain is a way to play the
      loops already saved, not another loop to save. */
   const [chain, setChain] = useState<readonly string[]>([])
+  /* #121. The Loop Finder, a mode of its own; null while it is off. How many
+     8 counts it averages over, and the presses so far. */
+  const [finder, setFinder] = useState<Finder | null>(null)
+  const [over, setOver] = useState(1)
+  const [marks, setMarks] = useState<readonly number[]>([])
+  /* How far each of its loops reaches past its bars, as a percentage of one */
+  const [wiggle, setWiggle] = useState(WIGGLE)
 
   /* One seek in flight at a time, and the rest of the drag dropped rather than
      queued — #23. A ref rather than state because every read and write happens
@@ -739,6 +785,10 @@ function OpenedClip({
      next one in the same press, and routing it past this would have the two fight
      over `nextPoint` inside one batch. */
   const changeLoop = (loop: Loop) => {
+    /* #121: a hand on the slider while the finder counts leaves the presses
+       behind */
+    if (finder !== null && finder.count === null) setMarks([])
+
     if (playback.kind === 'ready' && loop.b !== playback.loop.b) setNextPoint('a')
 
     putLoop(loop)
@@ -862,6 +912,238 @@ function OpenedClip({
     writeLoop(null, (kept) => loops.save(clip.id, kept))
   }
 
+  /* #121. The Loop Finder starts from nothing: the whole clip framed and enter
+     armed for the first 1, rather than the loops already there. Turning it off
+     puts the player back the way it was. */
+  const openFinder = () => {
+    if (playback.kind !== 'ready') return
+
+    setFinder({
+      before: {
+        loop: playback.loop,
+        looping: playback.looping,
+        nextPoint,
+        editingId,
+        chain,
+      },
+      count: null,
+      trying: null,
+      joins: [],
+    })
+    setMarks([])
+    setPlayback((held) =>
+      held.kind === 'ready'
+        ? { ...held, loop: wholeClip(held.duration), looping: true }
+        : held,
+    )
+    setNextPoint('a')
+    setEditingId(null)
+    setChain([])
+  }
+
+  const closeFinder = () => {
+    if (finder === null) return
+
+    const { before } = finder
+
+    setPlayback((held) =>
+      held.kind === 'ready'
+        ? { ...held, loop: before.loop, looping: before.looping }
+        : held,
+    )
+    setNextPoint(before.nextPoint)
+    setEditingId(before.editingId)
+    setChain(before.chain)
+    setMarks([])
+    setFinder(null)
+  }
+
+  /* The whole clip framed and enter armed for the first 1, as the finder
+     opens and whenever its count starts again. */
+  const countAfresh = () => {
+    setMarks([])
+    setPlayback((held) =>
+      held.kind === 'ready' ? { ...held, loop: wholeClip(held.duration) } : held,
+    )
+    setNextPoint('a')
+  }
+
+  /* Enter while the finder counts, taken ahead of the A and B it sets any
+     other time. The first press is the 1 the bars start from, and B waits at
+     the end of the clip until the last of `over` 8 counts is in; then the
+     loop is all of them, to check by ear. */
+  const finderEnter = (at: number) => {
+    if (finder === null || finder.count !== null || playback.kind !== 'ready') {
+      return false
+    }
+
+    const next = pressed({ marks, over, at })
+    const [one = at] = next
+
+    setMarks(next)
+
+    if (next.length === 1) {
+      putLoop({ a: at, b: playback.duration })
+      setNextPoint('b')
+    } else if (next.length === over + 1) {
+      putLoop({ a: one, b: Math.max(at, one + MIN_LOOP) })
+      setNextPoint('a')
+    }
+
+    return true
+  }
+
+  const changeOver = (next: number) => {
+    setOver(next)
+    countAfresh()
+  }
+
+  /* The 8 counts framed, as against the whole clip the finder opens on, and
+     one 8 count as their share of it */
+  const counted =
+    finder !== null &&
+    finder.count === null &&
+    playback.kind === 'ready' &&
+    nextPoint === 'a' &&
+    playback.loop.b - playback.loop.a > MIN_LOOP &&
+    (playback.loop.a > 0 || playback.loop.b < playback.duration)
+      ? playback.loop
+      : null
+  const countLength = counted === null ? 0 : (counted.b - counted.a) / over
+
+  const confirmCount = () => {
+    if (finder === null || counted === null) return
+
+    setFinder({
+      ...finder,
+      count: { one: counted.a, length: countLength },
+      trying: null,
+      joins: [],
+    })
+  }
+
+  /* What the panel reads while counting: the 8 count once it is framed, with
+     how far the presses strayed when there were several; until then, how
+     many are in. */
+  const countReading = () => {
+    if (counted !== null) {
+      const spread = marks.length === over + 1 ? spreadOf(marks, countLength) : null
+
+      return `${countLength.toFixed(2)}s · ${bpmOf(countLength)} BPM${
+        spread === null ? '' : ` · ±${spread.toFixed(2)}s`
+      }`
+    }
+
+    return over > 1 && marks.length > 0 ? `${marks.length - 1} of ${over}` : ''
+  }
+
+  /* Reached by the key handler through a ref, for `saveLoop`'s reason */
+  const finderEnterRef = useRef(finderEnter)
+
+  /* The 8 count found, cut into bars from its first 1, and the bars as the
+     loops they would be saved as. */
+  const bars =
+    finder?.count && playback.kind === 'ready'
+      ? barsFrom(finder.count, playback.duration)
+      : []
+  const groupsWith = (joins: readonly number[], reach: number) =>
+    finder?.count && playback.kind === 'ready'
+      ? groupsOf({
+          bars,
+          joins,
+          length: finder.count.length,
+          wiggle: reach,
+          duration: playback.duration,
+        })
+      : []
+  const groups = groupsWith(finder?.joins ?? [], wiggle)
+
+  /* A loop tried: looped from its lead-in to its run-on, from the top */
+  const tryGroup = (group: Group) => {
+    if (finder === null) return
+
+    setPlayback((held) =>
+      held.kind === 'ready'
+        ? { ...held, loop: { a: group.a, b: group.b }, looping: true }
+        : held,
+    )
+    setNextPoint('a')
+    setFinder({ ...finder, trying: group.first })
+    seekTo(group.a)
+    void surface.current?.play()
+  }
+
+  /* The loop being tried, after the joins or the reach change under it: the
+     one that now holds its first bar, which a join may have moved. */
+  const keepTrying = (joins: readonly number[], reach: number) => {
+    if (finder === null || finder.trying === null) return null
+
+    const { trying } = finder
+    const now = groupsWith(joins, reach).find(
+      (group) => group.first <= trying && trying <= group.last,
+    )
+
+    if (now) putLoop({ a: now.a, b: now.b })
+
+    return now?.first ?? null
+  }
+
+  const toggleJoin = (k: number) => {
+    if (finder === null) return
+
+    const joins = finder.joins.includes(k)
+      ? finder.joins.filter((one) => one !== k)
+      : [...finder.joins, k]
+
+    setFinder({ ...finder, joins, trying: keepTrying(joins, wiggle) })
+  }
+
+  const changeWiggle = (next: number) => {
+    setWiggle(next)
+    if (finder !== null) keepTrying(finder.joins, next)
+  }
+
+  /* One loop per group into Drive, in one write, named by its bars and at 1x
+     whatever the player's speed: only the times are kept. Once Drive has them
+     the finder closes, onto the way a clip opens, as after any save (#71). */
+  const saveGroups = () => {
+    if (finder === null || groups.length === 0 || loops.writing) return
+
+    const kept = groups.map((group) => ({
+      id: crypto.randomUUID(),
+      name: group.name,
+      a: group.a,
+      b: group.b,
+      speed: 1,
+    }))
+
+    void loops.saveAll(clip.id, kept).then((written) => {
+      if (!written) return
+
+      setFinder(null)
+      setMarks([])
+      setPlayback((held) =>
+        held.kind === 'ready' ? { ...held, loop: wholeClip(held.duration) } : held,
+      )
+      setNextPoint('a')
+      setEditingId(null)
+      setChain([])
+      setLoopName('')
+    })
+  }
+
+  /* Back to counting, from the 8 counts found last time */
+  const findAgain = () => {
+    if (finder === null || finder.count === null) return
+
+    const { one, length } = finder.count
+
+    putLoop({ a: one, b: one + length * over })
+    setNextPoint('a')
+    setMarks([])
+    setFinder({ ...finder, count: null, trying: null, joins: [] })
+  }
+
   /* The key handler below subscribes on the loop and the armed boundary, and
      nothing else — so it reaches the save through a ref rather than closing over
      it. Taking `saveLoop` as a dependency would re-subscribe the window listener
@@ -940,6 +1222,7 @@ function OpenedClip({
     saveAsNewRef.current = saveAsNew
     scrubRef.current = scrub
     playOrPauseRef.current = playOrPause
+    finderEnterRef.current = finderEnter
     pauseForScrubRef.current = pauseForScrub
   })
 
@@ -1092,6 +1375,9 @@ function OpenedClip({
       /* Read off the element for `nudge`'s reason: `time` is a copy, stale by
          however long it has been since the last frame, and a mark placed from it
          would land somewhere other than where the dancer saw. */
+      /* #121: while the Loop Finder counts, it takes the press */
+      if (finderEnterRef.current(surface.current?.currentTime ?? 0)) return
+
       const framed = enterSets({
         loop: playback.loop,
         handle: nextPoint,
@@ -1384,9 +1670,53 @@ function OpenedClip({
 
      In the new layout it is put away while no loop is being picked (#94):
      hidden in place rather than unmounted, for the header's reason. */
+  /* #121: the slider is out while the Loop Finder is, whatever the box says */
+  const sliderShown = sliderOut || finder !== null
+
+  const finderPanel = finder !== null && (
+    <LoopFinderPanel
+      column={column}
+      stage={
+        finder.count === null
+          ? {
+              kind: 'counting',
+              over,
+              reading: countReading(),
+              canConfirm: counted !== null,
+              onOver: changeOver,
+              onConfirm: confirmCount,
+            }
+          : {
+              kind: 'cutting',
+              reading: `${finder.count.length.toFixed(2)}s · ${bpmOf(finder.count.length)} BPM`,
+              wiggle,
+              reached: countsReached(wiggle),
+              onWiggle: changeWiggle,
+              onFindAgain: findAgain,
+              loops: groups.length,
+              writing: loops.writing,
+              notice: loops.notice,
+              onSave: saveGroups,
+            }
+      }
+    />
+  )
+
   const loopRange = (
-    <div role="group" aria-label="Loop range" hidden={column && !sliderOut}>
-      {playback.kind === 'ready' && (
+    <div role="group" aria-label="Loop range" hidden={column && !sliderShown}>
+      {playback.kind === 'ready' && finder?.count ? (
+        <BarLane
+          duration={playback.duration}
+          time={time}
+          bars={bars}
+          groups={groups}
+          joins={finder.joins}
+          trying={finder.trying}
+          onTry={tryGroup}
+          onJoin={toggleJoin}
+          onSeek={seekTo}
+        />
+      ) : playback.kind === 'ready' && (
         <LoopSlider
           duration={playback.duration}
           loop={playback.loop}
@@ -1394,6 +1724,8 @@ function OpenedClip({
           onSeek={seekTo}
           onLoopChange={changeLoop}
           onHold={hushWhileHeld}
+          tone={finder ? 'finder' : 'accent'}
+          marks={marks}
         />
       )}
     </div>
@@ -1500,6 +1832,15 @@ function OpenedClip({
             <SwitchPill on={countdownOn} onToggle={setCountdownOn}>
               Countdown
             </SwitchPill>
+            {/* #121: a mode, in its own colour while it is on */}
+            <SwitchPill
+              on={finder !== null}
+              onToggle={(on) => (on ? openFinder() : closeFinder())}
+              tone="finder"
+              disabled={playback.kind !== 'ready'}
+            >
+              Loop Finder
+            </SwitchPill>
             <SwitchPill on={tryNewUi} onToggle={setTryNewUi}>
               Try new UI
             </SwitchPill>
@@ -1538,7 +1879,9 @@ function OpenedClip({
               <div className="mt-4">{hint}</div>
               {transport}
             </div>
-            {savedLoops}
+            {/* #121: Saved loops steps aside while the Loop Finder is open */}
+            {finderPanel}
+            {finder === null && savedLoops}
           </div>
         )}
         {/* The card becomes the black field the clip sits alone in. Same
@@ -1556,7 +1899,7 @@ function OpenedClip({
               ? 'fixed inset-0 z-50 flex items-center justify-center bg-black'
               : column
                 ? `@container min-h-0 overflow-y-auto rounded-2xl bg-panel p-6 ${
-                    sliderOut ? '' : '[--player-controls:var(--player-chrome)]'
+                    sliderShown ? '' : '[--player-controls:var(--player-chrome)]'
                   }`
                 : 'mx-auto w-fit max-w-full rounded-2xl bg-panel p-4 lg:p-6'
           }
@@ -1754,7 +2097,8 @@ function OpenedClip({
             {loopRange}
             {!column && hint}
             {!column && transport}
-            {!column && savedLoops}
+            {!column && finderPanel}
+            {!column && finder === null && savedLoops}
           </div>
         </div>
       </main>

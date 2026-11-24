@@ -78,5 +78,13 @@ export const useFakeLoops = ({
     [write],
   )
 
-  return { loops, writing, notice, save, update, remove }
+  const saveAll = useCallback(
+    (clipId: string, adding: readonly SavedLoop[]) =>
+      write((current) =>
+        adding.reduce((into, loop) => withLoop(into, clipId, loop), current),
+      ),
+    [write],
+  )
+
+  return { loops, writing, notice, save, update, remove, saveAll }
 }
