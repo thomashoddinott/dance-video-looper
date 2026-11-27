@@ -2,6 +2,7 @@ import type { SavedLoop } from '../loops/loop'
 import { inStartOrder } from './chain'
 import type { Loop } from './playback'
 import { nextLoopName, summarise } from './savedLoops'
+import { type Sending, SendLoopButton } from './SendLoopButton'
 
 const SAVE_BUTTON =
   'rounded-lg bg-control px-4 py-2.5 text-sm font-semibold text-ink/90 transition hover:bg-control-hi active:scale-95 disabled:pointer-events-none disabled:opacity-40'
@@ -51,6 +52,8 @@ export function SavedLoopsPanel({
   onRecall,
   onRemove,
   onChain,
+  sending,
+  onSend,
 }: {
   /* #81, #86. In the column beside the clip rather than in the card under the
      transport: a card itself then, taking the height the controls above it
@@ -92,6 +95,10 @@ export function SavedLoopsPanel({
   readonly onRecall: (entry: SavedLoop) => void
   readonly onRemove: (id: string) => void
   readonly onChain: (id: string) => void
+  /* #123. Each loop sends itself to a friend: what that does here, and where
+     each one's send has got to. */
+  readonly sending: Sending
+  readonly onSend: (entry: SavedLoop) => void
 }) {
   return (
     <section
@@ -299,6 +306,14 @@ export function SavedLoopsPanel({
                     unsaved
                   </span>
                 )}
+                {/* #123, as picked at the mockup gate: beside the ×, which
+                    keeps the loop's own row as the one place that acts on it */}
+                <SendLoopButton
+                  name={entry.name}
+                  sending={sending}
+                  state={sending.state(entry.id)}
+                  onSend={() => onSend(entry)}
+                />
                 {/* Its own target beside the recall, not a corner of it. The
                     dancer is reaching for these with a thumb, and a removal
                     reached by mistake costs the loop it took a minute to frame
