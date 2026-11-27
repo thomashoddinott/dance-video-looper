@@ -11,6 +11,7 @@ import { browserDriveApi } from '../drive/driveApi'
 import type { SavedLoop } from '../loops/loop'
 import { loopsFor } from '../loops/loopsChange'
 import type { LoopsHandle } from '../loops/useLoops'
+import { useDesktop } from '../screens'
 import { chainedSpan, inStartOrder } from './chain'
 import { ClipName } from './ClipName'
 import { useClipSource } from './clipSource'
@@ -66,7 +67,6 @@ import {
   settled,
 } from './seekGate'
 import { COUNTDOWN, TRY_NEW_UI, useSessionSwitch } from './useSessionSwitch'
-import { useWideScreen } from './useWideScreen'
 import { VideoProgress } from './VideoProgress'
 import { YouTubeFrame } from './YouTubeFrame'
 import { browserMountYouTube, type MountYouTube } from './youtubeMount'
@@ -462,14 +462,14 @@ function OpenedClip({
   const [sliderOut, setSliderOut] = useState(false)
   /* Whether this is a laptop or a desktop (#81, #86): where the experimental
      switches are offered, and where they take effect. */
-  const wide = useWideScreen()
+  const desktop = useDesktop()
   /* #105, desktop-first. A 3, 2, 1 count before the loop comes round, so the
      dancer has a few seconds to get back into position: the clip goes back to
      A and holds there, paused, while `count` runs down, then plays on. Null
      while nothing is counting. On to begin with; off for the session once
      turned off. */
   const [countdownOn, setCountdownOn] = useSessionSwitch(COUNTDOWN)
-  const countingIn = wide && countdownOn
+  const countingIn = desktop && countdownOn
   const [count, setCount] = useState<number | null>(null)
   /* #116. What the last arrow key did, shown over the clip for a moment: the
      speed it set, or the time it scrubbed to. A fresh object each key, so the
@@ -942,7 +942,7 @@ function OpenedClip({
 
   /* #123. A saved loop to a friend: a clip from Drive cut to its own MP4, A
      to B, or a YouTube entry, which the app never holds, as a link that opens
-     it at A. A phone hands either to the share sheet; a wide screen downloads
+     it at A. A phone hands either to the share sheet; a desktop downloads
      the one and copies the other. */
   const handOn = async (id: string, file: File, phone: boolean) => {
     const handed = await sendLoop.hand(file, phone)
@@ -951,7 +951,7 @@ function OpenedClip({
   }
 
   const sendSaved = (entry: SavedLoop) => {
-    const phone = !wide
+    const phone = !desktop
     const failed = () => setSending({ id: entry.id, state: 'failed' })
 
     /* The tap the share sheet was waiting for: the cut is already made */
@@ -1662,7 +1662,7 @@ function OpenedClip({
      the rest of the screen with the slider under it. Off, or on a narrower
      screen, the player is one column, as it was before #81. */
   const [tryNewUi, setTryNewUi] = useSessionSwitch(TRY_NEW_UI)
-  const column = wide && tryNewUi
+  const column = desktop && tryNewUi
 
   /* One panel, put in one of two places: under the transport in the card, or
      under the controls in the column. A JSX value rather than two renders, so
@@ -1688,7 +1688,7 @@ function OpenedClip({
       onChain={chainLoop}
       sending={{
         kind: youtube === undefined ? 'file' : 'link',
-        phone: !wide,
+        phone: !desktop,
         state: (id) => (sending?.id === id ? sending.state : 'idle'),
       }}
       onSend={sendSaved}
@@ -1708,7 +1708,7 @@ function OpenedClip({
         role="toolbar"
         aria-label="Seek and speed"
         className={`flex flex-wrap items-center justify-between gap-2 ${
-          column ? '' : 'mt-4 lg:mt-6'
+          column ? '' : 'mt-4 desktop:mt-6'
         }`}
       >
         {playback.kind === 'ready' && (
@@ -1899,7 +1899,7 @@ function OpenedClip({
         />
         {/* #86, #100: on to begin with, and offered only where it changes
             anything. */}
-        {wide && (
+        {desktop && (
           <div className="ml-auto flex shrink-0 items-center gap-3">
             {/* #94, #96, on trial: the slider out or away, by hand, until the
                 keyboard's part in it is worked out. */}
@@ -1986,7 +1986,7 @@ function OpenedClip({
                 ? `@container min-h-0 overflow-y-auto rounded-2xl bg-panel p-6 ${
                     sliderShown ? '' : '[--player-controls:var(--player-chrome)]'
                   }`
-                : 'mx-auto w-fit max-w-full rounded-2xl bg-panel p-4 lg:p-6'
+                : 'mx-auto w-fit max-w-full rounded-2xl bg-panel p-4 desktop:p-6'
           }
         >
           {/* Only the clip goes; the header above and the regions below stay put,
@@ -2032,7 +2032,7 @@ function OpenedClip({
                       ? 'max-h-dvh max-w-full object-contain'
                       : column
                         ? 'mx-auto block max-h-[calc(100dvh-var(--player-controls))] max-w-full rounded-lg bg-black'
-                        : 'mx-auto block max-h-[50vh] max-w-full rounded-lg bg-black lg:max-h-[80vh]'
+                        : 'mx-auto block max-h-[50vh] max-w-full rounded-lg bg-black desktop:max-h-[80vh]'
                   }
                   playsInline
                   /* The default fetches metadata and stops, so scrubbing past
@@ -2190,7 +2190,7 @@ function OpenedClip({
 
       {/* #115. Every key, in the corner, closed until clicked. Desktop first,
           like the other experiments, and gone with the controls in zen. */}
-      {wide && !isolated && <KeyMap />}
+      {desktop && !isolated && <KeyMap />}
     </div>
   )
 }

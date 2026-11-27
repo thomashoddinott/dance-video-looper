@@ -23,6 +23,16 @@
   --color-bachata: #b026ff;
   /* #121: the Loop Finder's own colour, so its slider reads as a mode */
   --color-finder: #d9761a;
+
+  /* #125. The app's screen sizes past a phone's, named for what they mean
+     here, and the only ones there are: Tailwind's own are reset, so a class
+     says `tablet:` or `desktop:` and nothing else. `screens.ts` names the
+     same widths for the script, and a test holds the two together. */
+  --breakpoint-*: initial;
+  /* 640px: room for three clips abreast, and a pointer that hovers */
+  --breakpoint-tablet: 40rem;
+  /* 1024px: a laptop or a desktop */
+  --breakpoint-desktop: 64rem;
 }
 
 /* #81, #86. How much of a wide screen's height the new layout takes from the

@@ -32,7 +32,7 @@ type Question = 'delete' | 'style' | 'rename' | 'group'
    Drive. So the control is always in the document and always focusable, and it
    is only the *fading* that is conditional. */
 const REVEAL =
-  'opacity-100 transition sm:opacity-0 sm:group-hover/tile:opacity-100 sm:focus-visible:opacity-100 sm:aria-expanded:opacity-100'
+  'opacity-100 transition tablet:opacity-0 tablet:group-hover/tile:opacity-100 tablet:focus-visible:opacity-100 tablet:aria-expanded:opacity-100'
 
 export function ClipTile({
   clip,
@@ -379,7 +379,7 @@ function GroupQuestion({
           }}
           aria-label="New group"
           placeholder="New group"
-          className="min-w-0 flex-1 rounded-lg bg-ink/10 px-2 py-1.5 text-base text-ink outline-none placeholder:text-ink/40 sm:text-xs"
+          className="min-w-0 flex-1 rounded-lg bg-ink/10 px-2 py-1.5 text-base text-ink outline-none placeholder:text-ink/40 tablet:text-xs"
         />
         <button
           type="submit"
