@@ -32,6 +32,7 @@ import { holdSeeks, playable, runsOut, seeksSeen } from '../test/media'
 import { aWindow } from '../test/screenWidth'
 import { SEEK_BACKSTOP } from './seekGate'
 import { PlayerScreen } from './PlayerScreen'
+import type { SendLoop } from './loopShare'
 import type { MountYouTube } from './youtubeMount'
 import { aYouTube, aYouTubePlayer } from './youtubePlayer.factory'
 import { BUFFERING, ENDED, PLAYING } from './youtubeSurface'
@@ -95,6 +96,7 @@ const Player = ({
   demo = false,
   mountYouTube,
   shapeYouTube = aLandscapeVideo,
+  sendLoop = aSender(),
   ...loops
 }: {
   readonly clip: Clip
@@ -105,6 +107,7 @@ const Player = ({
   readonly demo?: boolean
   readonly mountYouTube?: MountYouTube
   readonly shapeYouTube?: ((videoId: string) => Promise<VideoShape>) | undefined
+  readonly sendLoop?: SendLoop
 } & LoopOptions) => {
   const store = useFakeLoops(loops)
 
@@ -120,9 +123,20 @@ const Player = ({
       demo={demo}
       mountYouTube={mountYouTube}
       shapeYouTube={shapeYouTube}
+      sendLoop={sendLoop}
     />
   )
 }
+
+/* #123. The browser's half of sending a loop, stood in for: a cut that
+   resolves to a few bytes, and a hand-off and a link that only say they were
+   asked. */
+const aSender = (overrides: Partial<SendLoop> = {}) => ({
+  cut: vi.fn(async () => new Blob(['a cut'], { type: 'video/mp4' })),
+  hand: vi.fn(async (): Promise<'sent' | 'held'> => 'sent'),
+  link: vi.fn(async () => {}),
+  ...overrides,
+})
 
 /* #90. Which way a YouTube video faces is oEmbed's to say; nothing here asks
    the network, and a video is landscape unless a case says otherwise. */
@@ -169,7 +183,10 @@ const renderPlayerFetching = (
   )
 }
 
-const renderPlayer = (clip: Clip, loops: LoopOptions = {}) =>
+const renderPlayer = (
+  clip: Clip,
+  loops: LoopOptions & { readonly sendLoop?: SendLoop } = {},
+) =>
   render(
     inASession(
       <MemoryRouter initialEntries={[`/clip/${clip.id}`]}>
@@ -1436,6 +1453,113 @@ describe('saving the Loop Finder\'s loops', () => {
       expect(finderPanel()).toHaveTextContent(A_REFUSAL)
     })
     expect(aBar('Bar 1')).toBeInTheDocument()
+  })
+})
+
+/* #123. Each saved loop sends itself, to a friend on WhatsApp: a clip from
+   Drive cut to its own MP4, A to B, downloaded on a wide screen and shared
+   from a phone. */
+describe('sending a saved loop', () => {
+  const aSection = getLoop({ id: 'the-section', name: 'The section', a: 3, b: 7 })
+
+  /* A clip with one loop saved, and the stand-in handed in, so a case can
+     read back what it was asked. */
+  const renderSending = (sendLoop = aSender(), { wide = false } = {}) => {
+    aWindow({ wide })
+    const { container } = renderPlayer(getClip({ src: '/wave-practice.mp4' }), {
+      seed: { ...NO_LOOPS, clips: { 'shuffle-drill': [aSection] } },
+      sendLoop,
+    })
+
+    fireEvent.loadedMetadata(playable(clipSurface(container), { seconds: 12 }))
+
+    return sendLoop
+  }
+
+  it('offers to download each saved loop on a wide screen', () => {
+    renderSending(aSender(), { wide: true })
+
+    expect(screen.getByRole('button', { name: 'Download The section' })).toBeInTheDocument()
+  })
+
+  it('offers to share it from a phone', () => {
+    renderSending()
+
+    expect(screen.getByRole('button', { name: 'Share The section' })).toBeInTheDocument()
+  })
+
+  it('cuts the clip to the loop and downloads it, named for the clip and the loop', async () => {
+    const sendLoop = renderSending(aSender(), { wide: true })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download The section' }))
+
+    await waitFor(() => {
+      expect(sendLoop.hand).toHaveBeenCalled()
+    })
+    expect(sendLoop.cut).toHaveBeenCalledWith('/wave-practice.mp4', { a: 3, b: 7 })
+
+    const [file, phone] = vi.mocked(sendLoop.hand).mock.calls[0] ?? []
+
+    expect(file?.name).toBe('Shuffle drill – The section.mp4')
+    expect(file?.type).toBe('video/mp4')
+    expect(phone).toBe(false)
+  })
+
+  it('hands it to the share sheet from a phone', async () => {
+    const sendLoop = renderSending()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share The section' }))
+
+    await waitFor(() => {
+      expect(sendLoop.hand).toHaveBeenCalledWith(expect.any(File), true)
+    })
+  })
+
+  it('shows it is busy while cutting, and then that it went', async () => {
+    let finish: (blob: Blob) => void = () => {}
+    const sendLoop = renderSending(
+      aSender({ cut: vi.fn(() => new Promise<Blob>((done) => (finish = done))) }),
+      { wide: true },
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download The section' }))
+
+    expect(screen.getByRole('button', { name: 'Cutting The section' })).toBeDisabled()
+
+    finish(new Blob(['a cut']))
+
+    expect(await screen.findByRole('button', { name: 'The section sent' })).toBeInTheDocument()
+    expect(sendLoop.hand).toHaveBeenCalledTimes(1)
+  })
+
+  /* A browser opens the share sheet only straight after a tap, and a long cut
+     can outlast it. The next tap shares what is already cut. */
+  it('offers Share for a second tap when the browser asks for one, without cutting again', async () => {
+    const hand = vi
+      .fn<SendLoop['hand']>()
+      .mockResolvedValueOnce('held')
+      .mockResolvedValueOnce('sent')
+    const sendLoop = renderSending(aSender({ hand }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share The section' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Share The section now' }))
+
+    expect(await screen.findByRole('button', { name: 'The section sent' })).toBeInTheDocument()
+    expect(sendLoop.cut).toHaveBeenCalledTimes(1)
+    expect(hand).toHaveBeenCalledTimes(2)
+    expect(hand.mock.calls[1]?.[0]).toBe(hand.mock.calls[0]?.[0])
+  })
+
+  it('says when a loop could not be sent', async () => {
+    renderSending(aSender({ cut: vi.fn(async () => Promise.reject(new Error('no codec'))) }), {
+      wide: true,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download The section' }))
+
+    expect(
+      await screen.findByRole('button', { name: 'The section could not be sent' }),
+    ).toBeInTheDocument()
   })
 })
 
@@ -5047,7 +5171,12 @@ describe('a YouTube video in the player', () => {
     {
       demo = false,
       seed = NO_LOOPS,
-    }: { readonly demo?: boolean; readonly seed?: typeof NO_LOOPS } = {},
+      sendLoop = aSender(),
+    }: {
+      readonly demo?: boolean
+      readonly seed?: typeof NO_LOOPS
+      readonly sendLoop?: SendLoop
+    } = {},
   ) => {
     const driveApi = aDriveApi()
     const rendered = render(
@@ -5064,6 +5193,7 @@ describe('a YouTube video in the player', () => {
                   shapeYouTube={shapeYouTube}
                   demo={demo}
                   seed={seed}
+                  sendLoop={sendLoop}
                 />
               }
             />
@@ -5374,6 +5504,63 @@ describe('a YouTube video in the player', () => {
     expect(youtube.player.playVideo).toHaveBeenCalled()
     expect(youtube.player.pauseVideo).not.toHaveBeenCalled()
     expect(screen.queryByRole('timer', { name: 'Countdown' })).not.toBeInTheDocument()
+  })
+
+  /* #123. A YouTube entry cannot be cut, so a loop of one goes as a link that
+     opens the video at A. */
+  describe('sending a saved loop of it', () => {
+    const aTurn = getLoop({ id: 'the-turn', name: 'The turn', a: 58.4, b: 75 })
+
+    const sendingFrom = async ({ wide = false } = {}) => {
+      aWindow({ wide })
+      const sendLoop = aSender()
+      const youtube = aYouTube()
+      renderYouTube(youtube, undefined, {
+        seed: { ...NO_LOOPS, clips: { [A_YOUTUBE_CLIP.id]: [aTurn] } },
+        sendLoop,
+      })
+
+      await waitFor(() => {
+        expect(youtube.mount).toHaveBeenCalled()
+      })
+      act(() => {
+        youtube.ready()
+      })
+
+      return sendLoop
+    }
+
+    it('copies a link that opens the video at A, on a wide screen', async () => {
+      const sendLoop = await sendingFrom({ wide: true })
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Copy a link to The turn' }))
+
+      await waitFor(() => {
+        expect(sendLoop.link).toHaveBeenCalledWith(
+          'https://youtu.be/EuT94T544Mg?t=58',
+          'Paseala – The turn',
+          false,
+        )
+      })
+      expect(sendLoop.cut).not.toHaveBeenCalled()
+      expect(
+        await screen.findByRole('button', { name: 'The turn sent' }),
+      ).toBeInTheDocument()
+    })
+
+    it('shares the link from a phone', async () => {
+      const sendLoop = await sendingFrom()
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Share a link to The turn' }))
+
+      await waitFor(() => {
+        expect(sendLoop.link).toHaveBeenCalledWith(
+          'https://youtu.be/EuT94T544Mg?t=58',
+          'Paseala – The turn',
+          true,
+        )
+      })
+    })
   })
 
   it('comes back round to A when the video runs out mid-loop', async () => {

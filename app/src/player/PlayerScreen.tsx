@@ -14,6 +14,7 @@ import type { LoopsHandle } from '../loops/useLoops'
 import { chainedSpan, inStartOrder } from './chain'
 import { ClipName } from './ClipName'
 import { useClipSource } from './clipSource'
+import { browserSendLoop } from './browserSendLoop'
 import { KeyMap } from './KeyMap'
 import { BarLane } from './BarLane'
 import {
@@ -28,6 +29,7 @@ import {
   WIGGLE,
 } from './loopFinder'
 import { LoopFinderPanel } from './LoopFinderPanel'
+import { linkFromA, loopFileName, type SendLoop } from './loopShare'
 import { KEY_TIMINGS, READOUT_FOR, repeatWhileHeld } from './keys'
 import { clamp, type Handle, MIN_LOOP, NUDGE, SCRUB_STEP } from './loopRange'
 import { LoopSlider } from './LoopSlider'
@@ -42,6 +44,7 @@ import {
 } from './playback'
 import { beingEdited, nameToKeep, unwritten } from './savedLoops'
 import { SavedLoopsPanel } from './SavedLoopsPanel'
+import type { SendState } from './SendLoopButton'
 import { BackGlyph, ForwardGlyph, SeekButton } from './SeekButton'
 import { enterSets, isTyping } from './shortcuts'
 import { ShortcutHint } from './ShortcutHint'
@@ -256,6 +259,7 @@ export function PlayerScreen({
   onRename,
   mountYouTube = browserMountYouTube,
   shapeYouTube = shapeOfYouTube,
+  sendLoop = browserSendLoop,
 }: {
   readonly clips: readonly Clip[]
   /* Fired once the path has resolved to a clip the library holds (#16), which
@@ -291,6 +295,9 @@ export function PlayerScreen({
   /* #90. Which way a YouTube video faces — oEmbed in the browser, a stand-in
      under test. */
   readonly shapeYouTube?: ShapeYouTube | undefined
+  /* #123. How a loop is cut and handed on — WebCodecs, the share sheet and
+     the clipboard in the browser, a stand-in under test. */
+  readonly sendLoop?: SendLoop | undefined
 }) {
   const { clipId } = useParams()
   const clip = clips.find((candidate) => candidate.id === clipId)
@@ -320,6 +327,7 @@ export function PlayerScreen({
       showcase={demo}
       mountYouTube={mountYouTube}
       shapeYouTube={shapeYouTube}
+      sendLoop={sendLoop}
     />
   )
 }
@@ -334,6 +342,7 @@ function OpenedClip({
   onRename,
   mountYouTube,
   shapeYouTube,
+  sendLoop,
   showcase,
 }: {
   readonly clip: Clip
@@ -345,6 +354,7 @@ function OpenedClip({
   readonly onRename: ((clip: Clip, name: string) => Promise<boolean>) | undefined
   readonly mountYouTube: MountYouTube
   readonly shapeYouTube: ShapeYouTube
+  readonly sendLoop: SendLoop
   /* #102. Opened from the showcase, by a visitor rather than a dancer. */
   readonly showcase: boolean
 }) {
@@ -525,6 +535,24 @@ function OpenedClip({
      not written anywhere, and that is the point — a chain is a way to play the
      loops already saved, not another loop to save. */
   const [chain, setChain] = useState<readonly string[]>([])
+  /* #123. The one saved loop being sent, and where it has got to. One at a
+     time: a cut is seconds of encoding, and two at once would only share the
+     encoder. The cut is kept while a phone's share sheet waits for a tap. */
+  const [sending, setSending] = useState<{
+    readonly id: string
+    readonly state: Exclude<SendState, 'idle'>
+    readonly file?: File
+  } | null>(null)
+
+  /* Gone or not gone, said for a moment and then let go */
+  useEffect(() => {
+    if (sending === null || (sending.state !== 'sent' && sending.state !== 'failed')) return
+
+    const settled = setTimeout(() => setSending(null), 2000)
+
+    return () => clearTimeout(settled)
+  }, [sending])
+
   /* #121. The Loop Finder, a mode of its own; null while it is off. How many
      8 counts it averages over, and the presses so far. */
   const [finder, setFinder] = useState<Finder | null>(null)
@@ -910,6 +938,57 @@ function OpenedClip({
      indistinguishable in a list that has no reorder and, until now, no rename. */
   const saveAsNew = () => {
     writeLoop(null, (kept) => loops.save(clip.id, kept))
+  }
+
+  /* #123. A saved loop to a friend: a clip from Drive cut to its own MP4, A
+     to B, or a YouTube entry, which the app never holds, as a link that opens
+     it at A. A phone hands either to the share sheet; a wide screen downloads
+     the one and copies the other. */
+  const handOn = async (id: string, file: File, phone: boolean) => {
+    const handed = await sendLoop.hand(file, phone)
+
+    setSending(handed === 'held' ? { id, state: 'held', file } : { id, state: 'sent' })
+  }
+
+  const sendSaved = (entry: SavedLoop) => {
+    const phone = !wide
+    const failed = () => setSending({ id: entry.id, state: 'failed' })
+
+    /* The tap the share sheet was waiting for: the cut is already made */
+    if (sending?.id === entry.id && sending.state === 'held' && sending.file) {
+      void handOn(entry.id, sending.file, phone).catch(failed)
+      return
+    }
+
+    if (sending?.state === 'busy') return
+
+    setSending({ id: entry.id, state: 'busy' })
+
+    if (youtube !== undefined) {
+      void sendLoop
+        .link(linkFromA(youtube, entry.a), `${clip.name} – ${entry.name}`, phone)
+        .then(() => setSending({ id: entry.id, state: 'sent' }))
+        .catch(failed)
+      return
+    }
+
+    const src = source.src
+
+    if (src === undefined) {
+      failed()
+      return
+    }
+
+    void sendLoop
+      .cut(src, { a: entry.a, b: entry.b })
+      .then((cut) =>
+        handOn(
+          entry.id,
+          new File([cut], loopFileName(clip.name, entry.name), { type: 'video/mp4' }),
+          phone,
+        ),
+      )
+      .catch(failed)
   }
 
   /* #121. The Loop Finder starts from nothing: the whole clip framed and enter
@@ -1607,6 +1686,12 @@ function OpenedClip({
       onRecall={recallLoop}
       onRemove={removeLoop}
       onChain={chainLoop}
+      sending={{
+        kind: youtube === undefined ? 'file' : 'link',
+        phone: !wide,
+        state: (id) => (sending?.id === id ? sending.state : 'idle'),
+      }}
+      onSend={sendSaved}
     />
   )
 

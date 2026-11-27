@@ -269,6 +269,28 @@ const ExpandIcon = () => (
   </Glyph>
 )
 
+/* #123: an arrow down into a tray, for a clip whose bytes the app has */
+const DownloadIcon = () => (
+  <Glyph size="h-5 w-5" outline>
+    <path d="M12 4v11" />
+    <path d="M7 10l5 5 5-5" />
+    <path d="M5 20h14" />
+  </Glyph>
+)
+
+/* #123: a link, for a YouTube entry, which can only be sent as one */
+const LinkIcon = () => (
+  <Glyph size="h-5 w-5" outline>
+    <path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1" />
+    <path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" />
+  </Glyph>
+)
+
+/* #123. Where a YouTube loop can be sent: the video, from A. A link cannot
+   say where to stop. youtu.be with `t` opens a Short in the ordinary player,
+   which is the only one that takes a start. */
+const linkFrom = (videoId, a) => `youtu.be/${videoId}?t=${Math.floor(a)}`
+
 const CloseIcon = () => (
   <Glyph size="h-5 w-5" outline>
     <path d="M6 6l12 12" />
@@ -886,7 +908,7 @@ function Player({
 
   useEffect(() => {
     if (!badge) return
-    const gone = setTimeout(() => setBadge(null), 900)
+    const gone = setTimeout(() => setBadge(null), badge.for ?? 900)
     return () => clearTimeout(gone)
   }, [badge])
   const countingInRef = useRef(false)
@@ -1535,6 +1557,21 @@ function Player({
     startAfresh()
   }
 
+  /* #123, mockup only: says what it would do rather than doing it. A clip
+     from Drive becomes its own MP4, A to B; a YouTube entry can only go as a
+     link that starts at A. */
+  const sendLoop = (span, name) => {
+    setBadge({
+      for: 2600,
+      text: youtube
+        ? `Link copied: ${linkFrom(clip.videoId, span.a)}`
+        : `Downloading ${clip.name} – ${name}.mp4 (${formatTime(span.a)}–${formatTime(span.b)})`,
+    })
+  }
+
+  const SendIcon = youtube ? LinkIcon : DownloadIcon
+  const sendLabel = (name) => (youtube ? `Copy a link to ${name}` : `Download ${name}`)
+
   // the key handler subscribes once, so it reaches save through a ref
   useEffect(() => {
     saveLoopRef.current = saveLoop
@@ -1717,6 +1754,16 @@ function Player({
                 unsaved
               </span>
             )}
+            {/* #123, as picked at the gate: each saved loop sends itself */}
+            <button
+              type="button"
+              aria-label={sendLabel(item.name)}
+              title={sendLabel(item.name)}
+              onClick={() => sendLoop(item, item.name)}
+              className="rounded p-1.5 text-ink/40 hover:text-ink"
+            >
+              <SendIcon />
+            </button>
             <button
               type="button"
               aria-label={`Delete ${item.name}`}
