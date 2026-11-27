@@ -291,34 +291,6 @@ const LinkIcon = () => (
    which is the only one that takes a start. */
 const linkFrom = (videoId, a) => `youtu.be/${videoId}?t=${Math.floor(a)}`
 
-/* #123 mockup gate only: where the control sits, to pick from */
-const DOWNLOAD_SPOTS = [
-  { key: 'A', label: 'On each saved loop' },
-  { key: 'B', label: 'Over the clip' },
-  { key: 'C', label: 'Beside Save' },
-]
-
-function DownloadSpotPicker({ spot, onSpot }) {
-  return (
-    <div className="fixed bottom-3 left-3 z-40 flex items-center gap-1 rounded-xl bg-panel p-1.5 text-xs shadow-lg ring-1 ring-ink/10">
-      <span className="px-1.5 font-semibold text-ink/60">Download</span>
-      {DOWNLOAD_SPOTS.map(({ key, label }) => (
-        <button
-          key={key}
-          type="button"
-          aria-pressed={spot === key}
-          onClick={() => onSpot(key)}
-          className={`rounded-lg px-2.5 py-1 font-semibold ${
-            spot === key ? 'bg-accent text-on-accent' : 'bg-control text-ink/70 hover:bg-control-hi'
-          }`}
-        >
-          {key} · {label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
 const CloseIcon = () => (
   <Glyph size="h-5 w-5" outline>
     <path d="M6 6l12 12" />
@@ -906,8 +878,6 @@ function Player({
   const [over, setOver] = useState(1)
   const [marks, setMarks] = useState([])
   const finderEnterRef = useRef(null)
-  /* #123 mockup gate: where the download control is drawn */
-  const [downloadSpot, setDownloadSpot] = useState('A')
 
   /* #86, on trial. With **Try new UI** on, a wide screen puts the controls and
      the loops in a column left of the clip, and the clip has the rest. Off, or
@@ -1696,19 +1666,6 @@ function Player({
         >
           {editing ? 'Update' : 'Save'}
         </button>
-        {/* #123, spot C: the loop framed now, saved or not */}
-        {downloadSpot === 'C' && (
-          <button
-            type="button"
-            aria-label={sendLabel(willName)}
-            title={sendLabel(willName)}
-            onClick={() => sendLoop(loop, willName)}
-            disabled={halfSet}
-            className={`rounded-lg px-3 py-2.5 active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${CONTROL}`}
-          >
-            <SendIcon />
-          </button>
-        )}
       </div>
 
       {/* Says which loop is about to be written over, by the name it is
@@ -1797,18 +1754,16 @@ function Player({
                 unsaved
               </span>
             )}
-            {/* #123, spot A: this loop, as saved */}
-            {downloadSpot === 'A' && (
-              <button
-                type="button"
-                aria-label={sendLabel(item.name)}
-                title={sendLabel(item.name)}
-                onClick={() => sendLoop(item, item.name)}
-                className="rounded p-1.5 text-ink/40 hover:text-ink"
-              >
-                <SendIcon />
-              </button>
-            )}
+            {/* #123, as picked at the gate: each saved loop sends itself */}
+            <button
+              type="button"
+              aria-label={sendLabel(item.name)}
+              title={sendLabel(item.name)}
+              onClick={() => sendLoop(item, item.name)}
+              className="rounded p-1.5 text-ink/40 hover:text-ink"
+            >
+              <SendIcon />
+            </button>
             <button
               type="button"
               aria-label={`Delete ${item.name}`}
@@ -2256,19 +2211,6 @@ function Player({
                 </div>
               )}
 
-              {/* #123, spot B: the loop framed now, from over the clip */}
-              {downloadSpot === 'B' && !zen && (
-                <button
-                  type="button"
-                  aria-label={sendLabel(willName)}
-                  title={sendLabel(willName)}
-                  onClick={() => sendLoop(loop, willName)}
-                  disabled={halfSet}
-                  className="absolute right-12 top-2 rounded-lg bg-shell/60 p-2 text-ink/60 backdrop-blur transition hover:text-ink active:scale-95 disabled:opacity-40"
-                >
-                  <SendIcon />
-                </button>
-              )}
               <button
                 type="button"
                 aria-label={zen ? 'Leave the isolated view' : 'Isolate the video'}
@@ -2310,7 +2252,6 @@ function Player({
       </main>
 
       {!zen && <KeysPanel />}
-      {!zen && <DownloadSpotPicker spot={downloadSpot} onSpot={setDownloadSpot} />}
     </div>
   )
 }
