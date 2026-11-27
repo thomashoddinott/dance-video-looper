@@ -31,7 +31,7 @@ export function ShortcutHint({
     <p
       role="note"
       aria-label="Keyboard shortcuts"
-      className="mb-4 hidden text-center text-xs text-ink/40 sm:block"
+      className="mb-4 hidden text-center text-xs text-ink/40 tablet:block"
     >
       {next && (
         <>

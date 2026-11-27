@@ -365,7 +365,7 @@ export function ClipsScreen({
               onChange={(event) => setLink(event.target.value)}
               aria-label="YouTube link"
               placeholder="Paste a YouTube link"
-              className="min-w-0 flex-1 rounded-lg bg-control px-3 py-2 text-base text-ink placeholder:text-ink/40 sm:text-sm"
+              className="min-w-0 flex-1 rounded-lg bg-control px-3 py-2 text-base text-ink placeholder:text-ink/40 tablet:text-sm"
             />
             <button
               type="submit"
@@ -501,7 +501,7 @@ export function ClipsScreen({
           role="list"
           aria-label="Clips"
           aria-busy={library.state === 'loading'}
-          className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
+          className="mt-4 grid grid-cols-2 gap-3 tablet:grid-cols-3 desktop:grid-cols-4"
         >
           {ordered.map((clip) => (
             <ClipTile

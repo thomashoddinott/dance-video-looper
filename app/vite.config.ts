@@ -52,5 +52,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    /* Vitest hands every stylesheet to a test as an empty string. #125 reads
+       the screen widths out of this one, so it comes through as it is. */
+    css: { include: [/src\/index\.css/] },
   },
 })

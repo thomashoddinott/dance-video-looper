@@ -7,11 +7,11 @@ import type { ClipGroup } from './clipGroups'
    name truncates instead of pushing its neighbours off the row — and spelled
    out whole, because Tailwind only generates a class it can find written. */
 const chipShownAt = (index: number) =>
-  index < 2 ? '' : index < 4 ? 'hidden sm:block' : index < 5 ? 'hidden lg:block' : 'hidden'
+  index < 2 ? '' : index < 4 ? 'hidden tablet:block' : index < 5 ? 'hidden desktop:block' : 'hidden'
 
 /* All groups is offered only where some chip did not fit. */
 const moreShownAt = (count: number) =>
-  count > 5 ? '' : count > 4 ? 'lg:hidden' : count > 2 ? 'sm:hidden' : 'hidden'
+  count > 5 ? '' : count > 4 ? 'desktop:hidden' : count > 2 ? 'tablet:hidden' : 'hidden'
 
 /* #70. One row that never wraps, however many groups a dancer makes: the
    newest that fit, then All groups for the rest — every group, with a field
@@ -102,7 +102,7 @@ export function GroupFilter({
               close()
               more.current?.focus()
             }}
-            className="absolute top-full right-0 left-0 z-30 mt-1.5 rounded-xl bg-panel p-2 shadow-lg ring-1 ring-ink/10 sm:left-auto sm:w-80"
+            className="absolute top-full right-0 left-0 z-30 mt-1.5 rounded-xl bg-panel p-2 shadow-lg ring-1 ring-ink/10 tablet:left-auto tablet:w-80"
           >
             {/* 16px on a phone so iOS does not zoom the page in on it (#20). */}
             <input
@@ -114,7 +114,7 @@ export function GroupFilter({
               }}
               aria-label="Find a group"
               placeholder="Find a group"
-              className="w-full rounded-lg bg-control px-3 py-2 text-base text-ink placeholder:text-ink/40 sm:text-sm"
+              className="w-full rounded-lg bg-control px-3 py-2 text-base text-ink placeholder:text-ink/40 tablet:text-sm"
             />
             <ul className="mt-1.5 max-h-64 overflow-y-auto">
               {listed.map((group) => (
